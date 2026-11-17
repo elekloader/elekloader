@@ -1,16 +1,17 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""+Drive collections (docs/DRIVE.md, "+Drive collections"): the A4 loader's boot linker
-(mods/drive-loader-a4mk2/dlink.c, DL_COLLECTIONS) links tables +Drive mods declare, and its
-descriptor says so (F_COLLECTIONS, the loader's export drive_collections), so the host twin
-(elekloader/drive.py, Build.collections) does the same on that build only.
+"""+Drive collections (docs/DRIVE.md, "+Drive collections"): both loaders' boot linkers
+(mods/drive-loader-a4mk2/dlink.c and, from drive-loader 0.8, mods/drive-loader-ar2/dlink.c,
+DL_COLLECTIONS) link tables +Drive mods declare, and their descriptors say so (F_COLLECTIONS, the
+loader's export drive_collections), so the host twin (elekloader/drive.py, Build.collections) does
+the same on such a build only.
 
 Built for the computer and run against the twin: a declaring mod and the mods adding to its table load
 in any /mods/active order, the table is placed after every .bss with its living entries sorted as the
 merge sorts them and a zero entry, and NAME and NAME_n resolve; a contribution whose table no living mod
 declares, or of another entry size, is refused, also when its declarer goes in a later round; two mods
 declaring one name, a name the build has, a DSP table and a bad entry size are refused alike; the
-MODS page's check agrees; and the Rytm's loader (drive-loader-ar2, no F_COLLECTIONS) refuses
-"collections" as before, as does the twin on its build.
+MODS page's check agrees, for each loader on its own kind of build; and a build whose loader
+doesn't export drive_collections has no F_COLLECTIONS.
 
     python tests/test_drive_collections.py
 
@@ -70,24 +71,28 @@ def main():
         return [x.get('detail', '') for x in sm['status']]
 
     with Bench('analog-rytm-mk2') as B:
-        F = Built(B)
-        check('a loader exporting drive_collections sets the descriptor\'s F_COLLECTIONS (bit 4)',
+      for kind, exe, who in (('a4', a4_exe, ''), ('ar2', ar2_exe, 'drive-loader-ar2: ')):
+        F = Built(B, kind=kind)
+
+        def check_(name, cond, info=''):
+            check(who + name, cond, info)
+        check_('a loader exporting drive_collections sets the descriptor\'s F_COLLECTIONS (bit 4)',
               F.build.d['flags'] & desc.F_COLLECTIONS == 16 and F.build.collections, F.build.d['flags'])
-        check('the descriptor\'s text names it', '+Drive collections' in desc.dump(F.build.d))
+        check_('the descriptor\'s text names it', '+Drive collections' in desc.dump(F.build.d))
 
         def alike(name, mods, want_states, want_details=None):
-            sm, ram = boot(a4_exe, F, mods, work)
+            sm, ram = boot(exe, F, mods, work)
             r = twin(F, mods)
-            check(name + ': ' + str(want_states), states(sm) == want_states, sm['status'])
+            check_(name + ': ' + str(want_states), states(sm) == want_states, sm['status'])
             bad = compare(F, sm, ram, r)
             if details(sm) != [c.detail[:31] for c in r.choices]:
                 bad.append('details %s, twin %s' % (details(sm), [c.detail for c in r.choices]))
-            check(name + ': C and twin agree', not bad, bad)
+            check_(name + ': C and twin agree', not bad, bad)
             if want_details is not None:
-                check(name + ': details ' + str(want_details), details(sm) == want_details, details(sm))
-            sc, _ram = boot(a4_exe, F, mods, work, check=True)
+                check_(name + ': details ' + str(want_details), details(sm) == want_details, details(sm))
+            sc, _ram = boot(exe, F, mods, work, check=True)
             rc = twin(F, mods, deep=False)
-            check(name + ': the MODS page\'s check agrees', states(sc) == [(c.state, c.code, c.arg) for c in rc.choices]
+            check_(name + ': the MODS page\'s check agrees', states(sc) == [(c.state, c.code, c.arg) for c in rc.choices]
                   and states(sc) == states(sm), (sc['status'], sm['status']))
             return sm, ram, r
 
@@ -99,16 +104,16 @@ def main():
         sm, ram, r = alike('a table and two adders', mods, [(1, 0, 0)] * 3)
         t = r.tables['sc_cmds']
         core = r.base[('sc-core', '.run')]
-        check('the table is after every .bss, its NAME and NAME_n in the declarer\'s code',
+        check_('the table is after every .bss, its NAME and NAME_n in the declarer\'s code',
               t['address'] >= max(a + 8 for (_i, s), a in r.base.items() if s == '.bss')
               and word(ram, core + 12) == t['address'] and word(ram, core + 16) == 2,
               (hex(t['address']), hex(word(ram, core + 12)), word(ram, core + 16)))
-        check('entries sorted by order: sc-zz (40) then sc-aa (60), each its function\'s address, then a zero entry',
+        check_('entries sorted by order: sc-zz (40) then sc-aa (60), each its function\'s address, then a zero entry',
               t['entries'] == [('sc-zz', 40), ('sc-aa', 60)]
               and word(ram, t['address']) == r.base[('sc-zz', '.run')]
               and word(ram, t['address'] + 8) == r.base[('sc-aa', '.run')]
               and word(ram, t['address'] + 4) == 5 and ram[t['address'] + 16 - F.ram_base:][:8] == bytes(8))
-        check('the area ends after the table', r.end == t['address'] + 3 * 8, (hex(r.end), hex(t['address'])))
+        check_('the area ends after the table', r.end == t['address'] + 3 * 8, (hex(r.end), hex(t['address'])))
 
         # the declarer adds to its own table, an entry of two with relocations in the second
         d = decl(B)
@@ -116,14 +121,14 @@ def main():
                             'relocs': [[8, 'abs32', 'sym:fn_sc-core', 0], [12, 'abs32', 'sym:sc_cmds_n', 0]]}]
         sm, ram, r = alike('the declarer adds two entries itself', [d, adder(B, 'sc-b', 50)], [(1, 0, 0)] * 2)
         t = r.tables['sc_cmds']
-        check('its second entry is relocated where the merge put it',
+        check_('its second entry is relocated where the merge put it',
               t['entries'] == [('sc-b', 50), ('sc-core', 50), ('sc-core', 50)]
               and word(ram, t['address'] + 16) == r.base[('sc-core', '.run')] and word(ram, t['address'] + 20) == 3)
 
         # a declared table with no entries: a zero entry, NAME_n 0
         sm, ram, r = alike('a table nothing adds to', [decl(B)], [(1, 0, 0)])
         core = r.base[('sc-core', '.run')]
-        check('nothing added: NAME_n is 0 and the table one zero entry',
+        check_('nothing added: NAME_n is 0 and the table one zero entry',
               word(ram, core + 16) == 0 and r.end == word(ram, core + 12) + 8)
 
         # ---- refusals ----
@@ -159,30 +164,26 @@ def main():
 
         # the room: the tables count in the layout
         S = Built(B)
-        S.out, S.build = TD.built(B, ('a4', 3000))
+        S.out, S.build = TD.built(B, (kind, 3000))
         ddr_base, run_end = S.out.layout['ddr']
         o = S.out.layout['run_load'] - B.dev.main_load
         S.ram_base, S.ram, S.desc_at = ddr_base, bytes(S.out.image[o:o + run_end - ddr_base]), S.out.map['core_desc']
         many = [adder(B, 'sc-%03d' % i) for i in range(40)]
         for m in many:
             m['sections']['.bss'] = {'size': 96}
-        sm, ram = boot(a4_exe, S, [decl(B)] + many, work)
+        sm, ram = boot(exe, S, [decl(B)] + many, work)
         r = twin(S, [decl(B)] + many)
         bad = compare(S, sm, ram, r)
-        check('a small area: C and twin agree on what the room refuses', not bad and any(
+        check_('a small area: C and twin agree on what the room refuses', not bad and any(
             c.code == ROOM for c in r.choices), (bad, [(c.id, c.code) for c in r.choices][:6]))
 
-        # ---- the Rytm's loader: no F_COLLECTIONS ----
-        R = Built(B, abs16=False)
-        check('without drive_collections: no F_COLLECTIONS', not R.build.d['flags'] & desc.F_COLLECTIONS
-              and not R.build.collections)
-        for name, mods, want in (('a mod declaring a table', [decl(B)], [(2, FEATURE, 0)]),
-                                 ('a mod adding to one no build has', [adder(B, 'sc-a')], [(2, TABLE, 0)])):
-            sm, ram = boot(ar2_exe, R, mods, work)
-            r = twin(R, mods)
-            check('drive-loader-ar2: %s refused' % name, states(sm) == want, sm['status'])
-            check('drive-loader-ar2: %s, C and twin agree' % name, not compare(R, sm, ram, r)
-                  and details(sm) == [c.detail for c in r.choices], (compare(R, sm, ram, r), details(sm)))
+      # ---- a loader that doesn't export drive_collections ----
+      R = Built(B, abs16=False)
+      check('without drive_collections: no F_COLLECTIONS', not R.build.d['flags'] & desc.F_COLLECTIONS
+            and not R.build.collections)
+      r = twin(R, [decl(B)])
+      check('without drive_collections: the twin refuses "collections"',
+            [(c.state, c.code, c.detail) for c in r.choices] == [(2, FEATURE, 'collections')])
 
     print('all passed' if not fails else '%d failed' % len(fails))
     return 1 if fails else 0

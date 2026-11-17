@@ -73,7 +73,7 @@ test('knob ids: runs and the ids entries name, on a build with F_KNOBS, as drive
       assert.equal(drive.statusText(r), c.status, c.name)
       assert.deepEqual(drive.resultLines(r), c.lines, c.name)
     }
-    for (const [hex, want] of K.stores) {     // /mods/.store with runs (format 3), as the twin writes it
+    for (const [hex, want] of K.stores) {     // /mods/.store with runs (format 3; the Rytm's 4), as the twin writes it
       const st = drivestore.decode(fromHex(hex)!)!
       assert.deepEqual({ knobs: st.knobs, freed_knobs: st.freed_knobs, next_knob: st.next_knob }, want)
       assert.equal(toHex(drivestore.encode(st)), hex)

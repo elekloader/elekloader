@@ -256,7 +256,8 @@ def main():
         refused('another device', drive_mod(B, 'tg', target=dict(B.target, device='digitakt-mk1')), 6)
         refused('a site over its stock bytes', drive_mod(B, 'st', sites=[dict(B.site(B.at(0x1000)), stock_sha256='0' * 64)]),
                 30, detail='%08x' % B.at(0x1000))
-        refused('collections', drive_mod(B, 'co', collections={'ev_mine': {'entry': 4}}), 7, detail='collections')
+        refused('a DSP collection', drive_mod(B, 'co', collections={'ev_mine': {'entry': 4, 'space': 'dsp'}}), 7,
+                detail='collections')   # +Drive collections (drive-loader 0.8): test_drive_collections.py
         refused('.fast', drive_mod(B, 'fa', sections={'.run': {'len': 2, 'parts': [['hex', '4e75']]},
                                                       '.fast': {'len': 2, 'parts': [['hex', '4e75']]}}), 7, detail='.fast')
         refused('storage', drive_mod(B, 'sg', storage=[{'sym': 'x', 'scope': 'kit', 'bits': 1}]), 7, detail='storage')

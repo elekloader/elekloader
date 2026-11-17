@@ -393,11 +393,19 @@ def _knobs():
         full = drive.load_build(out.image)
         st1 = drive.link(full, T.files(km(B, 'ka', 4), km(B, 'kb', 2))).placed.bytes
         st2 = drive.link(full, T.files(km(B, 'kb', 2), km(B, 'kc', 3)), st1).placed.bytes
-        stores = [[x.hex(), {k: ds.decode(x)[k] for k in ('knobs', 'freed_knobs', 'next_knob')}] for x in (st1, st2)]
-        return {'release': {'version': B.rel.version, 'syxSha256': B.rel.syx_sha256, 'mainSha256': B.rel.main_sha256,
-                            'mainLen': B.rel.main_len},
-                'build': blk.hex(), 'claims': [list(c) for c in desc.decode(blk)['claims']], 'cases': rows,
-                'stores': stores}
+        xs = [st1, st2]
+        rel = {'version': B.rel.version, 'syxSha256': B.rel.syx_sha256, 'mainSha256': B.rel.main_sha256,
+               'mainLen': B.rel.main_len}
+    with Bench('analog-rytm-mk2') as B:      # the Rytm's format 4 (format 1 and the runs), drive-loader 0.8
+        out = link.link([link.Mod2(d, d['id']) for d in flashed(B, rytm=True)], B.img)
+        full = drive.load_build(out.image)
+        r1 = drive.link(full, T.files(km(B, 'ka', 4, abs16=False), km(B, 'kb', 2, abs16=False))).placed.bytes
+        r2 = drive.link(full, T.files(km(B, 'kb', 2, abs16=False), km(B, 'kc', 3, abs16=False)), r1).placed.bytes
+        assert r1[4:6] == r2[4:6] == ds.FORMAT_ONE_KNOBS.to_bytes(2, 'big')
+        xs += [r1, r2]
+    stores = [[x.hex(), {k: ds.decode(x)[k] for k in ('knobs', 'freed_knobs', 'next_knob')}] for x in xs]
+    return {'release': rel, 'build': blk.hex(), 'claims': [list(c) for c in desc.decode(blk)['claims']], 'cases': rows,
+            'stores': stores}
 
 
 class Recorder:

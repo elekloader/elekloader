@@ -139,7 +139,7 @@ room in the area. The `.elemod` stays one JSON file.
 ## +Drive collections
 
 A loader whose descriptor has `F_COLLECTIONS` (drive-loader-a4mk2, decided
-2026-11-16) links tables +Drive mods declare, so a flashed mod's
+2026-11-16; drive-loader-ar2 from 0.8, decided 2026-11-17) links tables +Drive mods declare, so a flashed mod's
 `collections` and the contributions to them load from the +Drive unchanged.
 Flashed code never reads a +Drive table: its link is done at build.
 
@@ -168,18 +168,24 @@ Flashed code never reads a +Drive table: its link is done at build.
 
 ## Knob ids on the +Drive
 
-A loader whose descriptor has `F_KNOBS` (drive-loader-a4mk2) gives +Drive
-mods knob ids by count, as the linker gives flashed mods theirs
-(docs/ADAPTING.md, "Knob ids by count (Analog Four MKII)"), so a flashed
-mod's `"knobs"` and its `__knobs` relocations load from the +Drive
-unchanged. The flashed ids are below 0x4000; the +Drive's are 0x4000..0x7fff,
-so a reflash never moves them.
+A loader whose descriptor has `F_KNOBS` (drive-loader-a4mk2; drive-loader-ar2
+from 0.8, decided 2026-11-17) gives +Drive mods knob ids by count, as the
+linker gives flashed mods theirs (docs/ADAPTING.md, "Knob ids by count
+(Analog Four MKII)"), so a flashed mod's `"knobs"` and its `__knobs`
+relocations load from the +Drive unchanged. The flashed ids are below
+0x4000; the +Drive's are 0x4000..0x7fff on both devices (the profile's
+`drive_knobs`), so a reflash never moves them. The rules below are the
+device profile's `param_ids`, which each loader's dl.h has as constants:
+the A4's are given here, the Rytm's are the core's 469..554, own ids from
+555 (0x22b), and three tables (`core_params`, and `core_param_locks` and
+`core_knob_looks`, whose entries take own ids only).
 
 - **The flashed ids.** The descriptor names the ids each flashed module's
   `core_params` and `core_knob_looks` entries take, its run included, as
   claims of kind 4 (`"<first> <last>"`, hex).
 - **Form.** `"knobs"` is 0..1024 and `__knobs` no mod's symbol; a relocation
-  to `__knobs` is `abs32` or `abs16` with an addend below `"knobs"` (else
+  to `__knobs` is `abs32` or `abs16` (`abs32` alone on the Rytm, whose
+  loader takes no `abs16`) with an addend below `"knobs"` (else
   `format`). `__knobs` is the import of a mod with `"knobs"` only.
 - **Fixed ids.** The ids a mod's entries name in its own `.run` bytes
   follow the linker's rules, in the check rounds after `claim`: none of the
@@ -192,7 +198,7 @@ so a reflash never moves them.
   never-used ids run out, then goes out again. A mod with no run left is
   refused (`ids`, `run of N: none free`), and the rounds start again.
 - **Kept.** The runs, the freed runs (the latest 512) and the next id go into
-  `/mods/.store` (format 3). A link that never settles keeps the old ones;
+  `/mods/.store` (format 3 on the A4, format 4 on the Rytm). A link that never settles keeps the old ones;
   FORGET DATA keeps them too.
 
 ## Sites
@@ -425,6 +431,11 @@ format 2 with, after the CC records: u16 runs, u16 freed runs, u32 the next
 knob id, then each run and freed run (oldest first): u32 first id, u16
 count, u8 the mod's name length, u8 0, the name, zeros to 4. Not part of the
 layout ID.
+
+Format 4 (the Rytm with +Drive knob ids, drive-loader-ar2 0.8; written only
+when there are any) is format 1 with the same runs after the CC records. A
+loader before 0.8 reads a format 4 file as none: going back to one after a
+boot that gave knob ids places +Drive storage afresh.
 
 `js/tools/drivestore_vectors.py` writes the runs in
 `js/test/drivestore-vectors.json` and, for the A4,

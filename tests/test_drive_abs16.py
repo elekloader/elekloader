@@ -45,8 +45,8 @@ class Built:
     """The made-up flashed build of the A4's loader kind (stage at the top, payload skip, and with
     `abs16` F_ABS16), as RAM for the host linker and as the twin's Build."""
 
-    def __init__(self, B, abs16=True):
-        out, b = TD.built(B, 'a4' if abs16 else 'skip')
+    def __init__(self, B, abs16=True, kind=None):
+        out, b = TD.built(B, kind or ('a4' if abs16 else 'skip'))
         self.B, self.out, self.build = B, out, b
         ddr_base, run_end = out.layout['ddr']
         o = out.layout['run_load'] - B.dev.main_load

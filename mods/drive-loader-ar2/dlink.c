@@ -23,9 +23,11 @@
  * dl_check, sized to the set (the mods) and to the +Drive area (the pools, dl.h DL_POOL_*),
  * and go back when it returns. The merge's room is the descriptor's biggest table. */
 
-enum { SEC_ABS, SEC_RUN, SEC_BSS, SEC_TABLE, SEC_COUNT, SEC_STORE };
+enum { SEC_ABS, SEC_RUN, SEC_BSS, SEC_TABLE, SEC_COUNT, SEC_STORE, SEC_DTABLE, SEC_DCOUNT };
 enum { R_ABS32, R_PC32, R_PC16 };
 #define FLASHED 0xFFFF
+/* A relocation kind's size in bytes, or 0 for one this loader doesn't take (no abs16: the A4's, D3) */
+#define rsize(s, n) (js_eq(s, n, "abs32") || js_eq(s, n, "pc32") ? 4 : js_eq(s, n, "pc16") ? 2 : 0)
 #define NONE 0xFFFF
 
 struct sym {
@@ -65,13 +67,31 @@ struct dmod {
     u16 site_first, site_n;              /* its sites and copied blocks */
     u32 sdata_first;                     /* where its sites' bytes start in sdata */
     u16 fld_first, fld_n;                /* its storage fields */
+#ifdef DL_COLLECTIONS
+    u16 coll_first, coll_n;              /* the tables it declares, in L.coll */
+#endif
 #ifdef DL_SITES
     u16 tsite_first, tsite_n;            /* its sites in L.sites */
 #endif
 #ifdef DL_REGIONS
     u16 reg_first, reg_n;                /* its regions in L.regs */
 #endif
+#ifdef DL_KNOBS
+    u16 knobs;                           /* its "knobs": how many ids it asks for */
+    u16 kfix_first, kfix_n;              /* the ids its entries name, in L.kfix */
+    u32 knob_base;                       /* its run's first id (knob_runs) */
+#endif
 };
+
+#ifdef DL_KNOBS
+/* Knob ids an entry names (link.Mod2.id_ranges), a +Drive mod's or (claims of kind 4) a flashed
+ * module's: [a, b], signed as link.py reads them. */
+struct kfix {
+    s32 a, b;
+    u16 who;                             /* the mod's index, or the flashed module's */
+    u8 own_only, pad;                    /* from a table whose ids are the mods' own (dl.h DL_KNOB_TABLES) */
+};
+#endif
 
 #ifdef DL_SITES
 /* A site a mod writes in the running OS (the Octatrack's TELOS, dl.h "sites"): its range, and
@@ -98,10 +118,28 @@ struct dsite {                           /* a site, or a copied block (data NONE
 
 struct contrib {
     s32 order;
-    u16 table;                           /* the descriptor's table index */
+    u16 table;                           /* the descriptor's table index; with DL_COLLECTIONS, DTAB | a
+                                          * +Drive table's index once a check round found it, NONE before */
     u16 nent;                            /* entries it adds */
     u16 index;                           /* its place in the mod's contribute list */
+#ifdef DL_COLLECTIONS
+    u16 tname;                           /* a +Drive table's name in the arena; NONE: a flashed table */
+    u16 dlen;                            /* its data's bytes */
+#endif
 };
+
+#ifdef DL_COLLECTIONS
+/* A table a +Drive mod declares (docs/DRIVE.md, "+Drive collections"): placed by the layout after
+ * every .bss, its living entries and a zero entry; NAME and NAME_n are its mod's global names. */
+#define DTAB 0x8000u
+struct coll {
+    u16 mod;
+    u16 name;                            /* in the arena */
+    u16 entry;
+    u16 count;                           /* its living entries, from the layout */
+    u32 addr;                            /* from the layout */
+};
+#endif
 
 struct entry {                           /* pass 2: one contribution's bytes */
     u16 mod, ctr;
@@ -170,6 +208,10 @@ static struct {
     struct fld *fld;
     u32 nfld;
     u32 *fdesc;                          /* each field's descriptor, once placed */
+#ifdef DL_COLLECTIONS
+    struct coll *coll;                   /* the +Drive tables of every file pass 1 read */
+    u32 ncoll, COLLS;
+#endif
     struct ds_want *want;                /* the living mods' fields, for dstore */
     u16 *want_fld;
     struct dl_status *st;                /* where the records go: dl_status, or a check's */
@@ -182,6 +224,15 @@ static struct {
 #ifdef DL_REGIONS
     struct { u32 lo, hi; } regs[DL_REGIONS_MAX];   /* the mods' regions, [lo, hi) */
     u32 nregs;
+#endif
+#ifdef DL_KNOBS
+    int knobs;                           /* the build gives +Drive mods knob ids (F_KNOBS) */
+    struct kfix *kfix, *kflash;          /* the +Drive mods' fixed ids; the flashed modules' */
+    u32 nkfix, nkflash, KFIX;
+    struct ds_state *kprev;              /* /mods/.store's runs (ds_decode), 0 for none */
+    struct ds_knob *krun, *kfree;        /* knob_runs' runs and freed runs */
+    u32 nkrun, nkfree;
+    struct ds_knobset kset;              /* what ds_allocate writes (ds_knobs_in) */
 #endif
     u32 crc_table[256];
 } L;
@@ -352,6 +403,9 @@ static u32 n_map(void) { return D16(4 + 2) >= 2 ? D16(0x50) : 0; }
 static u32 o_map(u32 i) { return D32(0x4c) + 12 * i; }
 static u32 n_pre(void) { return D16(4 + 2) >= 2 ? D16(0x52) : 0; }
 static u32 o_pre(u32 i) { return D32(0x54) + 12 * i; }
+/* ABI 1.3: the flags */
+static u32 d_flags(void) { return D16(4 + 2) >= 3 ? D32(0x60) : 0; }
+#define F_KNOBS 128                      /* bit 7: +Drive mods' knob ids (knob_start) */
 /* An entry's order: ABI 1.1's orders array, else (1.0) the key's, 0xFFFF the linker's own */
 static s32 table_order(u32 i, u32 k)
 {
@@ -371,6 +425,18 @@ static int find_table(const char *s, u32 n)
         if (js_eq(s, n, table_name(i)))
             return (int)i;
     return -1;
+}
+
+/* A contribution's entry size: its table's. */
+static u32 ctr_entry(const struct contrib *c)
+{
+#ifdef DL_COLLECTIONS
+    if (c->table == NONE)
+        return 0;
+    if (c->table & DTAB)
+        return L.coll[c->table & ~DTAB].entry;
+#endif
+    return table_entry(c->table);
 }
 
 static int flashed_module(const char *name)
@@ -407,6 +473,12 @@ static u32 sym_value(const struct sym *s)
         return table_addr(s->val);
     case SEC_STORE:                      /* a storage field: its descriptor */
         return L.fdesc ? L.fdesc[s->val] : 0;
+#ifdef DL_COLLECTIONS
+    case SEC_DTABLE:                     /* a +Drive table: its address, from the layout */
+        return L.coll[s->val].addr;
+    case SEC_DCOUNT:                     /* its NAME_n: its living entries */
+        return L.coll[s->val].count;
+#endif
     case SEC_COUNT: {                    /* NAME_n: the count after the merge */
         u32 n = table_count(s->val), i, k;
         for (i = 0; i < (u32)L.nmods; i++)
@@ -508,11 +580,11 @@ static int version_cmp(const char *a, const char *b)
 /* The top-level values pass 1 and pass 2 read, found once per file. */
 enum { K_ELEMOD, K_ID, K_VERSION, K_TARGET, K_SECTIONS, K_SYMBOLS, K_EXPORTS, K_IMPORTS, K_WEAK,
        K_RELOCS, K_SITES, K_COLLECTIONS, K_CONTRIBUTE, K_COPIED, K_STORAGE, K_SHARC,
-       K_RESOURCES, K_REQUIRES, K_CONFLICTS, K_N };
+       K_RESOURCES, K_REQUIRES, K_CONFLICTS, K_KNOBS, K_N };
 static const char *const KEYS[K_N] = {
     "elemod", "id", "version", "target", "sections", "symbols", "exports", "imports", "weak",
     "relocs", "sites", "collections", "contribute", "copied", "storage", "sharc",
-    "resources", "requires", "conflicts",
+    "resources", "requires", "conflicts", "knobs",
 };
 
 static int top(const u8 *buf, u32 len, const char **at)
@@ -1424,6 +1496,106 @@ u32 dl_sites_n(void) { return L.nsites; }
 #endif
 
 /* Pass 1: read one file into m. -> 0, or a refusal code (detail in *what). */
+#ifdef DL_COLLECTIONS
+/* A mod's "collections" (docs/DRIVE.md, "+Drive collections"): each table's name (1 to 59 bytes) and
+ * entry size (a multiple of 4, at most 0xFFFF) into L.coll, and NAME and NAME_n as its global names,
+ * after its exports and storage fields (so the check rounds treat them as exports). A DSP table
+ * ("space") is a feature refusal; "spare", "max" and "render" are a flashed build's and ignored. */
+static int collections(struct dmod *m, const char *p, const u8 *buf, u32 len, const char **what)
+{
+    js_t j;
+    const char *s;
+    u32 n;
+    int first = 1;
+    m->coll_first = (u16)L.ncoll;
+    m->coll_n = 0;
+    if (empty(p, buf, len))
+        return 0;
+    at(&j, p, buf, len);
+    if (!js_open(&j, '{'))
+        return DL_R_FORMAT;
+    while (js_next(&j, '}', &first)) {
+        char nm[64];
+        s32 k, entry = -1, v;
+        int f2 = 1;
+        u16 at_;
+        struct coll *c;
+        if (!js_key(&j, &s, &n) || (k = js_unescape(s, n, nm, 60)) <= 0)
+            return DL_R_FORMAT;
+        if (!js_open(&j, '{'))
+            return DL_R_FORMAT;
+        while (js_next(&j, '}', &f2)) {
+            const char *ks;
+            u32 kn;
+            if (!js_key(&j, &ks, &kn))
+                return DL_R_FORMAT;
+            if (js_eq(ks, kn, "entry")) {
+                if (!js_int(&j, &v) || v <= 0 || v > 0xFFFF || (v & 3))
+                    return DL_R_FORMAT;
+                entry = v;
+            } else if (js_eq(ks, kn, "space")) {   /* a DSP table: never on the +Drive */
+                *what = "collections";
+                return DL_R_FEATURE;
+            } else if (!js_skip(&j)) {
+                return DL_R_FORMAT;
+            }
+        }
+        if (j.err || entry < 0)
+            return DL_R_FORMAT;
+        /* its name and NAME_n into the arena, as keep() would put them */
+        if (L.ncoll >= L.COLLS || L.nsyms + 2 > L.SYMS || L.arena_n >= L.ARENA
+            || L.arena_n + (u32)k + 1 > L.ARENA)
+            return DL_R_LIMIT;
+        at_ = (u16)L.arena_n;
+        dl_memcpy(L.arena + at_, nm, (u32)k);
+        L.arena[at_ + k] = 0;
+        L.arena_n += (u32)k + 1;
+        if (L.arena_n >= L.ARENA || L.arena_n + (u32)k + 3 > L.ARENA)
+            return DL_R_LIMIT;
+        dl_memcpy(L.arena + L.arena_n, nm, (u32)k);
+        L.arena[L.arena_n + k] = '_';
+        L.arena[L.arena_n + k + 1] = 'n';
+        L.arena[L.arena_n + k + 2] = 0;
+        c = &L.coll[L.ncoll];
+        c->mod = (u16)(m - L.mods);
+        c->name = at_;
+        c->entry = (u16)entry;
+        c->count = 0;
+        c->addr = 0;
+        add_sym(dl_hash(nm, (u32)k), c->mod, SEC_DTABLE, L.ncoll);
+        L.syms[L.nsyms - 1].name = at_;
+        add_sym(dl_hash(L.arena + L.arena_n, (u32)k + 2), c->mod, SEC_DCOUNT, L.ncoll);
+        L.syms[L.nsyms - 1].name = (u16)L.arena_n;
+        L.arena_n += (u32)k + 3;
+        L.ncoll++;
+        m->coll_n++;
+        m->exp_n += 2;                   /* global names, as exports are */
+    }
+    return j.err ? DL_R_FORMAT : 0;
+}
+
+/* The living mod that declares the +Drive table name: the first in id order. -> its table's
+ * index in L.coll, or -1. */
+static int declarer(const char *name)
+{
+    int i;
+    u32 q;
+    for (i = 0; i < L.nmods; i++) {
+        const struct dmod *o = &L.mods[L.order[i]];
+        if (!o->alive)
+            continue;
+        for (q = o->coll_first; q < (u32)o->coll_first + o->coll_n; q++)
+            if (!dl_strcmp(L.arena + L.coll[q].name, name))
+                return (int)q;
+    }
+    return -1;
+}
+#endif
+
+#ifdef DL_KNOBS
+static int knob_scan(struct dmod *m, const char **k, const u8 *buf, u32 len);
+#endif
+
 static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
 {
     const char *k[K_N], *s;
@@ -1451,12 +1623,32 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
         return DL_R_FORMAT;
     if (!target_ok(k[K_TARGET], buf, len))
         return DL_R_TARGET;
+#ifdef DL_KNOBS
+    {                                    /* "knobs": 0..DL_KNOBS_MAX; __knobs is the linker's */
+        u8 sec;
+        u32 off;
+        m->knobs = 0;
+        m->kfix_first = (u16)L.nkfix;
+        m->kfix_n = 0;
+        if (k[K_KNOBS]) {
+            at(&j, k[K_KNOBS], buf, len);
+            if (!js_int(&j, &v) || v < 0 || v > DL_KNOBS_MAX)
+                return DL_R_FORMAT;
+            m->knobs = (u16)v;
+        }
+        if (find_symbol(k[K_SYMBOLS], buf, len, "__knobs", 7, &sec, &off))
+            return DL_R_FORMAT;
+    }
+#endif
 #ifdef DL_SITES
     for (i = 1; i < sizeof(nok) / sizeof(nok[0]); i++)   /* sites are read below */
 #else
     for (i = 0; i < sizeof(nok) / sizeof(nok[0]); i++)
 #endif
         if (!(nok[i] == K_STORAGE && L.store) && (!L.main_hi || (nok[i] != K_SITES && nok[i] != K_COPIED))
+#ifdef DL_COLLECTIONS
+            && nok[i] != K_COLLECTIONS   /* read below (collections()) */
+#endif
             && !empty(k[nok[i]], buf, len)) {
             *what = no[i];
             return DL_R_FEATURE;
@@ -1624,6 +1816,9 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
             s32 order = 50;
             u32 dlen = 0, had_data = 0;
             struct contrib *c;
+#ifdef DL_COLLECTIONS
+            u16 tname = NONE;
+#endif
             if (!js_open(&j, '{'))
                 return DL_R_FORMAT;
             while (js_next(&j, '}', &f2)) {
@@ -1633,6 +1828,13 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
                     if (!js_str(&j, &s, &n))
                         return DL_R_FORMAT;
                     t = find_table(s, n);
+#ifdef DL_COLLECTIONS
+                    if (t < 0) {         /* a +Drive table's: found in the check rounds */
+                        if ((tname = keep(s, n)) == NONE)
+                            return DL_R_LIMIT;
+                        t = (int)NONE;
+                    } else
+#endif
                     if (t < 0 || !(table_flags(t) & F_MORE) || (table_flags(t) & F_DSP)) {
                         static char tn[32];
                         u32 q = n < 31 ? n : 31;
@@ -1667,6 +1869,14 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
                 return DL_R_FORMAT;
             if (order == 0x7FFFFFFF)     /* the linker's own entries' */
                 return DL_R_FORMAT;
+#ifdef DL_COLLECTIONS
+            if (tname != NONE) {
+                if (!dlen) {
+                    *what = astr(tname);
+                    return DL_R_TABLE;
+                }
+            } else
+#endif
             if (!dlen || dlen % table_entry(t)) {
                 *what = table_name(t);
                 return DL_R_TABLE;
@@ -1676,7 +1886,13 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
             c = &L.ctr[L.nctr++];
             c->table = (u16)t;
             c->order = order;
+#ifdef DL_COLLECTIONS
+            c->tname = tname;
+            c->dlen = (u16)dlen;
+            c->nent = tname != NONE ? 0 : (u16)(dlen / table_entry(t));
+#else
             c->nent = (u16)(dlen / table_entry(t));
+#endif
             c->index = index++;
             m->ctr_n++;
         }
@@ -1717,11 +1933,19 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
     }
     if (L.store && (i = (u32)storage(m, k[K_STORAGE], buf, len)) != 0)
         return (int)i;
+#ifdef DL_COLLECTIONS
+    if ((i = (u32)collections(m, k[K_COLLECTIONS], buf, len, what)) != 0)
+        return (int)i;
+#endif
     {
         int code = scan_sites(m, k, buf, len, what);
         if (code)
             return code;
     }
+#ifdef DL_KNOBS
+    if (L.knobs && (i = (u32)knob_scan(m, k, buf, len)) != 0)
+        return (int)i;
+#endif
     m->init_sec = 0xFF;
     {
         u8 sec;
@@ -1733,6 +1957,544 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
     }
     return 0;
 }
+
+#ifdef DL_KNOBS
+/* ---- knob ids (docs/DRIVE.md, "Knob ids on the +Drive") ----------------------------------------
+ * A +Drive mod may declare "knobs": n and gets a run of n ids in DL_KNOB_LO..DL_KNOB_HI, kept from
+ * boot to boot in /mods/.store (store.knobs, the lockfile's rules). Ids a mod's entries name in its
+ * own bytes follow link.id_problems: none of the core's, a core_knob_looks entry's from DL_KNOB_OWN
+ * up, and from there up no id taken twice, by a flashed module (claims of kind 4) or a mod. */
+#define KNOB_FREED_MAX DS_MAX_KNOBS      /* the freed runs a .store keeps: the last ones */
+#define KNOB_RUNS_MAX (DS_MAX_KNOBS + DL_MAX_MODS)
+static char *put_num(char *p, u32 v);
+
+/* The knob state for a build with F_KNOBS (ABI 1.3): the flashed modules' ids and the .store's runs.
+ * -> 0 when the heap has no room. */
+static int knob_start(void)
+{
+    u32 i, nk = 0;
+    ds_knobs_in = 0;
+    if (!(d_flags() & F_KNOBS))
+        return 1;
+    L.knobs = 1;
+    for (i = 0; i < n_claims(); i++)
+        if (D16(o_claim(i)) == 4)
+            nk++;
+    L.KFIX = 4 * L.CONTRIBS;
+    L.kfix = dl_alloc(L.KFIX * sizeof *L.kfix);
+    L.kflash = dl_alloc((nk ? nk : 1) * sizeof *L.kflash);
+    L.krun = dl_alloc(KNOB_RUNS_MAX * sizeof *L.krun);
+    L.kfree = dl_alloc(2 * DS_MAX_KNOBS * sizeof *L.kfree);
+    if (!L.kfix || !L.kflash || !L.krun || !L.kfree)
+        return 0;
+    for (i = 0; i < n_claims(); i++) {   /* "<first> <last>" in hex */
+        const char *p = pool(D32(o_claim(i) + 4));
+        struct kfix *f = &L.kflash[L.nkflash];
+        u32 q = 0;
+        if (D16(o_claim(i)) != 4)
+            continue;
+        while (p[q] && p[q] != ' ')
+            q++;
+        js_parse_int(p, q, &f->a);
+        p += q + (p[q] == ' ');
+        q = 0;
+        while (p[q] && p[q] != ' ')
+            q++;
+        js_parse_int(p, q, &f->b);
+        f->who = D16(o_claim(i) + 2);
+        f->own_only = 0;
+        L.nkflash++;
+    }
+    if (dl_store_prev)
+        L.kprev = ds_decode(dl_store_prev, dl_store_prev_n);   /* 0: none the allocator takes */
+    return 1;
+}
+
+/* Relocations at p ([[..., type, target, addend], ...]) to __knobs: each abs32 or abs16, its
+ * addend below knobs (link.check). -> 0 when one is not. */
+static int knob_refs_ok(const char *p, const u8 *buf, u32 len, u32 knobs)
+{
+    js_t j;
+    int first = 1;
+    if (!p)
+        return 1;
+    at(&j, p, buf, len);
+    if (!js_open(&j, '['))
+        return 1;                        /* its form is checked elsewhere */
+    while (js_next(&j, ']', &first)) {
+        const char *s, *typ = 0, *tgt = 0;
+        u32 n, tn = 0, gn = 0;
+        s32 add = 0, x;
+        int f2 = 1;
+        if (!js_open(&j, '['))
+            return 1;
+        while (js_next(&j, ']', &f2)) {
+            if (js_peek(&j) == '"') {
+                if (!js_str(&j, &s, &n))
+                    return 1;
+                typ = tgt;
+                tn = gn;
+                tgt = s;
+                gn = n;
+            } else if (js_int(&j, &x)) {
+                add = x;
+            } else if (!js_skip(&j)) {
+                return 1;
+            }
+        }
+        if (tgt && js_eq(tgt, gn, "sym:__knobs")
+            && (!typ || !(js_eq(typ, tn, "abs32") || js_eq(typ, tn, "abs16")) || add < 0 || (u32)add >= knobs))
+            return 0;
+    }
+    return 1;
+}
+
+/* The same for each object's "relocs" in a list of objects (sites, contributions). */
+static int knob_list_ok(const char *p, const u8 *buf, u32 len, u32 knobs)
+{
+    js_t j;
+    const char *s;
+    u32 n;
+    int first = 1;
+    if (!p)
+        return 1;
+    at(&j, p, buf, len);
+    if (!js_open(&j, '['))
+        return 1;
+    while (js_next(&j, ']', &first)) {
+        int f2 = 1;
+        if (!js_open(&j, '{'))
+            return 1;
+        while (js_next(&j, '}', &f2)) {
+            if (!js_key(&j, &s, &n))
+                return 1;
+            if (js_eq(s, n, "relocs") && !knob_refs_ok(j.p, buf, len, knobs))
+                return 0;
+            if (!js_skip(&j))
+                return 1;
+        }
+    }
+    return 1;
+}
+
+/* The value at key `name` of the object at p, or 0. */
+static const char *member(const char *p, const u8 *buf, u32 len, const char *name)
+{
+    js_t j;
+    const char *s;
+    u32 n;
+    int first = 1;
+    if (!p)
+        return 0;
+    at(&j, p, buf, len);
+    if (!js_open(&j, '{'))
+        return 0;
+    while (js_next(&j, '}', &first)) {
+        if (!js_key(&j, &s, &n))
+            return 0;
+        js_peek(&j);
+        if (js_eq(s, n, name))
+            return j.p;
+        if (!js_skip(&j))
+            return 0;
+    }
+    return 0;
+}
+
+/* The big-endian long at .run+off from its hex parts (link.Mod2._long without the stock image):
+ * -> 1, or 0 past .run, under a relocation or over a stock part. */
+static int run_long(const char **k, const char *parts_p, const u8 *buf, u32 len, u32 run_len, s32 off, u32 *v)
+{
+    js_t j;
+    const char *s;
+    u32 n, at_ = 0, got = 0;
+    u8 b[4];
+    int first = 1;
+    if (off < 0 || (u32)off + 4 > run_len || !parts_p)
+        return 0;
+    if (k[K_RELOCS]) {                   /* [".run", off, type, target, addend] */
+        at(&j, k[K_RELOCS], buf, len);
+        js_open(&j, '[');
+        while (js_next(&j, ']', &first)) {
+            int f2 = 1;
+            s32 o;
+            js_open(&j, '[');
+            js_next(&j, ']', &f2);
+            js_skip(&j);
+            js_next(&j, ']', &f2);
+            js_int(&j, &o);
+            js_next(&j, ']', &f2);
+            js_str(&j, &s, &n);
+            if (o < off + 4 && off < o + rsize(s, n))
+                return 0;
+            while (js_next(&j, ']', &f2))
+                js_skip(&j);
+        }
+    }
+    at(&j, parts_p, buf, len);
+    first = 1;
+    if (!js_open(&j, '['))
+        return 0;
+    while (js_next(&j, ']', &first)) {
+        int f2 = 1;
+        u32 cnt, lo, hi, q;
+        if (!js_open(&j, '[') || !js_next(&j, ']', &f2) || !js_str(&j, &s, &n))
+            return 0;
+        if (js_eq(s, n, "hex")) {
+            if (!js_next(&j, ']', &f2) || !js_str(&j, &s, &n))
+                return 0;
+            cnt = n / 2;
+            lo = (u32)off > at_ ? (u32)off : at_;
+            hi = (u32)off + 4 < at_ + cnt ? (u32)off + 4 : at_ + cnt;
+            for (q = lo; q < hi; q++)
+                b[got++] = (u8)(hexval(s[2 * (q - at_)]) << 4 | hexval(s[2 * (q - at_) + 1]));
+        } else {                         /* a stock part: no bytes here */
+            s32 a, c;
+            if (!js_next(&j, ']', &f2) || !js_int(&j, &a) || !js_next(&j, ']', &f2) || !js_int(&j, &c))
+                return 0;
+            cnt = (u32)c;
+            if ((u32)off < at_ + cnt && at_ < (u32)off + 4)
+                return 0;
+        }
+        while (js_next(&j, ']', &f2))
+            js_skip(&j);
+        at_ += cnt;
+        if (got == 4) {
+            *v = dl_rd32(b);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Pass 1's part for knob ids, on a build with F_KNOBS: the references to __knobs, then the ids the
+ * mod's entries name in its own bytes (link.Mod2.id_ranges: core_params' and core_knob_looks'
+ * entries point at a pair of longs, the first and last id). -> 0, or a refusal code. */
+static int knob_scan(struct dmod *m, const char **k, const u8 *buf, u32 len)
+{
+    static const struct { const char *name; u8 own_only; } tabs[] = DL_KNOB_TABLES;
+    const char *parts_p = member(member(k[K_SECTIONS], buf, len, ".run"), buf, len, "parts");
+    u32 t;
+    if (!knob_refs_ok(k[K_RELOCS], buf, len, m->knobs) || !knob_list_ok(k[K_SITES], buf, len, m->knobs)
+        || !knob_list_ok(k[K_CONTRIBUTE], buf, len, m->knobs))
+        return DL_R_FORMAT;
+    m->kfix_first = (u16)L.nkfix;
+    m->kfix_n = 0;
+    if (!k[K_CONTRIBUTE])
+        return 0;
+    for (t = 0; t < sizeof tabs / sizeof tabs[0]; t++) {
+        js_t j;
+        const char *s;
+        u32 n;
+        int first = 1;
+        at(&j, k[K_CONTRIBUTE], buf, len);
+        js_open(&j, '[');
+        while (js_next(&j, ']', &first)) {
+            const char *obj, *rel, *to;
+            js_t q;
+            int f3 = 1;
+            js_peek(&j);
+            obj = j.p;
+            js_skip(&j);
+            to = member(obj, buf, len, "to");
+            if (!to)
+                continue;
+            at(&q, to, buf, len);
+            if (!js_str(&q, &s, &n) || !js_eq(s, n, tabs[t].name) || !(rel = member(obj, buf, len, "relocs")))
+                continue;
+            at(&q, rel, buf, len);
+            js_open(&q, '[');
+            while (js_next(&q, ']', &f3)) {   /* [off, type, target, addend] */
+                int f4 = 1;
+                s32 off, add;
+                const char *ty, *tg;
+                u32 tyn, tgn, a, b;
+                s32 at_;
+                u8 sec;
+                u32 so;
+                js_open(&q, '[');
+                js_next(&q, ']', &f4);
+                js_int(&q, &off);
+                js_next(&q, ']', &f4);
+                js_str(&q, &ty, &tyn);
+                js_next(&q, ']', &f4);
+                js_str(&q, &tg, &tgn);
+                js_next(&q, ']', &f4);
+                tyn = js_int(&q, &add) ? tyn : 0;   /* an addend past s32: no entry of ours */
+                while (js_next(&q, ']', &f4))
+                    js_skip(&q);
+                if (off % 4 || !js_eq(ty, tyn, "abs32"))
+                    continue;
+                if (tgn > 4 && tg[0] == 's' && tg[1] == 'y' && tg[2] == 'm' && tg[3] == ':') {
+                    if (!find_symbol(k[K_SYMBOLS], buf, len, tg + 4, tgn - 4, &sec, &so) || sec != SEC_RUN)
+                        continue;
+                    at_ = (s32)so + add;
+                } else if (js_eq(tg, tgn, "sec:.run")) {
+                    at_ = add;
+                } else {
+                    continue;
+                }
+                if (!run_long(k, parts_p, buf, len, m->run_len, at_, &a)
+                    || !run_long(k, parts_p, buf, len, m->run_len, at_ + 4, &b) || (s32)a > (s32)b)
+                    continue;
+                if (L.nkfix >= L.KFIX)
+                    return DL_R_LIMIT;
+                L.kfix[L.nkfix].a = (s32)a;
+                L.kfix[L.nkfix].b = (s32)b;
+                L.kfix[L.nkfix].who = (u16)(m - L.mods);
+                L.kfix[L.nkfix].own_only = tabs[t].own_only;
+                L.nkfix++;
+                m->kfix_n++;
+            }
+        }
+    }
+    return 0;
+}
+
+/* Python's '%#x' of v */
+static char *put_xhex(char *p, s32 v)
+{
+    static const char dg[] = "0123456789abcdef";
+    u32 u = v < 0 ? 0u - (u32)v : (u32)v;
+    int i = 28;
+    if (v < 0)
+        *p++ = '-';
+    if (!u) {
+        *p++ = '0';
+        return p;
+    }
+    *p++ = '0';
+    *p++ = 'x';
+    while (!(u >> i))
+        i -= 4;
+    for (; i >= 0; i -= 4)
+        *p++ = dg[u >> i & 15];
+    return p;
+}
+
+static char knob_why[64];
+
+/* "<a>-<b> are <tail>" in knob_why */
+static const char *knob_detail(s32 a, s32 b, const char *tail, s32 own)
+{
+    char *p = put_xhex(knob_why, a);
+    *p++ = '-';
+    p = put_xhex(p, b);
+    *p++ = ' ';
+    *p++ = 'a';
+    *p++ = 'r';
+    *p++ = 'e';
+    *p++ = ' ';
+    if (own) {
+        const char *w = "below ";
+        while (*w)
+            *p++ = *w++;
+        p = put_xhex(p, own);
+    } else {
+        u32 q;
+        for (q = 0; tail[q] && p < knob_why + 60; q++)
+            *p++ = tail[q];
+        *p++ = '\'';
+        *p++ = 's';
+    }
+    *p = 0;
+    return knob_why;
+}
+
+/* link.id_problems for the mod at id order i against the flashed ids and the earlier living mods'.
+ * -> a refusal's detail, or 0. */
+static const char *knob_problem(int i, const struct dmod *m)
+{
+    u32 r, x;
+    int k;
+    for (r = m->kfix_first; r < (u32)m->kfix_first + m->kfix_n; r++) {
+        s32 a = L.kfix[r].a, b = L.kfix[r].b;
+        if (a <= DL_KNOB_CORE_HI && DL_KNOB_CORE_LO <= b)
+            return knob_detail(a, b, "core", 0);
+        if (L.kfix[r].own_only && a < DL_KNOB_OWN)
+            return knob_detail(a, b, 0, DL_KNOB_OWN);
+        if (b < DL_KNOB_OWN)
+            continue;
+        if (a < DL_KNOB_OWN)
+            a = DL_KNOB_OWN;
+        for (x = 0; x < L.nkflash; x++) {
+            const struct kfix *f = &L.kflash[x];
+            if (f->a <= b && a <= f->b)
+                return knob_detail(a > f->a ? a : f->a, b < f->b ? b : f->b, module_name(f->who), 0);
+        }
+        for (k = 0; k < i; k++) {
+            const struct dmod *o = &L.mods[L.order[k]];
+            if (!o->alive)
+                continue;
+            for (x = o->kfix_first; x < (u32)o->kfix_first + o->kfix_n; x++) {
+                const struct kfix *f = &L.kfix[x];
+                if (f->a <= b && a <= f->b)
+                    return knob_detail(a > f->a ? a : f->a, b < f->b ? b : f->b, astr(o->id), 0);
+            }
+        }
+    }
+    return 0;
+}
+
+/* store.knobs' clash: the highest last id of the taken runs [at, at+n-1] meets (fixed: the flashed
+ * ids and the living mods' from DL_KNOB_LO up; the runs; the freed runs not of mod), or -1. */
+static s32 knob_clash(u32 at_, u32 n, int runs, const char *mod)
+{
+    s32 hit = -1, lo = (s32)at_, hi = (s32)(at_ + n - 1);
+    u32 x;
+    int k;
+    for (x = 0; x < L.nkflash; x++)
+        if (L.kflash[x].b >= DL_KNOB_LO && L.kflash[x].a <= hi && lo <= L.kflash[x].b && L.kflash[x].b > hit)
+            hit = L.kflash[x].b;
+    for (k = 0; k < L.nmods; k++) {
+        const struct dmod *o = &L.mods[k];
+        if (!o->alive)
+            continue;
+        for (x = o->kfix_first; x < (u32)o->kfix_first + o->kfix_n; x++) {
+            const struct kfix *f = &L.kfix[x];
+            if (f->b >= DL_KNOB_LO && f->a <= hi && lo <= f->b && f->b > hit)
+                hit = f->b;
+        }
+    }
+    if (!runs)
+        return hit;
+    for (x = 0; x < L.nkrun; x++) {
+        const struct ds_knob *r = &L.krun[x];
+        s32 y = (s32)(r->first + r->count - 1);
+        if ((s32)r->first <= hi && lo <= y && y > hit)
+            hit = y;
+    }
+    for (x = 0; x < L.nkfree; x++) {
+        const struct ds_knob *r = &L.kfree[x];
+        s32 y = (s32)(r->first + r->count - 1);
+        if (dl_strcmp(r->mod, mod) && (s32)r->first <= hi && lo <= y && y > hit)
+            hit = y;
+    }
+    return hit;
+}
+
+static struct dmod *knob_mod(const char *id)
+{
+    int k;
+    for (k = 0; k < L.nmods; k++) {
+        struct dmod *o = &L.mods[L.order[k]];
+        if (o->alive && o->knobs && !dl_strcmp(astr(o->id), id))
+            return o;
+    }
+    return 0;
+}
+
+/* Each living "knobs" mod's run (store.knobs from the .store's runs, past the flashed ids and the
+ * living mods' own, in DL_KNOB_LO..DL_KNOB_HI): m->knob_base, and L.kset for the new .store. A mod
+ * with no run left is refused. -> 1 when it refused one. */
+static int knob_runs(void)
+{
+    const struct ds_state *p = L.kprev;
+    u32 nxt = p && p->next_knob > DL_KNOB_LO ? p->next_knob : DL_KNOB_LO, x, y;
+    int k, want = 0;
+    if (!L.knobs)
+        return 0;
+    ds_knobs_in = 0;
+    for (k = 0; k < L.nmods; k++)
+        if (L.mods[k].alive && L.mods[k].knobs)
+            want = 1;
+    L.kset.n = L.kset.nf = 0;
+    L.kset.next = p ? p->next_knob : 0;
+    L.kset.kn = p ? p->kn : 0;
+    L.kset.fkn = p ? p->fkn : 0;
+    if (!want && (!p || (!p->nkn && !p->nfkn))) {   /* nothing given, nothing held: as it was */
+        ds_knobs_in = &L.kset;
+        return 0;
+    }
+    L.nkrun = L.nkfree = 0;
+    if (p)
+        for (x = 0; x < p->nfkn; x++)
+            L.kfree[L.nkfree++] = p->fkn[x];
+    for (x = 0; p && x < p->nkn; x++) {  /* a run stays while its mod asks for as many, clear of fixed */
+        const struct ds_knob *r = &p->kn[x];
+        const struct dmod *o = knob_mod(r->mod);
+        if (o && o->knobs == r->count && knob_clash(r->first, r->count, 0, 0) < 0)
+            L.krun[L.nkrun++] = *r;
+        else
+            L.kfree[L.nkfree++] = *r;
+    }
+    for (k = 0; k < L.nmods; k++) {      /* the others in id order */
+        struct dmod *o = &L.mods[L.order[k]];
+        const char *id = astr(o->id);
+        u32 n = o->knobs, at_ = 0;
+        int found = 0, again;
+        if (!o->alive || !n)
+            continue;
+        for (x = 0; x < L.nkrun && dl_strcmp(L.krun[x].mod, id); x++)
+            ;
+        if (x < L.nkrun)
+            continue;
+        for (x = L.nkfree; x-- > 0;)     /* back where it was, the latest first */
+            if (!dl_strcmp(L.kfree[x].mod, id) && L.kfree[x].first + n - 1 <= DL_KNOB_HI
+                && knob_clash(L.kfree[x].first, n, 1, id) < 0) {
+                at_ = L.kfree[x].first;
+                found = 1;
+                break;
+            }
+        for (x = y = 0; x < L.nkfree; x++)
+            if (dl_strcmp(L.kfree[x].mod, id))
+                L.kfree[y++] = L.kfree[x];
+        L.nkfree = y;
+        for (again = 0; !found && again < 2; again++) {
+            s32 hit;
+            if (again) {                 /* the never-used ids are gone: the freed runs go out again */
+                if (!L.nkfree)
+                    break;
+                L.nkfree = 0;
+            }
+            at_ = again ? DL_KNOB_LO : nxt;
+            while ((hit = knob_clash(at_, n, 1, id)) >= 0)
+                at_ = (u32)hit + 1;
+            if (at_ + n - 1 <= DL_KNOB_HI)
+                found = 1;
+        }
+        if (!found) {
+            char d[32], *q = d;
+            const char *w = "run of ";
+            while (*w)
+                *q++ = *w++;
+            q = put_num(q, n);
+            w = ": none free";
+            while (*w)
+                *q++ = *w++;
+            *q = 0;
+            refuse(o, DL_R_IDS, 0, d);
+            return 1;
+        }
+        L.krun[L.nkrun].mod = id;
+        L.krun[L.nkrun].first = at_;
+        L.krun[L.nkrun].count = n;
+        L.nkrun++;
+        if (at_ + n > nxt)
+            nxt = at_ + n;
+    }
+    for (x = 1; x < L.nkrun; x++) {      /* by first id (an insertion sort) */
+        struct ds_knob r = L.krun[x];
+        for (y = x; y > 0 && L.krun[y - 1].first > r.first; y--)
+            L.krun[y] = L.krun[y - 1];
+        L.krun[y] = r;
+    }
+    for (x = 0; x < L.nkrun + L.nkfree; x++) {
+        const struct ds_knob *r = x < L.nkrun ? &L.krun[x] : &L.kfree[x - L.nkrun];
+        if (r->first + r->count > nxt)
+            nxt = r->first + r->count;
+        if (x < L.nkrun)
+            knob_mod(r->mod)->knob_base = r->first;
+    }
+    L.kset.n = L.nkrun;
+    L.kset.kn = L.krun;
+    L.kset.nf = L.nkfree > KNOB_FREED_MAX ? KNOB_FREED_MAX : L.nkfree;
+    L.kset.fkn = L.kfree + (L.nkfree - L.kset.nf);   /* the latest */
+    L.kset.next = nxt;
+    ds_knobs_in = &L.kset;
+    return 0;
+}
+#endif
 
 /* ---- check -------------------------------------------------------------------------------- */
 static struct dmod *by_id(const char *id, struct dmod *self)
@@ -1934,6 +2696,16 @@ static int check_round(void)
             refused++;
             continue;
         }
+#ifdef DL_KNOBS
+        if (L.knobs) {                   /* knob ids: link.id_problems' rules */
+            const char *why = knob_problem(i, m);
+            if (why) {
+                refuse(m, DL_R_IDS, 0, why);
+                refused++;
+                continue;
+            }
+        }
+#endif
 #ifdef DL_REGIONS
         {
             const char *who = region_clash(m);
@@ -1946,7 +2718,11 @@ static int check_round(void)
 #endif
         for (q = 0; q < m->imports.n; q++) {
             const char *nm = L.arena + L.lists[m->imports.first + q];
-            if (!known_global(nm) && !in_list(&m->weak, nm))
+            if (!known_global(nm) && !in_list(&m->weak, nm)
+#ifdef DL_KNOBS
+                && !(L.knobs && m->knobs && !dl_strcmp(nm, "__knobs"))   /* its run's first id */
+#endif
+                )
                 break;
         }
         if (q < m->imports.n) {
@@ -1954,6 +2730,26 @@ static int check_round(void)
             refused++;
             continue;
         }
+#ifdef DL_COLLECTIONS
+        for (q = 0; q < m->ctr_n; q++) {     /* +Drive tables: a living mod declares each, of that entry */
+            struct contrib *c = &L.ctr[m->ctr_first + q];
+            int d;
+            if (c->tname == NONE)
+                continue;
+            d = declarer(L.arena + c->tname);
+            if (d < 0 || c->dlen % L.coll[d].entry) {
+                c->table = NONE;
+                break;
+            }
+            c->table = (u16)(DTAB | (u32)d);
+            c->nent = (u16)(c->dlen / L.coll[d].entry);
+        }
+        if (q < m->ctr_n) {
+            refuse(m, DL_R_TABLE, 0, L.arena + L.ctr[m->ctr_first + q].tname);
+            refused++;
+            continue;
+        }
+#endif
         {                                /* sites against earlier living mods' sites and copied
                                           * blocks (two copied blocks may share bytes) */
             u32 a, b;
@@ -2074,6 +2870,26 @@ static int layout(void)
         }
     }
     a = align(a, 4);
+#ifdef DL_COLLECTIONS
+    for (i = 0; i < L.nmods; i++) {      /* the +Drive tables, in id order: living entries and a zero */
+        struct dmod *m = &L.mods[L.order[i]];
+        u32 q, x, k;
+        if (!m->alive)
+            continue;
+        for (q = m->coll_first; q < (u32)m->coll_first + m->coll_n; q++) {
+            struct coll *c = &L.coll[q];
+            u32 n = 0;
+            for (x = 0; x < (u32)L.nmods; x++)
+                if (L.mods[x].alive)
+                    for (k = 0; k < L.mods[x].ctr_n; k++)
+                        if (L.ctr[L.mods[x].ctr_first + k].table == (DTAB | q))
+                            n += L.ctr[L.mods[x].ctr_first + k].nent;
+            c->count = (u16)n;
+            c->addr = a;
+            a += (n + 1) * c->entry;
+        }
+    }
+#endif
     if (a > L.area_hi && a - L.area_hi > over)
         over = a - L.area_hi;
     if (over) {
@@ -2107,6 +2923,12 @@ static int resolve(struct dmod *m, const char *s, u32 n, u32 *v)
     if (n > 4 && s[0] == 's' && s[1] == 'y' && s[2] == 'm' && s[3] == ':') {
         u32 h = dl_hash(s + 4, n - 4), i;
         const struct sym *g;
+#ifdef DL_KNOBS
+        if (L.knobs && m->knobs && js_eq(s + 4, n - 4, "__knobs")) {   /* its run's first id */
+            *v = m->knob_base;
+            return 1;
+        }
+#endif
         for (i = 0; i < L.nlocals; i++)
             if (L.locals[i].hash == h) {
                 u32 off = L.locals[i].val, sec = L.locals[i].sec;
@@ -2287,7 +3109,7 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
                 js_key(&j, &s, &n);
                 if (js_eq(s, n, "data")) {
                     u32 dn;
-                    if (L.edata_n + (u32)c->nent * table_entry(c->table) > L.EDATA)
+                    if (L.edata_n + (u32)c->nent * ctr_entry(c) > L.EDATA)
                         return DL_R_LIMIT;
                     if (!js_hex(&j, L.edata + L.edata_n, L.EDATA - L.edata_n, &dn))
                         return DL_R_JSON;
@@ -2325,7 +3147,7 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
                         js_int(&j, &add);
                         js_next(&j, ']', &f4);
                         if (off < 0 || (u32)off + (r->type == R_PC16 ? 2 : 4)
-                                           > (u32)c->nent * table_entry(c->table))
+                                           > (u32)c->nent * ctr_entry(c))
                             return DL_R_FORMAT;
                         r->off = (u16)off;
                         r->value = sv + (u32)add;
@@ -2422,17 +3244,39 @@ static int item_before(const struct item *a, const struct item *b)
 
 static int bind(int write)
 {
-    u32 t, i, k;
-    for (t = 0; t < n_tables(); t++) {
-        u32 esz = table_entry(t), cnt = table_count(t), n = 0, addr = table_addr(t);
-        u8 *tab = DL_MEM(addr);
+    u32 t, i, k, nt = n_tables();
+#ifdef DL_COLLECTIONS
+    nt += L.ncoll;                       /* then the +Drive tables: no flashed entries, in the area */
+#endif
+    for (t = 0; t < nt; t++) {
+        u32 tix = t, esz, cnt, n = 0, addr, cap;
+        u8 *tab;
         int any = 0;
+#ifdef DL_COLLECTIONS
+        if (t >= n_tables()) {
+            const struct coll *c = &L.coll[t - n_tables()];
+            if (!L.mods[c->mod].alive)
+                continue;
+            tix = DTAB | (t - n_tables());
+            esz = c->entry;
+            cnt = 0;
+            addr = c->addr;
+            cap = c->count;
+        } else
+#endif
+        {
+            esz = table_entry(t);
+            cnt = table_count(t);
+            addr = table_addr(t);
+            cap = table_cap(t);
+        }
+        tab = DL_MEM(addr);
         for (i = 0; i < L.nent; i++)
-            if (L.mods[L.ent[i].mod].alive && L.ctr[L.ent[i].ctr].table == t)
+            if (L.mods[L.ent[i].mod].alive && L.ctr[L.ent[i].ctr].table == tix)
                 any = 1;
         if (!any)
             continue;
-        if ((cnt + 1) * esz > L.MDATA)
+        if (cnt && (cnt + 1) * esz > L.MDATA)   /* a +Drive table has no flashed entries to keep */
             return 0;
         dl_memcpy(L.mdata, tab, cnt * esz);
         for (i = 0; i < cnt; i++) {
@@ -2447,7 +3291,7 @@ static int bind(int write)
         for (i = 0; i < L.nent; i++) {
             const struct entry *e = &L.ent[i];
             const struct contrib *c = &L.ctr[e->ctr];
-            if (!L.mods[e->mod].alive || c->table != t)
+            if (!L.mods[e->mod].alive || c->table != tix)
                 continue;
             for (k = 0; k < c->nent; k++) {
                 struct item *it;
@@ -2494,7 +3338,7 @@ static int bind(int write)
             }
         }
         if (write)
-            dl_memset(tab + n * esz, 0, (table_cap(t) + 1 - n) * esz);
+            dl_memset(tab + n * esz, 0, (cap + 1 - n) * esz);
     }
     return 1;
 }
@@ -2559,6 +3403,10 @@ int dl_parse_active(const char *text, u32 len, struct dl_choice *out)
 static void *take(u32 n) { return dl_alloc(n ? n : 4); }
 
 /* Every block begin() took goes back. */
+#ifdef DL_KNOBS
+static int knob_start(void);
+#endif
+
 static void finish(void)
 {
     static void **const p[] = {(void **)&L.mods, (void **)&L.order, (void **)&L.place, (void **)&L.arena, (void **)&L.lists,
@@ -2566,8 +3414,14 @@ static void finish(void)
                                (void **)&L.ctr, (void **)&L.ent, (void **)&L.edata, (void **)&L.erel,
                                (void **)&L.items, (void **)&L.mdata, (void **)&L.fld, (void **)&L.fdesc,
                                (void **)&L.want, (void **)&L.want_fld,
+#ifdef DL_COLLECTIONS
+                               (void **)&L.coll,
+#endif
 #ifdef DL_SITES
                                (void **)&L.sites, (void **)&L.tsdata,
+#endif
+#ifdef DL_KNOBS
+                               (void **)&L.kfix, (void **)&L.kflash, (void **)&L.krun, (void **)&L.kfree,
 #endif
                                };
     u32 i;
@@ -2575,6 +3429,11 @@ static void finish(void)
         dl_free(*p[i]);
         *p[i] = 0;
     }
+#ifdef DL_KNOBS
+    ds_state_free(L.kprev);
+    L.kprev = 0;
+    ds_knobs_in = 0;
+#endif
 }
 
 static u32 pool_n(u32 per, u32 mb, u32 base)
@@ -2610,6 +3469,14 @@ static int pools(int n)
     L.ERELOCS = pool_n(DL_POOL_ERELOCS, mb, 0);
     L.SITES = pool_n(DL_POOL_SITES, mb, 0);
     L.SDATA = pool_n(DL_POOL_SDATA, mb, 0);
+#ifdef DL_COLLECTIONS
+    L.COLLS = pool_n(DL_POOL_COLLS, mb, 0);
+    if (L.EDATA / 4 + 1 > L.MERGE)       /* a +Drive table's entries all fit the entry bytes' pool */
+        L.MERGE = L.EDATA / 4 + 1;
+    L.coll = take(L.COLLS * sizeof *L.coll);
+    if (!L.coll)
+        return 0;
+#endif
     L.mods = take((u32)n * sizeof *L.mods);
     L.order = take((u32)n * sizeof *L.order);
     L.place = take((u32)n * sizeof *L.place);
@@ -2784,13 +3651,17 @@ static int fit_round(void)
     return 1;
 }
 
-/* Check rounds and the room, until neither refuses a mod. */
+/* Check rounds, the room and the knob runs, until none refuses a mod. */
 static void settle(void)
 {
     do
         while (check_round())
             ;
+#ifdef DL_KNOBS
+    while (fit_round() || knob_runs());
+#else
     while (fit_round());
+#endif
 }
 
 /* The living mods' fields placed from /mods/.store (drive_store.allocate): their descriptors for
@@ -2889,6 +3760,10 @@ static int begin_start(u32 desc, int n, u8 *buf, u32 max, struct dl_status *st_o
 #endif
     if (!pools(n))
         return -1;
+#ifdef DL_KNOBS
+    if (!knob_start())
+        return -1;
+#endif
     L.arena_n = 1;                       /* offset 0 holds "" */
 
     /* the flashed build's names: exports, tables and their counts, core_desc */
@@ -2945,6 +3820,15 @@ static void begin_line(const struct dl_choice *ch, int i, s32 have, int why)
             L.nfld = m->fld_first;
         if (m->ctr_n)
             L.nctr = m->ctr_first;
+#ifdef DL_KNOBS
+        if (m->kfix_n)
+            L.nkfix = m->kfix_first;
+        m->kfix_n = 0;
+#endif
+#ifdef DL_COLLECTIONS
+        if (m->coll_n)
+            L.ncoll = m->coll_first;
+#endif
         if (m->site_n) {
             L.nsite = m->site_first;
             L.sdata_n = m->sdata_first;
@@ -3296,6 +4180,9 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
         if (dirty_hi > dl_used_lo)
             dl_memset(DL_MEM(dl_used_lo), 0, dirty_hi - dl_used_lo);
         dl_used_hi = dl_used_lo;
+#ifdef DL_KNOBS
+        ds_knobs_in = 0;                 /* and the knob runs stay the old .store's */
+#endif
         if (place_store())               /* nothing loads: every field parks */
             write_store();
         return 0;
