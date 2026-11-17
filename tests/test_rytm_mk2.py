@@ -200,8 +200,9 @@ def test_core_ar2_sites():
     # the project save to a +Drive slot (0.10, ev_project_save), and the six
     # length and scale setters (0.11, ev_steps' LENGTH), and the five moments (0.11: the SysEx
     # router, the kit select and push, the slot clear and paste), and the sequencer clock's two
-    # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic)
-    assert len(mod['sites']) == 125
+    # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic), and
+    # main()'s call at 0x401009e0 (0.14, ev_boot_drive)
+    assert len(mod['sites']) == 126
     for addr in ('0x400c0ba2', '0x400c0c8c', '0x400ab8d0', '0x400aba02', '0x400aba7e', '0x400ab096'):
         assert [x for x in mod['sites'] if x['addr'] == addr and x['op'] == 'jmp'], addr
     # each moment's site is its routine's first whole instructions, and the body in moments.s
@@ -491,7 +492,7 @@ def test_core_ar2_screen():
     assert ('ev_key', 'core_screen_key', -1000000) in sub
     assert ('ev_enc', 'core_screen_enc', 1000000) in sub
     assert ('ev_tick', 'core_screen_tick', 3) in sub
-    assert 'screen.c' in j['sources'] and j['version'] == '0.13'
+    assert 'screen.c' in j['sources'] and elemod.version_key(j['version']) >= elemod.version_key('0.13')
 
 
 def test_core_ar2_screen_check_needs_0_12():

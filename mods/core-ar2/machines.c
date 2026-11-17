@@ -110,10 +110,13 @@ static uint8_t *ref_record(int32_t k)
     return 0;
 }
 
+void core_store_boot_init(void);    /* store.c (0.14) */
+
 void core_boot_init(void)
 {
     uint32_t done = 0;
     const struct core_machine *const *e;
+    core_store_boot_init();
     for (e = core_machines; *e; e++) {
         const struct core_machine *m = *e;
         int32_t s = m->slot;
