@@ -2420,6 +2420,16 @@ sites, with `analog-rytm-mk2/moments.h`:
   handle a project uses. A core without the table `core_handles` refuses
   the mark at link time.
 
+### Moments (core-a4mk2, Analog Four MKII)
+
+The Rytm's moments, above, with `analog-four-mk2/moments.h`: `core_midi_try_send` and `core_usb_midi_up`,
+`core_project_name()`, `"handle": true` fields with
+`core_handle_fields` (4 sounds a kit, 6 tracks a pattern, no sound pool),
+the current kit, track (0..5: 4 FX, 5 CV) and pattern with their items, and
+`ev_kit`. The SysEx handler is std1's
+`ev_sysex_in` (core-a4mk2 0.7). What differs is in
+mods/core-a4mk2/README.md, "Moments".
+
 ### The sequencer (core-ar2 0.11, Analog Rytm MKII)
 
 The sequencer clock's steps and ticks as events, with
@@ -2776,8 +2786,16 @@ and on a unit (24 Oct 2026).
 
 The Rytm's knob looks (above) with `analog-four-mk2/pages.h`: an entry in
 `core_knob_looks` covers a mod's own knob ids, which on the A4 are above
-0x126, and `look` is a stock id, 1..0x126. The A4 has no `"knobs"` ids
-from the linker: a mod picks its ids as for `core_params`.
+0x126, and `look` is a stock id, 1..0x126.
+
+### Knob ids by count (Analog Four MKII)
+
+The Rytm's knob ids by count (above) with `analog-four-mk2/pages.h`:
+declare `"knobs": n` and use `CORE_KNOB(k)`. The A4's ids: stock's are 1..0x126, core-a4mk2 keeps 0x127..0x1ff (its lock
+pseudo ids and room for more), a mod's own start at 0x200. A mod that picks
+its ids itself still may, from 0x200: the linker refuses a `core_params` or
+`core_knob_looks` entry in 0x127..0x1ff, a `core_knob_looks` entry below
+0x200, and two mods sharing an id.
 
 ### Screen calls (core-a4mk2 0.6, Analog Four MKII)
 
@@ -4038,7 +4056,7 @@ core has.
 | `license` | an SPDX identifier. The example uses `GPL-2.0-or-later`, the loader's own licence. Put the same `SPDX-License-Identifier` line at the top of each source |
 | `sources` | `.c` and `.s` files, compiled/assembled with the device's flags |
 | `subscribe` | `{"event", "fn", "order"}`: `fn` is one of your global functions |
-| `sites` | patches to the stock image: `{"addr", "stock", "op", "target" or "new"}` (below) |
+| `sites` | patches to the stock image: `{"addr", "stock", "op", "target" or "new"}` (below); `"len"` and `"stock_sha256"` may stand in for `"stock"`, so the manifest holds no stock bytes |
 | `collections`, `contribute` | tables you declare (`{"entry": 4}`, or just the entry size; a core may add `"spare"`, `"max"` and `"render"`, DRIVE.md, "The build descriptor"), and entries you add to others' ([FORMAT.md](FORMAT.md)) |
 | `weak` | names you import that may be missing; they then read as zero |
 | `dsp`, `subscribe_dsp` | DSP code, on a device whose OS runs some (below, "DSP code") |

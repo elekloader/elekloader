@@ -81,6 +81,7 @@ typedef int (*fn_view)(int, void *, void *, void *);
 extern const fn_view std_view[];
 extern const ev_analog_frame_fn ev_analog_frame[];
 extern const ev_mod_set_fn ev_mod_set[];
+extern const ev_live_rec_fn ev_live_rec[];
 
 static unsigned short irq_mask(void)
 {
@@ -891,6 +892,25 @@ int core_mute_pre(int32_t track, int32_t muted)
         return 0;
     for (f = std_mute; *f; f++)
         if ((*f)((unsigned)track, (muted & 0xff) ? 1u : 0u, MUTE_SCOPE_PROJECT))
+            return 1;
+    return 0;
+}
+
+/* =============================== ev_live_rec =============================== */
+
+/* Live recording's pattern writes, each a project-model method with the track
+ * as its second argument, called only while live record is on (0x40021dc2):
+ * 0x400a954a a played note as a trig (and the pending entry its note-off,
+ * 0x400a67d8, finishes: refused, that finds nothing), 0x400a6a08 the note,
+ * velocity or length into the step's trig, 0x400a690c a live p-lock. Nonzero
+ * takes it: stock writes nothing (ui.s returns from the method). */
+int core_live_rec_pre(int32_t track, int32_t what)
+{
+    const ev_live_rec_fn *f;
+    if ((uint32_t)track > TRACK_CV)
+        return 0;
+    for (f = ev_live_rec; *f; f++)
+        if ((*f)((unsigned)track, (unsigned)what))
             return 1;
     return 0;
 }

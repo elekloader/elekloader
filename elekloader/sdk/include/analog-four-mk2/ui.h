@@ -115,6 +115,17 @@ typedef int (*ev_knob_turn_fn)(void *view, int id, int delta, int knob, int how)
  * stays (the mixer page still shows its level popup). These are not std1 parameters (std1 has no track level id). */
 #define KNOB_ID_LEVEL(t) (0x10000 + (t))
 
+/* ---- ev_live_rec, a native event (not std1): live recording about to write
+ * into track's pattern (UI task):
+ *     int f(unsigned track, unsigned what)
+ * Nonzero takes it: stock writes nothing, and no later handler runs. A mod
+ * subscribes by contributing to the "ev_live_rec" table. Knob turns that
+ * become live p-locks come on ev_knob_turn (TURN_LOCK) first. */
+#define LIVE_REC_NOTE 1                 /* a played note becomes a trig (its length follows at the note-off) */
+#define LIVE_REC_VALUE 2                /* note, velocity or length into the step's trig */
+#define LIVE_REC_LOCK 3                 /* a live p-lock */
+typedef int (*ev_live_rec_fn)(unsigned track, unsigned what);
+
 /* ---- ev_analog_frame(words), a native event (not std1): the analog
  * control frame, 100 words, after stock built it and before it is packed
  * for the analog board, in the audio interrupt, every block. A handler may

@@ -198,11 +198,31 @@ volatile unsigned char core_store_globals[4][GLOBAL_BYTES];
  * version loads */
 static unsigned char *st_image = S;
 
+/* the live generations, one byte a scope (sound .. project): this
+ * build's from .boot, which the Drive Loader may change in ev_boot_drive to
+ * the live +Drive layout's, with the layout ID and its ancestors in
+ * core_store_ids; the T and P split stays the build's */
+unsigned char core_store_gens[6];
+
 static unsigned gen(int scope)
+{
+    return core_store_gens[scope - 1];
+}
+
+static unsigned built_gen(int scope)
 {
     unsigned g = scope <= SC_TRACK ? (unsigned)__store_gen : (unsigned)__store_gen2;
     return g >> (24 - 8 * ((scope - 1) & 3)) & 255;
 }
+
+/* .boot (core_boot_init): this build's generations */
+void core_store_boot_init(void)
+{
+    int s;
+    for (s = SC_SOUND; s <= SC_PROJECT; s++)
+        core_store_gens[s - 1] = built_gen(s);
+}
+
 #define SPLIT_T ((unsigned)__store_gen2 >> 8 & 255)
 #define SPLIT_P ((unsigned)__store_gen2 & 255)
 #define PATTERNS_AT (HEADER + TRACKS * SPLIT_T)
@@ -915,6 +935,73 @@ void core_store_set(unsigned field, void *item, int index, unsigned value)
         core_lock_cancel(field, item);         /* no slide of it now (rows.c, 0.5) */
 }
 
+/* ---- handles (core-ar2 0.11's): every handle field's value in the live project ----
+ * The linker gives core_handles, the descriptor of each field a mod declared
+ * "handle": true (zero-terminated). core_handle_fields calls fn(field, item,
+ * index, value) for each item of the live project whose handle is not 0,
+ * with the item and index core_store_get takes: the 128 kits as edited, then
+ * as last saved (the live project +0xbe0cea, what a project save writes),
+ * each followed by its 4 sounds; the 4 global slots; the 128 patterns and
+ * their 6 tracks; the project. The working pattern (the live project +0x10,
+ * a copy of one of the 128) is left out. The A4 has no sound pool in the
+ * live project. UI task. */
+extern const unsigned core_handles[];
+
+typedef void (*core_handle_fn)(unsigned field, void *item, int index, unsigned value);
+
+#define LIVE_KITS_SAVED 0x4b000                 /* the kits as last saved, after the 128 as edited */
+#define LIVE_PATTERN_0 ((unsigned char *)0x40653c5c + 0x16fda)  /* live pattern 0, after the working one */
+#define LIVE_PATTERN_SIZE 0x16fda
+
+static void handle_at(core_handle_fn fn, unsigned field, void *item, int index)
+{
+    unsigned v = core_store_get(field, item, index);
+    if (v)
+        fn(field, item, index, v);
+}
+
+void core_handle_fields(core_handle_fn fn)
+{
+    const unsigned *h;
+    unsigned char *kit, *p;
+    int k, t, s;
+    if (!fn)
+        return;
+    for (h = core_handles; *h; h++)
+        switch (*h >> 28) {
+        case SC_SOUND:
+        case SC_KIT:
+            for (s = 0; s < 2; s++)
+                for (k = 0; k < 128; k++) {
+                    kit = LIVE_KITS + (s ? LIVE_KITS_SAVED : 0) + LIVE_KIT_SIZE * k;
+                    if (*h >> 28 == SC_KIT)
+                        handle_at(fn, *h, kit, 0);
+                    else
+                        for (t = 0; t < 4; t++)
+                            handle_at(fn, *h, kit + KIT_SOUNDS + 0x152 * t, 0);
+                }
+            break;
+        case SC_GLOBAL:
+            for (k = 0; k < 4; k++)
+                handle_at(fn, *h, 0, k);
+            break;
+        case SC_TRACK:
+        case SC_PATTERN:
+            for (k = 0; k < 128; k++) {
+                p = LIVE_PATTERN_0 + LIVE_PATTERN_SIZE * k;
+                if (*h >> 28 == SC_PATTERN)
+                    handle_at(fn, *h, p, 0);
+                else
+                    for (t = 0; t < TRACKS_A_PATTERN; t++)
+                        handle_at(fn, *h, p, t);
+            }
+            break;
+        case SC_PROJECT:
+            handle_at(fn, *h, 0, 0);
+            break;
+        }
+}
+
 /* 0.6: the modified mark (core-ar2 0.8's). After an edit of the live
  * project, a project load asks first; stock marks the project modified
  * (SET_MODIFIED(model, 1)) from the UI task on the project's change signal,
@@ -995,4 +1082,44 @@ int st_proj_save(void *model, int slot, void *progress)
     r = st_proj_save_body(model, slot, progress);
     save_event(0, (r & 255) ? how : how | SAVE_FAILED);
     return r;
+}
+
+/* ev_boot_drive: f(), once at boot, from the site 0x401061e8 in main()
+ * (store.s), before its call of 0x400f1b18: the heap is up, the +Drive's
+ * init done (0x40106124..0x4010613a; its result word 0x41865e98 is 0 when it
+ * came up, which a handler checks before it reads) and the power-off image
+ * read (0x401061a4); the audio interrupt (0x4010623a) and the UI task
+ * (0x40106302) have not started. A factory boot skips it. 0x400f1b18 is the
+ * boot's project load (the parameter maps, then 0x400145f6, stock's
+ * check-and-load of the stored image into the live project through
+ * 0x40011054, the boot word's reset and an upgraded image's save), so
+ * nothing has loaded the live project yet: the Drive Loader links the +Drive
+ * mods and may set the live layout (core_store_ids, core_store_gens), and
+ * the boot's load and its ev_project(1) then read with it, unlike core-ar2
+ * 0.14's, which loads again. The collection has no spare entries: a +Drive
+ * mod is not called in it. */
+typedef void (*ev_boot_drive_t)(void);
+extern const ev_boot_drive_t ev_boot_drive[];
+
+void core_boot_drive(void)
+{
+    const ev_boot_drive_t *f;
+    for (f = ev_boot_drive; *f; f++)
+        (*f)();
+}
+
+/* ev_drive_format: f(fs), from the site 0x40074af6 in FORMAT +DRIVE
+ * (0x40074984; store.s), after stock erased the project and sound slots and
+ * before it writes the header again, holding the store's mutex; fs is the
+ * MmcFs. Both formats reach it: the menu's, and the one at UI start on a card
+ * with no header. The Drive Loader empties its own store there. No spare
+ * entries. */
+typedef void (*ev_drive_format_t)(void *fs);
+extern const ev_drive_format_t ev_drive_format[];
+
+void core_drive_format(void *fs)
+{
+    const ev_drive_format_t *f;
+    for (f = ev_drive_format; *f; f++)
+        (*f)(fs);
 }
