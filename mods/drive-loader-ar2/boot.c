@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* Drive Loader, boot side (Analog Rytm MKII, OS 1.74): the boot stub's C half (flush.s has
- * the entry at the site 0x401009e0), the skip key, the crash guard, /mods/active, and the
+/* Drive Loader, boot side (Analog Rytm MKII, OS 1.74): dl_boot, which core calls in
+ * ev_boot_drive from its site 0x401009e0 (core-ar2 0.14), the skip key, the crash guard, /mods/active, and the
  * tick that clears the crash guard. The linker is dlink.c.
  *
  * At the site, main() (FUN_401006ee) has mounted ekFS and runs as an RTOS task with
@@ -8,6 +8,7 @@
  * so no table the linker rewrites can be read while it does. */
 #include "dl.h"
 #include "fs.h"
+#include "dstore.h"
 
 #define EMMC_ERROR (*(volatile u32 *)0x419ae2c0)     /* 0 = the eMMC came up */
 #define EKFS_MOUNT (*(volatile u32 *)0x419ae2bc)     /* 0 = ekFS is mounted */
@@ -25,6 +26,7 @@ typedef u32 (*held_fn)(u32 code);
 #define KEY_NO 0x45
 
 #define CRASH_TICKS 200                              /* ev_tick is about 20 Hz: 10 s */
+#define CRASH_TICKS_SITES 1200                       /* 60 s, after a boot that applied sites */
 #define DTCN0 (*(volatile u32 *)0xfc07000c)          /* bus clock count (dl.h, "boot time") */
 
 extern char core_desc[];
@@ -131,22 +133,21 @@ void dl_read_close(struct dl_reader *rd)
 int dl_read_more(struct dl_reader *rd, u8 *buf, u32 max)
 {
     s32 r;
-    u8 more;
+    u32 at = rd->got < max ? rd->got : 0;   /* past max: on over the buffer's start, for the
+                                             * size and CRC alone */
+    u32 room = rd->got < max ? max - rd->got : max;
     if (!rd->open)
         return -3;
-    if (rd->got < max) {                 /* one stretch, as dl_read_file reads them */
-        r = dl_fs_read(&rd->f, buf + rd->got, max - rd->got < DL_BREATHE ? max - rd->got : DL_BREATHE);
-        if (r > 0) {
-            rd->crc = dl_crc32_add(rd->crc, buf + rd->got, (u32)r);
-            rd->got += (u32)r;
-            return 0;
-        }
-        dl_read_close(rd);
-        return r < 0 ? -3 : 1;
+    r = dl_fs_read(&rd->f, buf + at, room < DL_BREATHE ? room : DL_BREATHE);   /* one stretch */
+    if (r > 0) {
+        rd->crc = dl_crc32_add(rd->crc, buf + at, (u32)r);
+        if (rd->got >= max)
+            rd->over = 1;
+        rd->got += (u32)r;
+        return 0;
     }
-    r = dl_fs_read(&rd->f, &more, 1);    /* full: one byte more is a file too large */
     dl_read_close(rd);
-    return r > 0 ? -2 : 1;
+    return r < 0 ? -3 : rd->over ? -2 : 1;
 }
 
 static int exists(const char *name)
@@ -214,11 +215,15 @@ static void boot(void);
 
 void dl_boot(void)
 {
-    u32 t0 = DTCN0, t1;
+    u32 t0 = DTCN0, t1, lo, hi;
     t_checks = t_link = 0;
+    dl_stage_top = 1;                    /* each file read into the +Drive area itself (dl.h) */
     booting = 1;
     boot();
     booting = 0;
+    if (dl_area((u32)core_desc, &lo, &hi) == 0)   /* the free tail, above the layout's end: the */
+        dl_stage_tail(dl_used_hi > lo && dl_used_hi <= hi ? dl_used_hi : lo, hi);   /* route and the
+                                          * MODS page stage there from now on (fs.h) */
     t1 = DTCN0;
     if (!t_checks)
         t_checks = t1;
@@ -247,6 +252,75 @@ static s32 read_active(char **text)
     return len;
 }
 
+/* ---- /mods/.store (dstore.h): read before the link, written after it when it changed ---- */
+static u8 *store_prev;
+u8 dl_store_io;                          /* .status: 0 none, 1 kept, 2 written, 3 a write failed */
+u32 dl_store_info[3];                    /* .status: the live layout ID, fields, parked fields */
+
+static void read_store(void)
+{
+    char path[DL_PATH_MAX];
+    s32 size, len;
+    dl_free(store_prev);
+    store_prev = 0;
+    dl_store_prev = 0;
+    dl_store_prev_n = 0;
+    path_of(path, ".store");
+    size = dl_fs_file_size(path);
+    if (size <= 0 || size > DS_MAX_FILE)
+        return;
+    store_prev = dl_alloc((u32)size);
+    if (!store_prev)
+        return;
+    len = dl_read_file(".store", store_prev, (u32)size);
+    if (len != size) {
+        dl_free(store_prev);
+        store_prev = 0;
+        return;
+    }
+    dl_store_prev = store_prev;
+    dl_store_prev_n = (u32)len;
+}
+
+/* the placement's .store, when its bytes changed: to .store.tmp, then over .store */
+static void write_store(void)
+{
+    char path[DL_PATH_MAX], tmp[DL_PATH_MAX];
+    const struct ds_out *o = &dl_store_out;
+    dl_file f;
+    int r;
+    u32 i;
+    dl_store_io = 0;
+    if (!o->bytes)
+        return;
+    dl_store_io = 1;
+    dl_store_info[0] = o->id;
+    dl_store_info[1] = o->nfields;
+    dl_store_info[2] = o->nparked;
+    if (dl_store_prev && dl_store_prev_n == o->nbytes) {
+        for (i = 0; i < o->nbytes && dl_store_prev[i] == o->bytes[i]; i++)
+            ;
+        if (i == o->nbytes)
+            return;
+    }
+    path_of(path, ".store");
+    path_of(tmp, ".store.tmp");
+    dl_lock();
+    dl_memset(&f, 0, sizeof f);
+    r = dl_fs_open(&f, tmp, 1);
+    if (r == 0)
+        r = dl_fs_write(&f, o->bytes, o->nbytes);
+    dl_fs_close(&f);
+    if (r == 0) {
+        dl_fs_delete(path);
+        r = dl_fs_rename(tmp, path);
+    } else {
+        dl_fs_delete(tmp);
+    }
+    dl_unlock();
+    dl_store_io = r == 0 ? 2 : 3;
+}
+
 static void boot(void)
 {
     s32 len;
@@ -262,6 +336,15 @@ static void boot(void)
     }
     if (skip_key()) {
         dl_skip_reason = DL_SKIP_KEY;
+        if (!exists(".armed")) {         /* no mods, but the +Drive fields keep their layout */
+            read_store();
+            if (dl_store_prev) {
+                write_armed();
+                dl_link((u32)core_desc, 0, 0, 0, 0);
+                remove_file(".armed");
+            }
+            dl_skip_reason = DL_SKIP_KEY;
+        }
         return;
     }
     if (exists(".armed")) {              /* the last start with mods didn't get 10 s in */
@@ -282,16 +365,19 @@ static void boot(void)
         dl_skip_reason = DL_SKIP_COUNT;
         return;
     }
-    if (!n)
-        return;                          /* no set chosen */
-    if (!dl_boot_choice) {
+    read_store();
+    if (!n && !dl_store_prev)
+        return;                          /* no set chosen, no +Drive fields placed before */
+    if (n && !dl_boot_choice) {
         dl_skip_reason = DL_SKIP_MEMORY;
         return;
     }
     write_armed();                       /* before the link, so a link that faults or hangs is
                                           * caught too: the next boot skips the set */
-    loaded = dl_link((u32)core_desc, dl_boot_choice, n, (u8 *)drive_staging, DL_STAGING_SIZE);
-    dl_flush();
+    loaded = dl_link((u32)core_desc, dl_boot_choice, n, 0, 0);   /* the stage at the top of the area */
+    dl_flush();                          /* after the area, the tables and the sites (each site's
+                                          * lines already pushed by dl_apply_site) */
+    write_store();                       /* a set that left none loaded parks its fields too */
     t_link = DTCN0;
     if (loaded <= 0) {
         remove_file(".armed");           /* nothing runs, so nothing to guard */
@@ -305,13 +391,17 @@ static void boot(void)
 }
 
 /* ev_tick: the MODS page's frames (page.c), and the crash guard comes off 10 s into
- * ticking. */
+ * ticking; after a boot that applied a site (dl_applied_n), 60 s in and once the MODS page
+ * doesn't show, whichever is later, so a site that breaks a page or the audio is caught. */
 void dl_page_tick(void *ctrl);
+int dl_page_shown(void);
 
 void dl_tick(void *ctrl)
 {
     dl_page_tick(ctrl);
-    if (!armed || ++armed_ticks < CRASH_TICKS)
+    if (!armed || ++armed_ticks < (dl_applied_n ? CRASH_TICKS_SITES : CRASH_TICKS))
+        return;
+    if (dl_applied_n && dl_page_shown())
         return;
     armed = 0;
     dl_lock();

@@ -16,32 +16,58 @@ into its string pool (UTF-8, NUL-terminated):
   container's, 0 where the profile does not know them); +0x18 u32 string pool offset, u32 its
   size; +0x20 u16 module, export, table and claim counts; +0x28 u32 offsets of the module, export,
   table and claim arrays, the key arrays, the area record and the storage record; +0x44 u32 the
-  device key (a name), +0x48 u32 the OS version (a name); zero to +0x60.
+  device key (a name), +0x48 u32 the OS version (a name); ABI 1.2: +0x4c u32 offset of the site
+  map, +0x50 u16 its count, u16 the pre-link count, +0x54 u32 offset of the pre-link ranges,
+  +0x58 u32 offset and +0x5c u32 count of the stock shadow (below; 0 without one); ABI 1.3: +0x60
+  u32 flags (bit 0, F_STAGE_TOP: the loader reads each +Drive file into the area itself at boot, a
+  mod's export drive_stage_top; docs/DRIVE.md, "The boot link"; bit 1, F_PAYLOAD_SKIP: it stages
+  each file without its .payload's hex, a mod's export drive_payload_skip; docs/DRIVE.md,
+  "Payloads on the +Drive"; bit 2, F_ABS16: its boot linker takes abs16 relocations, a mod's
+  export drive_abs16; bit 3, F_STD_MAP: it maps a std1 mod's subscriptions through
+  the core's std map, which the claims of kind 3 carry, a mod's export drive_std_map; docs/DRIVE.md,
+  "The boot link"; bit 4, F_COLLECTIONS: +Drive mods may declare tables, a mod's export
+  drive_collections; docs/DRIVE.md, "+Drive collections"; bit 5, F_CLAIMS: its boot linker takes
+  contributions' claims, and the site map carries the flashed contributions' claims (SITE_CLAIM),
+  a mod's export drive_claims; bit 6, F_STOCK_SHADOW: the shadow is there for a non-TELOS
+  loader's stock parts alone, which it lays over the running OS, a mod's export
+  drive_stock_shadow; docs/DRIVE.md, "The stock shadow"; bit 7, F_KNOBS: +Drive mods may declare
+  "knobs", given from the profile's drive_knobs range, a mod's export drive_knobs; docs/DRIVE.md,
+  "Knob ids on the +Drive"); zero to +0x64.
 
   module (16): name, version, u8 kind (0 core, 1 flashed mod, 2 a mod that imports core_desc),
     u8 flags (bit 0: has sites), u16 index, u16 first export, u16 export count
   export (8): name, u32 address. Grouped by module, in module order; by name within a module.
   table (24): name, u32 address, u16 entry size, u16 count, u16 capacity, u16 flags (bit 0: more
-    entries may be added, bit 1: a render table, bit 2: a DSP table, its address in words),
+    entries may be added, bit 1: a render table, bit 2: a DSP table, its address in words, bit 3
+    (ABI 1.2): the loader may add entries of its own, a mod's contributions may not),
     u32 offset of its keys, u32 offset of its orders (ABI 1.1; 0 in 1.0)
   keys: one u32 per entry, in table order: order << 16 | module index, the order held to 0..65534
     for a 1.0 reader; the entries the linker makes itself (storage, payloads, .fast copies) have
     0xFFFF
   orders (ABI 1.1, after the storage record): one s32 per entry, in table order: the entry's
     order; the linker's own entries have 0x7FFFFFFF. A 1.0 block has none: its key's order stands
-  claim (8): u16 kind (1: a resource name), u16 module index, u32 name
+  claim (8): u16 kind (1: a resource name; 2: a region of the bulk area a flashed mod claims,
+    "<lo> <hi> <name>" in hex; 3, with F_STD_MAP: a standard event the core's "std" map sends to
+    one of its tables, "<event> <table>", by the core, in event order; 4, with F_KNOBS: knob ids a
+    flashed module takes, its entries' and its "knobs" run, "<first> <last>" in hex), u16 module
+    index, u32 name
   area (20): the flashed build's RAM end, the +Drive mods' area (lo, hi), the staging buffer's
     address and size (a mod's exports drive_staging, drive_staging_size; 0 without)
   storage (12 + 16 a scope): u32 address and u32 length of the lockfile's trailer in the main OS
     image (the host's: nothing on the unit reads it), u16 scope count, u16 0, then per scope: name,
     u32 room in bits, u32 bits used, u32 generation
+  site map (ABI 1.2, after the orders; 12 a range): u32 lo, u32 hi (end, exclusive), u16 kind
+    (SITE_KINDS), u16 module index (0xFFFF: the device's or the linker's own). Every byte range of
+    the flashed main OS that is taken, sorted by (lo, hi, kind, module): ranges may overlap
+  pre-link ranges (ABI 1.2, after the site map; 12 a range): u32 lo, u32 hi, u16 kind (1 code,
+    2 data), u16 0. Main OS code and data the OS has finished with before the boot link runs, from
+    the release's profile; a site there would never fire
   shadow (ABI 1.2, only on a device whose profile asks for it, drive_shadow, or in a build whose
-    loader keeps its own area, drive_area): +0x58 u32 its offset, +0x5c u32 its count (0 without
-    one: a reader takes it when the offset is not 0); per range, by address: u32 address, u32
-    length, then the stock
-    bytes, padded to 4. Every range the flashed build writes, so a loader that copies a mod's stock
-    parts on the unit copies stock's bytes where the build changed them. A block without one is
-    ABI 1.1, byte for byte as before.
+    loader keeps its own area, drive_area): +0x58 u32 its
+    offset, +0x5c u32 its count (0 without one: a reader takes it when the offset is not 0); per
+    range, by address: u32 address, u32 length, then the stock bytes, padded to 4. Every range the
+    flashed build writes, so a loader that copies a mod's stock parts on the unit copies stock's
+    bytes where the build changed them.
 """
 import struct
 import sys
@@ -51,19 +77,44 @@ from .elemod import ModError
 
 SYM = 'core_desc'
 MAGIC = b'ELKD'
-ABI = (1, 1)
-HEADER = 0x60
+ABI = (1, 3)
+HEADER = 0x64
 SPARE = 16                       # a table's spare entries, unless its collection says
-F_MORE, F_RENDER, F_DSP = 1, 2, 4
+F_MORE, F_RENDER, F_DSP, F_LOADER = 1, 2, 4, 8
 LINKER_ORDER = 0x7FFFFFFF        # the order of an entry the linker makes itself
 ORDER_MIN = -0x80000000          # with a descriptor, an order is ORDER_MIN to LINKER_ORDER - 1
 KEY_LINKER = 0xFFFF              # a key's order (ABI 1.0's field) for the linker's own entries
 KIND_CORE, KIND_FLASHED, KIND_LOADER = 0, 1, 2
 CLAIM_NAME = 1
 CLAIM_REGION = 2                 # a region of the bulk area a flashed mod claims: "<lo> <hi> <name>", hex
+CLAIM_STD = 3                    # the core's std map: "<event> <table>", one a standard event (link.std_tables)
+CLAIM_KNOBS = 4                  # knob ids a flashed module takes: "<first> <last>", hex (F_KNOBS)
 STAGING = ('drive_staging', 'drive_staging_size')
 AREA_SYMS = ('drive_area', 'drive_area_size')   # a loader's own area (TELOS on the Octatrack)
-MODULE, EXPORT, TABLE, CLAIM, AREA, SCOPE = 16, 8, 24, 8, 20, 16
+STAGE_TOP = 'drive_stage_top'    # a loader's export: nonzero sets F_STAGE_TOP (ABI 1.3)
+F_STAGE_TOP = 1                  # the header's flags (ABI 1.3)
+PAYLOAD_SKIP = 'drive_payload_skip'   # a loader's export: nonzero sets F_PAYLOAD_SKIP
+F_PAYLOAD_SKIP = 2               # flags bit 1: the loader stages a file without its .payload's hex
+ABS16 = 'drive_abs16'            # a loader's export: nonzero sets F_ABS16
+F_ABS16 = 4                      # flags bit 2: the boot linker takes abs16 relocations
+STD_MAP = 'drive_std_map'        # a loader's export: sets F_STD_MAP and writes the core's std map
+F_STD_MAP = 8                    # flags bit 3: the loader maps std1 subscriptions (claims of kind 3)
+COLLECTIONS = 'drive_collections'   # a loader's export: nonzero sets F_COLLECTIONS
+F_COLLECTIONS = 16               # flags bit 4: +Drive mods may declare tables ("collections")
+CLAIMS = 'drive_claims'          # a loader's export: sets F_CLAIMS and maps the flashed claims
+F_CLAIMS = 32                    # flags bit 5: the boot linker takes contributions' claims (SITE_CLAIM)
+STOCK_SHADOW = 'drive_stock_shadow'   # a loader's export: the build carries the shadow, F_STOCK_SHADOW set
+F_STOCK_SHADOW = 64              # flags bit 6: the shadow serves stock parts only (no TELOS sites)
+KNOBS = 'drive_knobs'            # a loader's export: nonzero (on a device with drive_knobs) sets F_KNOBS
+F_KNOBS = 128                    # flags bit 7: +Drive mods' "knobs" (claims of kind 4 name the flashed ids)
+MODULE, EXPORT, TABLE, CLAIM, AREA, SCOPE, RANGE = 16, 8, 24, 8, 20, 16, 12
+# a site map range's kind (ABI 1.2)
+SITE_SITE, SITE_COPIED, SITE_DEVICE, SITE_BOOT, SITE_RUN, SITE_TRAILER, SITE_CLAIM = 1, 2, 3, 4, 5, 6, 7
+SITE_KINDS = {SITE_SITE: 'site', SITE_COPIED: 'copied', SITE_DEVICE: 'device', SITE_BOOT: 'boot copier',
+              SITE_RUN: 'RAM image', SITE_TRAILER: 'lockfile trailer', SITE_CLAIM: 'claim'}
+PRE_CODE, PRE_DATA = 1, 2                  # a pre-link range's kind (ABI 1.2)
+PRE_KINDS = {PRE_CODE: 'code', PRE_DATA: 'data'}
+NO_MODULE = 0xFFFF
 
 
 class _Pool:
@@ -103,7 +154,10 @@ def encode(d):
     o_area = o_key + 4 * nkeys
     o_sto = o_area + AREA
     o_ord = o_sto + 12 + SCOPE * len(scopes)
-    o_pool = o_ord + 4 * nkeys
+    sites, pre = d.get('sites', []), d.get('prelink', [])
+    o_map = o_ord + 4 * nkeys
+    o_pre = o_map + RANGE * len(sites)
+    o_pool = o_pre + RANGE * len(pre)
     body = bytearray()
     first = 0
     for i, m in enumerate(mods):
@@ -128,6 +182,10 @@ def encode(d):
         body += struct.pack('>IIII', pool(nm), room, used, gen)
     for t in tables:
         body += b''.join(struct.pack('>i', o) for o, _mi in t['entries'])
+    for lo, hi, kind, mi in sites:
+        body += struct.pack('>IIHH', lo & 0xFFFFFFFF, hi & 0xFFFFFFFF, kind, mi)
+    for lo, hi, kind in pre:
+        body += struct.pack('>IIHH', lo & 0xFFFFFFFF, hi & 0xFFFFFFFF, kind, 0)
     assert HEADER + len(body) == o_pool
     shadow = d.get('shadow') or []
     o_shadow = o_pool if shadow else 0
@@ -136,13 +194,14 @@ def encode(d):
     o_pool = HEADER + len(body)
     raw = bytes(pool.raw) + bytes(-len(pool.raw) % 4)
     size = o_pool + len(raw)
-    head = struct.pack('>4sHHII HHI II HHHH 7I II', MAGIC, ABI[0], 2 if shadow else ABI[1], size, 0,
+    head = struct.pack('>4sHHII HHI II HHHH 7I II IHHI II I', MAGIC, ABI[0], ABI[1], size, 0,
                        d['family'], d['device'], d['release'], o_pool, len(pool.raw),
                        len(mods), len(exports), len(tables), len(claims),
                        o_mod, o_exp, o_tab, o_clm, o_key, o_area, o_sto,
-                       pool(d['device_key']), pool(d['os']))
+                       pool(d['device_key']), pool(d['os']), o_map, len(sites), len(pre), o_pre,
+                       0, 0, d.get('flags', 0))
     blk = bytearray(head + bytes(HEADER - len(head)) + body + raw)
-    if shadow:                                  # +0x58: clear of the header words other 1.2 fields use
+    if shadow:                                  # +0x58: clear of the site map's header words
         struct.pack_into('>II', blk, 0x58, o_shadow, len(shadow))
     struct.pack_into('>I', blk, 0x0c, zlib.crc32(bytes(blk)) & 0xFFFFFFFF)
     return bytes(blk)
@@ -187,6 +246,14 @@ def decode(blk, at=0):
             orders = [LINKER_ORDER if k >> 16 == KEY_LINKER else k >> 16 for k in keys]
         tables.append({'name': name(n), 'address': a, 'entry': e, 'count': cnt, 'capacity': cap,
                        'flags': flags, 'entries': [(o, k & 0xFFFF) for o, k in zip(orders, keys)]})
+    sites, pre = [], []
+    if minor >= 2:                              # ABI 1.2: the site map and the pre-link ranges
+        o_map, nmap, npre, o_pre = struct.unpack_from('>IHHI', b, 0x4c)
+        if o_map + RANGE * nmap > len(b) or o_pre + RANGE * npre > len(b):
+            raise ModError('the build descriptor is cut short')
+        sites = [tuple(x) for x in struct.iter_unpack('>IIHH', b[o_map:o_map + RANGE * nmap])]
+        pre = [(lo, hi, k) for lo, hi, k, _z in struct.iter_unpack('>IIHH', b[o_pre:o_pre + RANGE * npre])]
+    flags = struct.unpack_from('>I', b, 0x60)[0] if minor >= 3 else 0   # ABI 1.3
     claims = [(k, m, name(n)) for k, m, n in
               (struct.unpack_from('>HHI', b, o_clm + CLAIM * i) for i in range(nclm))]
     t_at, t_len, nsc, _z = struct.unpack_from('>IIHH', b, o_sto)
@@ -201,7 +268,8 @@ def decode(blk, at=0):
     return {'abi': (major, minor), 'size': size, 'crc': crc, 'family': family, 'device': device,
             'release': release, 'device_key': name(dkey), 'os': name(os_), 'modules': mods,
             'tables': tables, 'claims': claims, 'area': struct.unpack_from('>5I', b, o_area),
-            'storage': {'trailer': (t_at, t_len), 'scopes': scopes}, 'shadow': shadow}
+            'storage': {'trailer': (t_at, t_len), 'scopes': scopes}, 'sites': sites, 'prelink': pre,
+            'flags': flags, 'shadow': shadow}
 
 
 def find(image):
@@ -231,19 +299,33 @@ def dump(d):
             ', sites' if m['flags'] & 1 else '', len(m['exports'])))
         out += ['  0x%08x %s' % (a, n) for n, a in m['exports']]
     for t in d['tables']:
-        fl = [w for bit, w in ((F_MORE, 'more'), (F_RENDER, 'render'), (F_DSP, 'dsp')) if t['flags'] & bit]
+        fl = [w for bit, w in ((F_MORE, 'more'), (F_RENDER, 'render'), (F_DSP, 'dsp'), (F_LOADER, 'loader'))
+              if t['flags'] & bit]
         out.append('table %s at 0x%08x, %d-byte entries, %d of %d%s' % (
             t['name'], t['address'], t['entry'], t['count'], t['capacity'],
             (' (%s)' % ', '.join(fl)) if fl else ''))
         if t['entries']:
             out.append('  keys ' + ' '.join('%d:%d' % x for x in t['entries']))
     for kind, mi, n in d['claims']:
-        out.append('claim %s by module %d: %s' % ('name' if kind == CLAIM_NAME else kind, mi, n))
+        out.append('claim %s by module %d: %s' % ({CLAIM_NAME: 'name', CLAIM_STD: 'std', CLAIM_KNOBS: 'knob ids'}.get(kind, kind), mi, n))
     a = d['area']
-    out.append('RAM end 0x%08x, +Drive area 0x%08x-0x%08x, staging 0x%08x (%d bytes)' % a)
+    out.append('RAM end 0x%08x, +Drive area 0x%08x-0x%08x, staging 0x%08x (%d bytes)' % a
+               + (', files staged at the area\'s top' if d.get('flags', 0) & F_STAGE_TOP else '')
+               + (', payloads skipped' if d.get('flags', 0) & F_PAYLOAD_SKIP else '')
+               + (', abs16 relocations' if d.get('flags', 0) & F_ABS16 else '')
+               + (', std1 mapped' if d.get('flags', 0) & F_STD_MAP else '')
+               + (', +Drive collections' if d.get('flags', 0) & F_COLLECTIONS else '')
+
+               + (', claims taken' if d.get('flags', 0) & F_CLAIMS else '')
+               + (', stock parts through the shadow' if d.get('flags', 0) & F_STOCK_SHADOW else '')
+               + (', +Drive knob ids' if d.get('flags', 0) & F_KNOBS else ''))
     s = d['storage']
     out.append('lockfile trailer at 0x%08x, %d bytes' % s['trailer'])
     out += ['storage %s: %d of %d bits, generation %d' % (n, u, r, g) for n, r, u, g in s['scopes']]
+    for lo, hi, kind, mi in d.get('sites', []):
+        out.append('taken 0x%08x-0x%08x %s%s' % (lo, hi, SITE_KINDS.get(kind, kind),
+                                                  '' if mi == NO_MODULE else ' by module %d' % mi))
+    out += ['pre-link 0x%08x-0x%08x %s' % (lo, hi, PRE_KINDS.get(k, k)) for lo, hi, k in d.get('prelink', [])]
     return '\n'.join(out)
 
 

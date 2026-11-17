@@ -118,6 +118,22 @@ struct core_view_page {
     int32_t (*shown)(void *view);   /* 0: always; else non-0 while the key may step to it */
 };
 
+/* Knob ids by count (decided 2026-11-16): a mod that declares "knobs": n in
+ * its mod.json gets n ids in a row from 0x200 up (0x4000 up from the +Drive),
+ * past every other mod's; the linker defines __knobs, the mod's own, as the
+ * first. CORE_KNOB(k) is knob k's id, 0..n-1, a constant in a const table
+ * (an abs32 relocation):
+ *
+ *     CORE_KNOBS;
+ *     const struct core_page my_page = {MY_PAGE, "MY PAGE", {CORE_KNOB(0), CORE_KNOB(1)}};
+ *     const struct core_param my_params = {CORE_KNOB(0), CORE_KNOB(1), ...};
+ *
+ * The ids can differ from one build to the next with other mods, so keep a
+ * knob's values by id - CORE_KNOB(0), never by the id. A mod may still pick
+ * its own ids, 0x200..0x3fff. */
+#define CORE_KNOBS extern char __knobs[]
+#define CORE_KNOB(k) ((int32_t)__knobs + (k))
+
 /* core-a4mk2 0.6: knob looks (core-ar2 0.13's). A mod's own id (above 0x126)
  * has no stock records, so stock draws its knob as record 0's dial on
  * record 0's range. An entry in core_knob_looks gives the ids the look of

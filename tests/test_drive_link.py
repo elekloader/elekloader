@@ -7,6 +7,7 @@ rewrites, and each refusal.
 
 Needs a C compiler (cc). The byte-for-byte comparison with `elekloader link --device-layout`
 is in the emulator gate; this checks the loader's own rules on known inputs."""
+import dataclasses
 import json
 import os
 import struct
@@ -29,7 +30,8 @@ AREA = None                              # the build's +Drive area start, from i
 def build_host(work):
     exe = os.path.join(work, 'drive_link_host')
     subprocess.run(['cc', '-O1', '-Wall', '-DDL_HOST', '-o', exe, os.path.join(HERE, 'drive_link_host.c'),
-                    os.path.join(SRC, 'dlink.c'), os.path.join(SRC, 'json.c')], check=True)
+                    os.path.join(SRC, 'dlink.c'), os.path.join(SRC, 'json.c'),
+                    os.path.join(SRC, 'dstore.c'), os.path.join(SRC, 'sha256.c')], check=True)
     return exe
 
 
@@ -37,7 +39,7 @@ class Flashed:
     """A flashed build: core (tables ev_x, ev_y with one spare, ev_z with none and closed),
     the loader stub (imports core_desc) and a flashed mod `flm` on ev_x."""
 
-    def __init__(self, B, orders=(50, 50)):
+    def __init__(self, B, orders=(50, 50), flm_sites=None):
         self.B = B
         core = B.core(version='0.11',
                       collections={'ev_x': {'entry': 4}, 'ev_y': {'entry': 4, 'spare': 1},
@@ -56,6 +58,8 @@ class Flashed:
                                  'relocs': [[0, 'abs32', 'sym:fn_flm', 0]]},
                                 {'to': 'ev_y', 'order': orders[1], 'data': '00000000',
                                  'relocs': [[0, 'abs32', 'sym:fn_flm', 0]]}])
+        if flm_sites:
+            flm['sites'] = flm_sites
         self.docs = [core, loader, flm]
         out = link.link([link.Mod2(d, d['id']) for d in self.docs], B.img)
         self.out = out
@@ -88,7 +92,8 @@ def drive_mod(B, ident, **extra):
     return d
 
 
-def run(exe, F, mods, work, active=None, raw=None, extra_files=None, check=False, step=False):
+def run(exe, F, mods, work, active=None, raw=None, extra_files=None, check=False, step=False, recheck=False,
+        main_out=None):
     """Link `mods` (docs, in this /mods/active order). -> (summary, RAM after).
     With check, run the MODS page's dl_check instead of dl_link."""
     d = tempfile.mkdtemp(dir=work)
@@ -112,11 +117,18 @@ def run(exe, F, mods, work, active=None, raw=None, extra_files=None, check=False
     r = subprocess.run([exe, ramf, '0x%x' % F.ram_base, stockf, '0x%x' % F.B.dev.main_load,
                         '0x%x' % F.desc_at, d, outf], capture_output=True, text=True,
                        env=dict(os.environ, DL_HOST_CHECK='1', **({'DL_HOST_STEP': '1' if step is True else step} if step else {}))
-                       if check else None)
+                       if check else dict(os.environ, DL_HOST_RECHECK='1') if recheck else None)
     if r.returncode:
         raise AssertionError('host linker failed: %s %s' % (r.stdout, r.stderr))
+    if main_out is not None:
+        with open(outf + '.main', 'rb') as fh:
+            main_out[:] = fh.read()
+    lines = r.stdout.splitlines()
+    out = json.loads(lines[0])
+    if recheck:
+        out.update(json.loads(lines[1]))
     with open(outf, 'rb') as fh:
-        return json.loads(r.stdout), bytearray(fh.read())
+        return out, bytearray(fh.read())
 
 
 def untouched(F, ram):
@@ -242,7 +254,9 @@ def main():
         refused('a claimed name', drive_mod(B, 'cl', resources={'names': ['settings:MODS']}), 13, detail='settings:MODS')
         refused('an unresolved import', drive_mod(B, 'im', imports=['nothing_here']), 14, detail='nothing_here')
         refused('another device', drive_mod(B, 'tg', target=dict(B.target, device='digitakt-mk1')), 6)
-        refused('a site', drive_mod(B, 'st', sites=[B.site(B.at(0x1000))]), 7, detail='sites')
+        refused('a site over its stock bytes', drive_mod(B, 'st', sites=[dict(B.site(B.at(0x1000)), stock_sha256='0' * 64)]),
+                30, detail='%08x' % B.at(0x1000))
+        refused('collections', drive_mod(B, 'co', collections={'ev_mine': {'entry': 4}}), 7, detail='collections')
         refused('.fast', drive_mod(B, 'fa', sections={'.run': {'len': 2, 'parts': [['hex', '4e75']]},
                                                       '.fast': {'len': 2, 'parts': [['hex', '4e75']]}}), 7, detail='.fast')
         refused('storage', drive_mod(B, 'sg', storage=[{'sym': 'x', 'scope': 'kit', 'bits': 1}]), 7, detail='storage')
@@ -334,7 +348,7 @@ def main():
         # 1000000, as core-ar2 0.13's screen handlers do; +Drive entries land before, between,
         # tied with and after them, the same in the boot linker and its twin
         W = Flashed(B, orders=(-1000000, 1000000))
-        check('ABI 1.1: the flashed orders read back whole', W.d['abi'] == (1, 1)
+        check('ABI 1.1: the flashed orders read back whole', W.d['abi'] == desc.ABI
               and W.tables['ev_x']['entries'][0][0] == -1000000 and W.tables['ev_y']['entries'][0][0] == 1000000,
               (W.d['abi'], W.tables['ev_x']['entries'], W.tables['ev_y']['entries']))
         wfn = W.out.map['flm:fn_flm']
@@ -374,6 +388,67 @@ def main():
             tst = [c for c in tw.choices if c.name == 'wbad.elemod'][0]
             check('whole orders: refuses an order ' + name + ', as the twin does',
                   got.get('code') == 5 and st['good']['state'] == 1 and tst.code == 5, (s, tst.code))
+
+        # +Drive sites: the loader and its twin agree on every verdict and every byte written
+        pre = (B.at(0x3000), B.at(0x3010), desc.PRE_CODE, 'test')
+        B.dev.releases['SYN'] = B.rel = dataclasses.replace(B.rel, prelink=(pre,))
+        S = Flashed(B, flm_sites=[B.jmp_site(B.at(0x2000), 'fn_flm')])
+        sb = drive.load_build(S.out.image)
+        check('sites: the build has a site map and the pre-link range', sb.main_hi == B.at(len(B.img))
+              and sb.prelink == [(pre[0], pre[1], pre[2])], (hex(sb.main_hi), sb.prelink))
+
+        def site_mod(ident, sites=None, copied=None, **extra):
+            m = drive_mod(B, ident, contribute=[], **extra)
+            if sites is not None:
+                m['sites'] = sites
+            if copied is not None:
+                m['copied'] = copied
+            return m
+        jmp = B.jmp_site(B.at(0x1000), 'fn_sa')
+        wide = B.site(B.at(0x1004), 4)
+        block = {'lo': B.at(0x1000), 'hi': B.at(0x1100), 'to': 0}
+        far = B.site(B.at(0x1200), 4, 'data', '00000000', [[0, 'abs32', 'sym:b_sa', 2]])
+        cases = {
+            'two that load, relocated': [site_mod('sa', [jmp, far])],
+            'a code site with a pc16 out of range': [site_mod('sa', [B.site(B.at(0x1000), 2, 'code', '0000',
+                                                                            [[0, 'pc16', 'sym:fn_sa', 0]])])],
+            'over a flashed site': [site_mod('sa', [B.jmp_site(B.at(0x2002), 'fn_sa')])],
+            'in a pre-link range': [site_mod('sa', [B.jmp_site(B.at(0x300c), 'fn_sa')])],
+            'right after it': [site_mod('sa', [B.jmp_site(B.at(0x3010), 'fn_sa')])],
+            'not its stock bytes': [site_mod('sa', [dict(jmp, stock_sha256='ab' * 32)])],
+            'two mods on one byte': [site_mod('sz', [wide]), site_mod('sa', [jmp])],
+            'a site in a copied block': [site_mod('sa', copied=[block]), site_mod('sz', [wide])],
+            'two copied blocks': [site_mod('sa', copied=[block]), site_mod('sz', copied=[block])],
+            'a copied block over a flashed site': [site_mod('sa', copied=[dict(block, lo=B.at(0x1f00), hi=B.at(0x2001))])],
+            'a site outside the main OS': [site_mod('sa', [B.site(B.at(len(B.img)) - 2, 2)])],
+            'an abs16 relocation': [site_mod('sa', [B.site(B.at(0x1000), 4, 'data', None, [[0, 'abs16', 'abs', 0]])])],
+            'an empty copied block': [site_mod('sa', copied=[dict(block, hi=block['lo'])])],
+        }
+        for name, mods in cases.items():
+            main = bytearray()
+            s, ram = run(exe, S, mods, work, recheck=True, main_out=main)
+            fl = [(m['id'] + '.elemod', (json.dumps(m, indent=1) + '\n').encode()) for m in mods]
+            tb = drive.load_build(S.out.image)
+            tw = drive.link(tb, fl)
+            twin = [{'state': c.state, 'code': c.code, 'arg': c.arg, 'id': c.label,
+                     'detail': c.detail_bytes().rstrip(b'\0').decode()} for c in tw.choices]
+            check('sites, %s: the loader and the twin agree' % name, s['status'] == twin, (s['status'], twin))
+            want = bytearray(B.img)
+            for _i, _ln, a, new in tw.sites:
+                want[a - B.dev.main_load:a - B.dev.main_load + len(new)] = new
+            check('sites, %s: the same bytes over the main OS' % name, main == want
+                  and [x[:2] for x in s['sites']] == [[a, len(new)] for _i, _ln, a, new in tw.sites],
+                  (s['sites'], [(hex(a), new.hex()) for _i, _ln, a, new in tw.sites]))
+            check('sites, %s: the same area' % name, bytes(area(S, ram, len(tw.area))) == tw.area)
+            drive.apply_sites(tb, tw)
+            again = drive.check(tb, fl)
+            check('sites, %s: a check after the boot gives the boot\'s verdicts (pass 2\'s aside), as the twin\'s'
+                  % name, s['codes'] == [c.code for c in again.choices]
+                  and all(c.code in (b, 18) and b in (c.code, 0) for c, b in zip(tw.choices, s['codes'])),
+                  (s, [c.why() for c in again.choices]))
+        s, _r = run(exe, S, cases['two that load, relocated'], work)
+        check('sites: both written, the jmp to the mod\'s code, the word to its .bss + 2',
+              s['loaded'] == 1 and len(s['sites']) == 2, s)
 
         # the boot's time (dl.h, dl_bus_us): bus ticks at 132 MHz to ﾂｵs, across DTIM0's wrap
         src = os.path.join(work, 'bus_us.c')

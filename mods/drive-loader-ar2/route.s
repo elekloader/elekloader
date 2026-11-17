@@ -1,7 +1,7 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
 | drive-loader (Analog Rytm MKII, OS 1.74): the /mods route's site, its
 | RouteTypeHandler, the thunks between stock's calls and route.c, and the
-| staging buffer (README, "The /mods route").
+| staging buffer's floor (STAGE.md).
 |
 | Stock passes a struct result's address in %a0 (hidden) and its arguments
 | on the stack; a std::function's invoker gets the functor's address first.
@@ -84,6 +84,10 @@ dl_handler:
         .align  16
         .globl  drive_staging
 drive_staging:
-        .space  0x80000
+        .space  0x10000                         | the floor (fs.h, DL_STAGING_SIZE)
         .globl  drive_staging_size
-        .set    drive_staging_size, 0x80000
+        .set    drive_staging_size, 0x10000
+| the build descriptor's flags bit 0 (ABI 1.3): the boot reads each file into the +Drive area
+| itself (dl.h, dl_stage_top), so host tools lay a set out as the boot does
+        .globl  drive_stage_top
+        .set    drive_stage_top, 1

@@ -1,0 +1,26 @@
+{
+ "id": "sidecar-check",
+ "version": "0.1",
+ "title": "Sidecar check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for core-a4mk2's moments, the calls the Sidecar companion uses, checked in RAM: sidecar-check-ar2's part 3 on the Analog Four MKII, after the magic SCK3. A SysEx handler that takes F0 7D messages and lets the rest through, USB MIDI through core_midi_try_send from the UI task and from the audio interrupt, the current kit, track, pattern and project name each tick, the name at ev_project_save, three handle fields walked by core_handle_fields, and every ev_kit logged. Over USB MIDI, F0 7D 53 43 SysEx commands set the command word and send the record back.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "sources": ["moments.c", "remote.c"],
+ "resources": {"core": "0.8"},
+ "requires": ["core"],
+ "subscribe": [
+  {"event": "ev_tick", "fn": "sc_moments_tick", "order": 62},
+  {"event": "std_sysex_in", "fn": "sc_sysex_in", "order": 50},
+  {"event": "ev_kit", "fn": "sc_kit", "order": 50},
+  {"event": "ev_project_save", "fn": "sc_save", "order": 50},
+  {"event": "ev_render_in", "fn": "sc_render_in", "order": 50}
+ ],
+ "storage": [
+  {"sym": "sc_h_project", "scope": "project", "bits": 16, "handle": true},
+  {"sym": "sc_h_pattern", "scope": "pattern", "bits": 12, "handle": true},
+  {"sym": "sc_h_kit", "scope": "kit", "bits": 16, "handle": true}
+ ]
+}

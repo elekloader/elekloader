@@ -52,7 +52,15 @@ const LINKER_SYMS = new Set(['__run_load', '__run_start', '__run_words', '__bss_
 export const STD_SETS = ['std1']             // what a mod's "events" names (ADAPTING.md, "Standard events (std1)")
 const MAX_SPARE = 4096                      // a table's spare entries (a collection's "spare")
 // the tables a build descriptor gives no spare entries: the linker fills them, from storage and payloads
-const NO_SPARE = [store.IDS_TABLE, store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE, store.HANDLES_TABLE, PAYLOADS]
+const NO_SPARE = [PAYLOADS]
+// the tables the linker fills from storage that a build descriptor opens to the loader alone (desc.F_LOADER):
+// spare entries for the +Drive mods' fields, which a mod's own contributions may not take
+const LOADER_ONLY = new Set([store.IDS_TABLE, store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE, store.HANDLES_TABLE])
+// a table's spare entries in a build descriptor where its collection gives no "spare" (else desc.SPARE)
+const DRIVE_SPARE = new Map<string, number>([['core_lock_params', 32], [store.CODES_TABLE, 32], [store.CCS_TABLE, 32],
+  [store.INITS_TABLE, 32], [store.HANDLES_TABLE, 32], [store.IDS_TABLE, 1 + store.MAX_ANCESTORS]])
+// a table's most entries, flashed and spare, where its collection gives no "max"
+const DRIVE_MAX = new Map<string, number>([[store.INITS_TABLE, store.MAX_INITS]])
 export const HASH_SEED = 5381, HASH_MUL = 33       // __run_hash: h = seed; h = h * 33 + word (mod 2^32), per word
 
 const align = (v: number, a: number) => Math.ceil(v / a) * a
@@ -167,6 +175,9 @@ export class Mod2 implements AnyMod {
       const parts = parseParts(get(d, 'parts', []), name + ' ' + sec, this.dev, this.rel)
       const n = partsLen(parts)
       if (n !== int(get(d, 'len', n), name)) throw new ModError(`${name} ${sec}: parts make ${n} bytes, not ${str(get(d, 'len'))}`)
+      if (sec === '.payload' && 'sha256' in d && parts.every(p => p[0] === 'hex')
+          && sha(concat(parts.map(p => p[1] as Uint8Array))) !== str(d.sha256).toLowerCase())
+        throw new ModError(`${name} .payload: its bytes do not match its sha256`)
       this.sections.set(sec, { align: al, parts, len: n })
     }
     this.sharc = !('sharc' in doc) ? null : isDict(doc.sharc) && doc.sharc.abi === KERNEL_ABI ? kernelPayload(doc.sharc, this.rel.sharc)
@@ -249,7 +260,7 @@ export class Mod2 implements AnyMod {
           throw new ModError(`${what}: bad relocation ${repr(r)}`)
         rel.push([off, typ as string, tgt as string, int(add, what)])
       }
-      const claims = iter(get(c, 'claims', [])).map(ab => {
+      const claims = iter(truthy(get(c, 'claims')) ? get(c, 'claims') : []).map(ab => {   // `or []`: null is none
         const [a, b] = unpack(ab, 2)
         return [int(a, what), int(b, what)] as [number, number]
       })
@@ -709,6 +720,7 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
  * relocated to __knobs too. -> [problems]. link.id_problems. */
 export function idProblems(mods: Mod2[], image: Uint8Array, knobs: Map<string, number> | null = null): string[] {
   const [own, [lo, hi, what], kinds] = mods[0].dev.paramIds!
+  const dk = mods[0].dev.driveKnobs
   const ownOnly = new Set(kinds.filter(([, o]) => o).map(([t]) => t))
   const taken: [Mod2, string, number, number][] = [], bad: string[] = []
   for (const m of mods) {
@@ -716,6 +728,8 @@ export function idProblems(mods: Mod2[], image: Uint8Array, knobs: Map<string, n
       let a = a0
       if (a <= hi && lo <= b) {
         bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}, and ${lo}..${hi} are ${what}; a mod's own ids start at ${own}`)
+      } else if (dk && a <= dk[1] && dk[0] <= b) {
+        bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}, and ${dk[0]}..${dk[1]} are the +Drive mods' knob ids`)
       } else if (ownOnly.has(table) && a < own) {
         bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}; that table's ids start at ${own}`)
       } else if (b >= own) {
@@ -836,9 +850,10 @@ export function ddrFor(dev: Device, coreVersion: string): Range {
 }
 
 /** The patched main OS, its map, tables and layout, and for a core with mod storage the new lockfile. lock: the
- * build's lockfile, or null for a new one (store.ts). Throws ModError. */
+ * build's lockfile, or null for a new one (store.ts); drive: what the unit's +Drive keeps (drivestore.reserve), as
+ * store.allocate takes it. Throws ModError. */
 export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = null,
-  sharcStream: Uint8Array | null = null): Linked {
+  sharcStream: Uint8Array | null = null, drive: store.Drive | false | null = null): Linked {
   if (!mods.length) throw new ModError('no mods')
   const dev = mods[0].dev, rel = mods[0].rel
   if (sha(image) !== rel.mainSha256) throw new ModError(`the stock main OS is not ${dev.name} ${rel.version}`)
@@ -964,7 +979,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       const users = [...new Set(handles.map(k => k[0]))].sort(cmp)
       throw new ModError(`${users.join(', ')} mark${users.length === 1 ? 's' : ''} storage fields as handles, which ${core.label()} does not keep (no table ${store.HANDLES_TABLE})`)
     }
-    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs)
+    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs, drive)
     let ids: Uint8Array[]
     ;[storeSyms, ids] = store.symbols(newLock)
     if (!storeSyms.has(store.LOCK_DST)) storeSyms.set(store.LOCK_DST, 0)    // not placed: no LFO field
@@ -982,7 +997,8 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   if (dev.paramIds && (order.some(m => m.knobs) || newLock?.knobs?.length || newLock?.freed_knobs?.length)) {
     const fixed = order.flatMap(m => m.idRanges(image).map(([, a, b]) => [a, b] as [number, number]))
     const held: Partial<store.Lock> = newLock ?? {}
-    ;[knobBase, knobNotes] = store.knobs(held, new Map(order.filter(m => m.knobs).map(m => [m.id, m.knobs])), dev.paramIds[0], fixed)
+    ;[knobBase, knobNotes] = store.knobs(held, new Map(order.filter(m => m.knobs).map(m => [m.id, m.knobs])), dev.paramIds[0], fixed,
+      dev.driveKnobs ? dev.driveKnobs[0] - 1 : store.KNOB_TOP)
     const bad = idProblems(order, image, knobBase)
     if (bad.length) throw new ModError('the linked mods break a rule:\n  ' + bad.join('\n  '))   // store.knobs keeps clear of them
   }
@@ -1018,9 +1034,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     for (const m of order) for (const c of m.contribute)
       if (!(c.order >= desc.ORDER_MIN && c.order < desc.LINKER_ORDER))
         throw new ModError(`${m.label()}: its entry for ${c.to} has the order ${c.order}; with a build descriptor an order is ${desc.ORDER_MIN} to ${desc.LINKER_ORDER - 1}`)
-    for (const [c, [owner]] of tables) spare.set(c, fixed.has(c) ? 0 : owner.spare.get(c) ?? desc.SPARE)
+    for (const [c, [owner]] of tables) spare.set(c, fixed.has(c) ? 0 : owner.spare.get(c) ?? DRIVE_SPARE.get(c) ?? desc.SPARE)
     for (const [c, [owner, e]] of tables) {   // a "max": the flashed entries and the spare ones fit it
-      const cap = owner.cap.get(c)
+      const cap = owner.cap.get(c) ?? DRIVE_MAX.get(c)
       if (cap === undefined || !entries.has(c)) continue
       const n = Math.floor(entries.get(c)!.reduce((k, x) => k + x[4].data.length, 0) / e)
       spare.set(c, Math.max(0, Math.min(spare.get(c)!, cap - n)))
@@ -1068,6 +1084,21 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     if (!dev.driveAlign) return [0, 0]
     return [Math.min(align(ramEnd, dev.driveAlign), ddrEnd), ddrEnd]
   }
+  const stdMap = order.some(m => m.exports.includes(desc.STD_MAP))   // the loader maps std1 at boot
+  const claimsMap = order.some(m => m.exports.includes(desc.CLAIMS))   // the boot linker takes claims
+  // the loader copies +Drive mods' stock parts through the shadow (A4: dlink.c stock_part); an export, not its value,
+  // so the sizing pass carries the shadow too
+  const stockShadow = order.some(m => m.exports.includes(desc.STOCK_SHADOW))
+  // the loader gives +Drive mods knob ids (F_KNOBS): the flashed ids go into claims of kind 4
+  const driveKnobs = !!(dev.driveKnobs && dev.paramIds && order.some(m => m.exports.includes(desc.KNOBS)))
+  const knobClaims = (): [number, number, string][] => !driveKnobs ? [] : order.flatMap(m => {
+    const kb = knobBase.get(m.id)
+    const set = new Map<string, [number, number]>()
+    for (const [, a, b] of m.idRanges(image, kb ?? null)) set.set(`${a} ${b}`, [a, b])
+    if (kb !== undefined) set.set(`${kb} ${kb + m.knobs - 1}`, [kb, kb + m.knobs - 1])
+    return [...set.values()].sort((x, y) => x[0] - y[0] || x[1] - y[1])
+      .map(([a, b]) => [desc.CLAIM_KNOBS, index.get(m.id)!, `0x${a.toString(16)} 0x${b.toString(16)}`] as [number, number, string])
+  })
   const descFields = (where: Where | null): desc.DescFields => {
     const w: Where = where ?? (() => 0)
     const modules = order.map(m => ({
@@ -1084,7 +1115,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       if (c === dev.fastTable) for (const m of fastMods) keys.push([desc.LINKER_ORDER, index.get(m.id)!])
       const n = tableCount(c)
       return { name: c, address: w('table', c), entry: e, count: n, capacity: n + spare.get(c)!, entries: keys,
-        flags: (fixed.has(c) ? 0 : desc.F_MORE) | (tables.get(c)![0].render.has(c) ? desc.F_RENDER : 0) | (dspTables.has(c) ? desc.F_DSP : 0) }
+        flags: (fixed.has(c) ? 0 : LOADER_ONLY.has(c) ? desc.F_LOADER : desc.F_MORE) | (tables.get(c)![0].render.has(c) ? desc.F_RENDER : 0) | (dspTables.has(c) ? desc.F_DSP : 0) }
     })
     let scopes: [string, number, number, number][] = []
     if (newLock) {
@@ -1108,16 +1139,44 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     return { family: dev.dataFamily, device: dev.dataDevice, release: rel.dataRelease ?? 0, deviceKey: dev.key, os: rel.version, modules, tables: tabs,
       claims: [...order.flatMap(m => m.names.map(nm => [desc.CLAIM_NAME, index.get(m.id)!, nm] as [number, number, string])),
         ...order.flatMap(m => m.regions.map(g => [desc.CLAIM_REGION, index.get(m.id)!,
-          `0x${g.lo.toString(16)} 0x${g.hi.toString(16)} ${g.name}`] as [number, number, string]))],
+          `0x${g.lo.toString(16)} 0x${g.hi.toString(16)} ${g.name}`] as [number, number, string])),
+        ...[...core.std.keys()].sort(cmp).filter(() => stdMap).map(ev => [desc.CLAIM_STD, index.get(core.id)!, `${ev} ${core.std.get(ev)}`] as [number, number, string]),
+        ...knobClaims()],
       area: [w('bss_end'), ...area, w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
       storage: { trailer: [w('trailer'), trailerLen], scopes },
+      flags: (w('glob', desc.STAGE_TOP) ? desc.F_STAGE_TOP : 0) | (w('glob', desc.PAYLOAD_SKIP) ? desc.F_PAYLOAD_SKIP : 0)
+        | (w('glob', desc.ABS16) ? desc.F_ABS16 : 0) | (stdMap ? desc.F_STD_MAP : 0)
+        | (w('glob', desc.COLLECTIONS) ? desc.F_COLLECTIONS : 0)
+        | (claimsMap ? desc.F_CLAIMS : 0)
+        | (stockShadow ? desc.F_STOCK_SHADOW : 0)
+        | (driveKnobs ? desc.F_KNOBS : 0),
+      sites: siteMap(w), prelink: (rel.prelink ?? []).map(([lo, hi, k]) => [lo, hi, k] as [number, number, number]),
       // the stock bytes of every range the flashed build writes, where the profile asks for them (driveShadow) or the
-      // loader keeps its own area: a loader on the unit copies a mod's stock parts from the running OS, and lays these
-      // over it
-      shadow: !dev.driveShadow && !ownArea ? [] : order.flatMap(m => m.sites)
+      // loader does (drive_stock_shadow): a loader on the unit copies a mod's stock parts from the running OS, and lays
+      // these over it
+      shadow: !dev.driveShadow && !stockShadow && !ownArea ? [] : order.flatMap(m => m.sites)
         .filter(s => dev.mainLoad <= s.addr && s.addr + s.len <= dev.mainLoad + image.length)
         .map(s => [s.addr, image.slice(s.addr - dev.mainLoad, s.addr - dev.mainLoad + s.len)] as [number, Uint8Array])
         .sort((a, b) => a[0] - b[0] || cmpBytes(a[1], b[1])) }
+  }
+  // the flashed main OS's taken byte ranges, for the loader's conflict checks (ABI 1.2): each site and copied block
+  // (by its module), the device's protected and kept ranges, and the appended code: the boot copier, the RAM image
+  // and the lockfile's trailer. link.py's site_map
+  const siteMap = (w: Where): [number, number, number, number][] => {
+    const out: [number, number, number, number][] = []
+    for (const m of order) for (const s of m.sites) if (!sharcSite(rel, s.addr)) out.push([s.addr, s.addr + s.len, desc.SITE_SITE, index.get(m.id)!])
+    for (const m of order) for (const [lo, hi] of m.copied) out.push([lo, hi, desc.SITE_COPIED, index.get(m.id)!])
+    for (const [lo, hi] of [...dev.protected, ...dev.keep]) out.push([lo, hi, desc.SITE_DEVICE, desc.NO_MODULE])
+    if (claimsMap) for (const m of order) for (const c of m.contribute) for (const [a, b] of c.claims) out.push([a, b, desc.SITE_CLAIM, index.get(m.id)!])
+    const boot = w('boot')
+    out.push([boot, boot + bootLen, desc.SITE_BOOT, index.get(core.id)!])
+    const run = w('run_image'), runLen = w('run_image_len')
+    out.push([run, run + runLen, desc.SITE_RUN, desc.NO_MODULE])
+    if (trailerLen) {
+      const t = w('trailer')
+      out.push([t, t + trailerLen, desc.SITE_TRAILER, desc.NO_MODULE])
+    }
+    return out.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3])
   }
   let descAt = 0, descLen = 0
   if (withDesc) {
@@ -1350,6 +1409,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       if (kind === 'table') return tabAt.get(a[0])!
       if (kind === 'glob') return glob.get(a[0]) ?? 0
       if (kind === 'bss_end') return bssEnd
+      if (kind === 'boot') return end
+      if (kind === 'run_image') return runLoad               // the RAM image's copy in the flashed image
+      if (kind === 'run_image_len') return ddr.length
       return dev.mainLoad + image.length + runLoad - end + ddr.length   // the trailer
     }))
     if (block.length !== descLen) throw new Error('the build descriptor changed size')

@@ -90,6 +90,46 @@ core_mute_site:
 1:      moveq   #0,%d0
         rts
 
+| ---- ev_live_rec: three project-model methods' entries, each (project,
+| track, ...), 8 bytes moved: 0x400a954a `lea -0x38(%sp),%sp; move.l
+| 0x58(%sp),%d1`, 0x400a6a08 `lea -0x14(%sp),%sp; movem.l %d2-%d6,(%sp)`,
+| 0x400a690c `lea -0x10(%sp),%sp; movem.l %d2-%d5,(%sp)`. Taken: rts (the
+| three are void). The C call reads only the stack, as stock's entry does.
+        .macro  LIVE_REC what
+        pea     \what                     | (what, then track: C's second argument is pushed first)
+        move.l  12(%sp),-(%sp)            | track (8 at the entry, 12 past the pea)
+        jsr     core_live_rec_pre
+        addq.l  #8,%sp
+        tst.l   %d0
+        .endm
+
+        .globl  core_live_note_site
+core_live_note_site:
+        LIVE_REC 1
+        bne.s   1f
+        lea     -0x38(%sp),%sp
+        move.l  0x58(%sp),%d1
+        jmp     0x400a9552
+1:      rts
+
+        .globl  core_live_value_site
+core_live_value_site:
+        LIVE_REC 2
+        bne.s   1f
+        lea     -0x14(%sp),%sp
+        movem.l %d2-%d6,(%sp)
+        jmp     0x400a6a10
+1:      rts
+
+        .globl  core_live_lock_site
+core_live_lock_site:
+        LIVE_REC 3
+        bne.s   1f
+        lea     -0x10(%sp),%sp
+        movem.l %d2-%d5,(%sp)
+        jmp     0x400a6914
+1:      rts
+
 | ---- ev_knob_turn: 0x40025b78 in the page view's turn (0x4002598c), past
 | the step and the lockout: `move.l 0x74(%a2),-(%sp); jsr 0x400adbd2`
 | (10 bytes). %a2 the view, %d2 the id, %d3 the encoder, %d5 the delta.
