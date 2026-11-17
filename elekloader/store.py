@@ -177,7 +177,7 @@ out are the freed runs given out again. A core that keeps no lockfile still
 gets the same ids for the same mods: they are given out from the first id in
 the order of the mods' ids.
 
-What the +Drive keeps (docs/DRIVE.md, "+Drive storage"). The Drive Loader
+What the +Drive keeps. The Drive Loader
 places +Drive mods' fields in the bits, lock codes and CCs the flashed build
 leaves free, from the top down, and keeps where in the unit's /mods/.store. A
 build given that file (`--drive-store`, drive_store.reserve) keeps it in one

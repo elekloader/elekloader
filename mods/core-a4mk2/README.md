@@ -262,16 +262,10 @@ What it does not do:
 
 ## Restarts
 
-An OS upgrade ends at 0x4007db24 as the Rytm's 1.74 does: interrupts
-masked, then a drain (0x40002766) waiting on the panel link's DMA
-(0x4133cfc0) and the UART queue (0x4133cfd0), counts only their interrupts
-move on. Core builds core-ar2's `finish.s` there (core-ar2's README, "The
-OS upgrade's restart"); on the A4 it is unchecked.
-
-`core_restart()` and `core_restart_now()` (`restart.s`, whose
-comment has the order and the limits; `analog-four-mk2/system.h`),
-core-dn1 5.0's calls: a reboot from a task once the +Drive's store and card
-are idle and those counts are 0, or at once.
+An OS upgrade's restart builds core-ar2's `finish.s` (its README, "The OS
+upgrade's restart") at 0x4007db24; on the A4 it is unchecked.
+`core_restart()` and `core_restart_now()`: `analog-four-mk2/system.h`,
+`restart.s`.
 
 ## Lockable parameters (0.5)
 
@@ -599,47 +593,27 @@ Not reported (std1 rule 6): a list parameter's turn. Unconfirmed: `keys.h`'s
 
 ## Audio events
 
-`audio.s` has the sites,
-`ui.h` the calls; handlers follow the C ABI and leave the EMAC unit as they
-found it. Every one fires where the hook it replaces fired, with the same data.
-
-| event / table | where | what |
-|---|---|---|
-| `core_dry_mute` (a byte) | 0x400fa6c4, the track levels' volume load for the dry VCA words (no call: the accumulators are live) | bit v: voice v's dry words get volume 0 next block; core clears it in `ev_render_out` at order 0, mods set bits in theirs |
-| `ev_fx_in(frames, out, voice_track)` | before the effects block's only call, 0x40103dda (`keep2`) | voice v at slot 2 + v of 32 frames of 8 longs; handlers may rewrite them, chained by order; the sends hear the result |
-| `ev_fx_out(out, frames, voice_track)` | after that call | out (0x80007e68) is the block's output, 32 stereo pairs; handlers add and saturate |
-| `ev_noise_fade(env, voice_track)` | 0x400ffe04 in the noise generator | after the fade envelopes update, before the levels are read |
-| `ev_noise_mix(bufs, voice_track)` | 0x400ffe50 | the final noise mix's start; a voice's three sources (140 bytes a voice) |
-| `core_knob_names` | the synth, FX and CV sets' name calls core already owns | `{first_id, last_id, kind, name(id, long)}`, any id, stock ones too, asked before core's lock-param names and stock's |
-
-The effects block writes its output through `out` (traced 2026-11-16), so one
-site at its call serves both events. The other three parameter sets' name calls (vtables at
-0x401a15ac, 0x401a182c, 0x401a18cc) still go to stock.
+`ev_fx_in`, `ev_fx_out`, `ev_noise_fade`, `ev_noise_mix`, `core_dry_mute`,
+`core_knob_names`: calls in `analog-four-mk2/ui.h`, sites in `audio.s`.
 
 ## +Drive mods
 
-core-ar2 0.12's spares (its README, "Room for +Drive mods"): 256 an event
-table, 16 a page table, 256 in `core_params`; +Drive storage needs
-`core_handles` (store.c) too.
-
-`ev_boot_drive`: f(), from 0x401061e8 in main(), before `jsr 0x400f1b18`,
-the boot's project load (`store.s`); a factory boot skips it. The loader
-may set the live layout there (`core_store_ids`, `core_store_gens`, from
-core-ar2 0.14), which that load then reads with: no second load, and no
-`core_lfo_dsts` (the A4's LFOs take `"mod"` fields).
-`ev_drive_format`: f(fs), from 0x40074af6 in FORMAT +DRIVE, after the slot
-erases, before the header's rewrite. Both are the loader's: no spares.
+core-ar2 0.12's spares (its README, "Room for +Drive mods") and
+`core_handles`. `ev_boot_drive` runs in main() before the boot's project
+load (`store.s`; not a factory boot), so a loader sets `core_store_ids`
+and `core_store_gens` (core-ar2 0.14's) first: no second load, no
+`core_lfo_dsts`. `ev_drive_format` runs in FORMAT +DRIVE after the slot
+erases. Both are the loader's alone.
 
 ## The sequencer
 
-`seq.c`, `seq.s`: core-ar2 0.11's sequencer events (`analog-four-mk2/seq.h`;
-[seq-check](../../examples/seq-check-a4mk2)).
+core-ar2 0.11's sequencer events: `seq.c`, `seq.s`, `analog-four-mk2/seq.h`,
+[seq-check](../../examples/seq-check-a4mk2).
 
 ## Moments
 
-core-ar2 0.11's moments (`analog-four-mk2/moments.h`; addresses in
-`send.c`, `store.c`, `moments.c`). From an interrupt `core_midi_try_send`
-masks every interrupt. No sound pool, no `ev_project_slot`.
+core-ar2 0.11's moments (`analog-four-mk2/moments.h`, `moments.c`), without
+a sound pool or `ev_project_slot`.
 
 ## Checked so far
 
