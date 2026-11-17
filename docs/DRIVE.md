@@ -501,7 +501,8 @@ image>` prints it.
   with the shadow. The twins
   (drive.py, js/src/drive.ts) check the same, leaving the stock hash to the
   unit when they have the descriptor alone.
-  A loader that exports `drive_stock_shadow` (the A4's) gets the same shadow
+  A loader that exports `drive_stock_shadow` (the A4's, and the Rytm's from
+  drive-loader-ar2 0.8) gets the same shadow
   for its stock parts alone, with flags bit 6 `F_STOCK_SHADOW`: the build
   matches each run of a mod's own code against the whole stock OS, so a
   part can name an address a flashed site wrote, where the running OS no
