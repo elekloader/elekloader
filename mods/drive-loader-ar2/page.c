@@ -21,6 +21,7 @@
 
 #include "dl.h"
 #include "fs.h"
+#include "park.h"
 
 /* stock's menus (core-ar2 README; trace 2, section 1) */
 #define NEW ((void *(*)(unsigned))0x40082a40)
@@ -63,6 +64,9 @@ struct file {                            /* a file the page knows: ticked, saved
     u8 boot_code;
     u16 boot_arg;                        /* the boot record's number (NO ROOM's KB, FULL's spare) */
     u8 checked;                          /* read and checked (crc, id, ver, file_code known) */
+    u8 big;                              /* larger than the live stage but not the +Drive area:
+                                          * read for its size and CRC, and its pass 1 and layout
+                                          * left to the next boot (STAGE.md) */
     char id[DL_ID_MAX];
     char ver[DL_VER_MAX];
     char detail[32];                     /* the file's refusal's name argument */
@@ -94,6 +98,15 @@ static struct dl_status *cst;
 static char (*cdet)[32];
 static char label[48];
 
+/* Parked data (PAGE.md, "Parked data"): the mods /mods/.store keeps fields of that no chosen mod
+ * declares any more, read when the page opens and after FORGET DATA. The build list shows them
+ * after the build's rows. */
+static struct dl_park *parks;
+static int npark;
+static u8 *forgetting;                   /* FORGET DATA's marks, one a parked mod */
+static u8 *store_raw, *store_out;        /* FORGET DATA's read of .store and its rewrite */
+static s32 store_len;
+
 /* The file being read, a stretch a tick (read_step): the staging buffer is the page's from its
  * open until the caller has checked what it read and given the buffer back. */
 static struct dl_reader rd;
@@ -120,9 +133,12 @@ static void set_free(void)
     dl_free(choice);
     dl_free(cst);
     dl_free(cdet);
+    dl_free(store_raw);
+    dl_free(store_out);
     choice = 0;
     cst = 0;
     cdet = 0;
+    store_raw = store_out = 0;
 }
 
 static void page_free(void)
@@ -131,10 +147,14 @@ static void page_free(void)
     dl_free(lrows);
     dl_free(build_rows);
     dl_free(sel);
+    dl_free(parks);
+    dl_free(forgetting);
     files = 0;
     lrows = 0;
     build_rows = sel = 0;
-    nfiles = fcap = nlrows = nbuild = 0;
+    parks = 0;
+    forgetting = 0;
+    nfiles = fcap = nlrows = nbuild = npark = 0;
     set_free();
 }
 
@@ -257,15 +277,79 @@ static int join(char *out, const char *rel, const char *name)
  * a line of its own (decided 2026-11-07: multiple lines are fine) */
 #define BOX_LINE 30
 
-/* a refusal into [at, end); `line` is where its line starts in the same buffer */
-static void reason_line(const char *line, char *at, char *end, int code, u32 arg, const char *d)
+/* the next word of `s` (to a space or its end) into [at, end) -> past it and its space */
+static const char *word(const char *s, char *at, char *end)
+{
+    while (*s && *s != ' ' && at < end - 1)
+        *at++ = *s++;
+    *at = 0;
+    while (*s && *s != ' ')
+        s++;
+    return *s ? s + 1 : s;
+}
+
+/* DL_R_STORE's second line from its detail "WHAT NEED HAVE" (decided 2026-11-10 with the
+ * storage loader): "sound: 62 of 56 bits", "codes: 3 of 1 free", "core_handles: 3 of 2 spare" */
+static void store_line(char *at, char *end, const char *d)
+{
+    char what[32], need[12], have[12];
+    int i, scope = 0;
+    d = word(word(word(d, what, what + sizeof what), need, need + sizeof need), have, have + sizeof have);
+    for (i = 0; i < DL_STORE_SCOPES; i++)
+        scope |= !dl_strcmp(what, dl_store_scopes[i]);
+    at = cat(cat(cat(cat(cat(cat(at, end, what), end, ": "), end, need), end, " of "), end, have), end,
+             scope ? " bits" : !dl_strcmp(what, "codes") ? " free" : " spare");
+    (void)at;
+}
+
+/* DL_R_CLASH's text from its arg (kind << 8 | line) and detail ("400a005e" and, for a flashed
+ * site, the flashed module's name): "SITE 0x400a005e" then who has it. The other +Drive mod is
+ * named from the set's records (set, nset: the boot's or the save's). */
+static void site_line(char *at, char *end, u32 arg, const char *d, const struct dl_status *set, u32 nset)
+{
+    char addr[12];
+    u32 kind = arg >> 8, line = arg & 0xff;
+    d = word(d, addr, addr + sizeof addr);
+    at = cat(cat(cat(at, end, " 0x"), end, addr), end, "\n");
+    if (kind == DL_SITE_CORE)
+        cat(cat(at, end, "TAKEN BY "), end, *d ? d : "THE BUILD");
+    else if (kind == DL_SITE_MOD) {
+        char id[DL_ID_MAX];
+        if (set && line < nset && set[line].id[0])
+            copy_str(id, set[line].id, sizeof id);
+        else
+            copy_str(id, "ANOTHER MOD", sizeof id);
+        cat(cat(at, end, "TAKEN BY "), end, id);
+    } else if (kind == DL_SITE_PRELINK)
+        cat(at, end, "IN A PRE-LINK RANGE");
+    else if (kind == DL_SITE_STOCK)
+        cat(at, end, "NOT STOCK BYTES");
+    else
+        cat(at, end, "REFUSED");
+}
+
+/* a refusal into [at, end); `line` is where its line starts in the same buffer; set and nset are
+ * the set's records (a site's other mod) */
+static void reason_line(const char *line, char *at, char *end, int code, u32 arg, const char *d,
+                        const struct dl_status *set, u32 nset)
 {
     static const char *const what[] = {
         "", "FILE MISSING", "FILE CHANGED", "TOO BIG", "BAD FILE", "NOT FORMAT 2",
         "OTHER DEVICE/OS", "CAN'T USE", "SAME ID AS", "NEEDS CORE", "NEEDS", "CONFLICTS",
         "EXPORT TAKEN", "CLAIMED", "NOT FOUND", "TABLE", "FULL", "NO ROOM", "OUT OF RANGE",
-        "TOO MANY NAMES", "OVER 256 MODS"};
+        "TOO MANY NAMES", "OVER 256 MODS",
+        /* 21 to 28: TELOS's (DL_SITES, DL_REGIONS), which this loader doesn't build with */
+        "REFUSED", "REFUSED", "REFUSED", "REFUSED", "REFUSED", "REFUSED", "REFUSED", "REFUSED",
+        "NO STORAGE ROOM", "SITE"};
     at = cat(at, end, code < (int)(sizeof what / sizeof what[0]) ? what[code] : "REFUSED");
+    if (code == DL_R_STORE) {            /* always on two lines: the detail is the whole of it */
+        store_line(cat(at, end, "\n"), end, d ? d : "");
+        return;
+    }
+    if (code == DL_R_CLASH) {
+        site_line(at, end, arg, d ? d : "", set, nset);
+        return;
+    }
     if (code == DL_R_ROOM) {
         at = cat(at, end, " +");
         at = num(at, end, arg);
@@ -283,9 +367,10 @@ static void reason_line(const char *line, char *at, char *end, int code, u32 arg
     }
 }
 
-static void reason(char *at, char *end, int code, u32 arg, const char *d)
+static void reason(char *at, char *end, int code, u32 arg, const char *d, const struct dl_status *set,
+                   u32 nset)
 {
-    reason_line(at, at, end, code, arg, d);
+    reason_line(at, at, end, code, arg, d, set, nset);
 }
 
 /* ---- files ---- */
@@ -494,6 +579,50 @@ static int read_folder(void)
     return 0;
 }
 
+/* The parked mods from raw (/mods/.store's bytes, len of them), into parks; none for a missing
+ * or bad file (the boot then places afresh, so nothing is parked). -> 0, -2 no memory. */
+static int parks_from(const u8 *raw, s32 len)
+{
+    int n = len > 0 ? dl_park_list(raw, (u32)len, 0, 0) : 0;
+    dl_free(parks);
+    dl_free(forgetting);
+    parks = 0;
+    forgetting = 0;
+    npark = 0;
+    if (n <= 0)
+        return 0;
+    parks = dl_alloc((u32)n * sizeof *parks);
+    forgetting = dl_alloc((u32)n);
+    if (!parks || !forgetting)
+        return -2;
+    npark = dl_park_list(raw, (u32)len, parks, n);
+    if (npark < 0)
+        npark = 0;
+    return 0;
+}
+
+/* DL_DIR/.store whole into a new heap buffer (*raw) -> its length, or < 0 (none: missing, or no
+ * memory, -2). Under dl_lock. */
+static s32 read_store(u8 **raw)
+{
+    char path[DL_PATH_MAX];
+    s32 size, len;
+    *raw = 0;
+    path_of(path, DL_STORE_NAME);
+    size = dl_fs_file_size(path);
+    if (size <= 0)
+        return -1;
+    *raw = dl_alloc((u32)size);
+    if (!*raw)
+        return -2;
+    len = dl_read_file(DL_STORE_NAME, *raw, (u32)size);
+    if (len < 0) {
+        dl_free(*raw);
+        *raw = 0;
+    }
+    return len;
+}
+
 /* Opening the page: the saved set from DL_DIR/active (ticked: the ticks start as the build), the
  * mods the last boot loaded, then DL_DIR's listing. -> 0, -2 no memory. */
 static int scan(void)
@@ -539,6 +668,19 @@ static int scan(void)
         }
     for (i = 0; i < nfiles; i++)
         boot_record(&files[i]);
+    {
+        u8 *raw;
+        s32 slen;
+        dl_lock();
+        slen = read_store(&raw);
+        dl_unlock();
+        k = slen == -2 || parks_from(raw, slen);
+        dl_free(raw);
+        if (k) {
+            page_free();
+            return -2;
+        }
+    }
     if (read_folder()) {
         page_free();
         return -2;
@@ -574,14 +716,22 @@ static int read_step(const char *name)
         rd_name = name;
     }
     dl_lock();
-    res = dl_read_more(&rd, drive_staging, DL_STAGING_SIZE);
+    res = dl_read_more(&rd, dl_stage_at, dl_stage_len);
     dl_unlock();
     if (!res)
         return 1;
     reading = 0;
     rd_len = res == 1 ? (s32)rd.got : res;
-    rd_crc = ~rd.crc;
+    rd_crc = ~rd.crc;                    /* -2 too: the reader read it to its end */
     return 0;
+}
+
+/* A file of n bytes the boot reads into the +Drive area itself (dl.h, dl_stage_top): pass 1
+ * takes it when it is no larger than the area. */
+static int fits_area(u32 n)
+{
+    u32 lo, hi;
+    return dl_stage_top && dl_area((u32)core_desc, &lo, &hi) == 0 && n <= hi - lo;
 }
 
 /* One file read, a stretch a call (read_step): its CRC-32 and size, then a check of it alone
@@ -603,7 +753,12 @@ static int inspect(struct file *r)
         return c;
     len = rd_len;
     r->checked = 1;
-    if (len == -2)
+    r->big = 0;
+    if (len == -2 && fits_area(rd.got)) {   /* the boot reads it in the area: it checks it */
+        r->big = 1;
+        r->size = rd.got;
+        r->crc = rd_crc;
+    } else if (len == -2)
         r->file_code = DL_R_TOO_BIG;
     else if (len < 0)
         r->file_code = DL_R_MISSING;
@@ -612,7 +767,7 @@ static int inspect(struct file *r)
         r->crc = rd_crc;
         copy_str(one.name, r->name, DL_LINE_NAME_MAX);
         one.crc = r->crc;
-        if (dl_check_buf((u32)core_desc, &one, len, drive_staging, DL_STAGING_SIZE, &one_st, one_det,
+        if (dl_check_buf((u32)core_desc, &one, len, dl_stage_at, dl_stage_len, &one_st, one_det,
                          one_ver) >= 0) {        /* the file just read, not read again */
             c = one_st.code;
             if (real_id(one_st.id, r->name))
@@ -683,7 +838,7 @@ struct fn {                              /* std::function: functor[2], manager, 
 };
 
 enum { M_DRIVE, M_BUILD };
-enum { P_NONE, P_LOAD, P_UNLOAD, P_DELETE, P_CLEAR, P_RMDIR };
+enum { P_NONE, P_LOAD, P_UNLOAD, P_DELETE, P_CLEAR, P_RMDIR, P_FORGET };
 static u8 mode;                          /* the list: the files, or the build */
 static u8 pending;                       /* what the open confirm window does */
 static void *view;                       /* the page's view while it shows (UI task only) */
@@ -704,15 +859,21 @@ static int build_empty(void)
 
 static int list_n(void)
 {
-    return mode == M_BUILD ? nbuild : nlrows;
+    return mode == M_BUILD ? nbuild + npark : nlrows;
 }
 
-/* the file of list row i in this mode, or -1 for ".." and a folder */
+/* the file of list row i in this mode, or -1 for "..", a folder and a parked mod */
 static int file_k(int i)
 {
     if (mode == M_BUILD)
-        return build_rows[i];
+        return i < nbuild ? build_rows[i] : -1;
     return lrows[i].kind == R_FILE ? lrows[i].f : -1;
+}
+
+/* the parked mod of list row i (the build list's rows after the build's), or -1 */
+static int park_k(int i)
+{
+    return mode == M_BUILD && i >= nbuild && i < nbuild + npark ? i - nbuild : -1;
 }
 
 /* the build list: the saved set, then the mods the last boot loaded that have left it
@@ -755,15 +916,15 @@ static int delete_dir_now(void)
 }
 
 static const char *const acts_drive[] = {"SELECT ALL", "DESELECT ALL", "LOAD TO BUILD", "CLEAR BUILD", "DELETE"};
-static const char *const acts_build[] = {"SELECT ALL", "DESELECT ALL", "UNLOAD", "INFO"};
+static const char *const acts_build[] = {"SELECT ALL", "DESELECT ALL", "UNLOAD", "INFO", "FORGET DATA"};
 #define NACT_DRIVE 5
-#define NACT_BUILD 4
+#define NACT_BUILD 5
 /* functor indices: list rows are 1..list_n(), and the list has no file limit (one row a file in
  * /mods), so the other rows sit far above any list row. At 100/200/300 the 256-mod emulator
  * record drew list row 100 as SELECT ALL, rows from 200 as NO MODS ON +DRIVE and rows from 300
  * as VIEW BUILD (2026-11-08). A row needs a heap entry, so no list reaches 0x10000000. */
 #define I_ACT 0x10000000                 /* functor index of the action panel's rows */
-#define I_EMPTY 0x20000000               /* the file list's one row when /mods holds no file */
+#define I_EMPTY 0x20000000               /* an empty list's one row (page_rows) */
 #define I_LEFT 0x30000000                /* and of the left panel's row */
 
 /* a row's label: list rows 1.., the action panel I_ACT.., the left panel I_LEFT. The file list
@@ -778,7 +939,7 @@ unsigned dl_page_text(int i)
     char *end = label + sizeof label;
     label[0] = 0;
     if (i == I_EMPTY)
-        cat(label, end, "NO MODS ON +DRIVE");
+        cat(label, end, mode == M_DRIVE ? "NO MODS ON +DRIVE" : "BUILD EMPTY");
     else if (i >= I_LEFT)
         cat(label, end, mode == M_DRIVE ? "VIEW BUILD" : "VIEW +DRIVE");
     else if (i >= I_ACT) {
@@ -790,7 +951,14 @@ unsigned dl_page_text(int i)
             cat(label, end, acts_build[i]);
     } else if (--i >= 0 && i < list_n()) {
         int k = file_k(i);
-        if (k >= 0) {
+        if (park_k(i) >= 0) {            /* a parked mod: its id, clipped as the build's */
+            const char *id = parks[park_k(i)].id;
+            if (view)
+                clip_tail(label, end, id, ((int (*)(void *))VCALL(V_WIDTH))(view) - 9 - text_w("KEEP") -
+                          LABEL_X - STATE_GAP, text_w);
+            else
+                cat(label, end, id);
+        } else if (k >= 0) {
             const struct file *r = &files[k];
             char name[DL_SEG_MAX + 1];
             if (mode == M_BUILD && r->id[0])
@@ -849,7 +1017,9 @@ static void row_column(int i, char *t, char *end)
     int k = file_k(i);
     const struct file *r;
     t[0] = 0;
-    if (k < 0) {
+    if (park_k(i) >= 0)                  /* parked data: its fields keep their bits */
+        cat(t, end, "PARK");
+    else if (k < 0) {
         if (lrows[i].kind == R_DIR && lrows[i].sel)   /* "(3)": 3 ticked files below it */
             cat(num(cat(t, end, "("), end, lrows[i].sel), end, ")");
         else
@@ -1014,11 +1184,13 @@ static int go(const char *name)
  * where every mod would load is written to DL_DIR/active, one that wouldn't isn't, and the box
  * says why. While a save runs the page takes no other action, changes no folder and checks
  * nothing else. */
-enum { J_NONE, J_LOAD, J_CLEAR, J_UNLOAD };
+enum { J_NONE, J_LOAD, J_CLEAR, J_UNLOAD, J_FORGET };
 enum { JP_FILES, JP_START, JP_STEPS, JP_END };
+enum { FP_READ, FP_WRITE, FP_COMMIT };   /* FORGET DATA's steps, one a tick */
 static struct {
     u8 what, phase, first;
     int m, i, k, n;                      /* set size, next line or file, unloaded, ticked */
+    int c;                               /* the set's files the check reads: m less the big ones */
     u32 tries;                           /* ticks the buffer was busy, in a row */
 } job;
 #define JOB_BUSY 600                     /* ticks (30 s) of a busy buffer before the save gives up */
@@ -1043,6 +1215,10 @@ static void job_saved(void)
     page_rows();
     if (what == J_LOAD)
         cursor_to(0);                    /* as stock after LOAD TO PROJ */
+    if (what == J_LOAD && job.c < job.m) {   /* a big file in the set: only the boot checks it */
+        job_end("SAVED: BIG FILE\nCHECKED AT NEXT BOOT");
+        return;
+    }
     job_end(what == J_LOAD ? (job.first ? count_msg(job.n, "LOADED") : "BUILD UPDATED")
             : what == J_CLEAR ? "BUILD CLEARED" : count_msg(job.k, "UNLOADED"));
 }
@@ -1080,6 +1256,7 @@ static void save_step(void)
     }
     if (job.phase == JP_START) {
         u32 s = (u32)(job.m > 0 ? job.m : 1);
+        job.c = 0;                       /* a big file stays out of the check: the boot checks it */
         choice = dl_alloc(s * sizeof *choice);
         cst = dl_alloc(s * sizeof *cst);
         cdet = dl_alloc(s * sizeof *cdet);
@@ -1088,11 +1265,12 @@ static void save_step(void)
             return;
         }
         for (i = 0, k = 0; i < nfiles && k < job.m; i++)
-            if (files[i].keep) {
+            if (files[i].keep && !files[i].big) {
                 copy_str(choice[k].name, files[i].name, DL_LINE_NAME_MAX);
                 choice[k++].crc = files[i].crc;
             }
-        if (dl_check_start((u32)core_desc, job.m, drive_staging, DL_STAGING_SIZE, cst, cdet, 0) < 0) {
+        job.c = k;
+        if (dl_check_start((u32)core_desc, job.c, dl_stage_at, dl_stage_len, cst, cdet, 0) < 0) {
             job_end("NOT SAVED");
             return;
         }
@@ -1100,7 +1278,7 @@ static void save_step(void)
         job.phase = JP_STEPS;
         return;
     }
-    if (job.phase == JP_STEPS && job.i < job.m) {
+    if (job.phase == JP_STEPS && job.i < job.c) {
         k = read_step(choice[job.i].name);  /* a stretch a tick, as the background's reads */
         if (k < 0) {
             if (++job.tries > JOB_BUSY) {
@@ -1118,11 +1296,12 @@ static void save_step(void)
         return;
     }
     ok = dl_check_finish();
-    if (ok != job.m) {
+    if (ok != job.c) {
         msg[0] = 0;
-        for (k = 0; k < job.m && ok >= 0; k++)
+        for (k = 0; k < job.c && ok >= 0; k++)
             if (cst[k].state != DL_ST_LOADED) {
-                reason(msg, msg + sizeof msg, cst[k].code ? cst[k].code : DL_R_LIMIT, cst[k].arg, cdet[k]);
+                reason(msg, msg + sizeof msg, cst[k].code ? cst[k].code : DL_R_LIMIT, cst[k].arg, cdet[k], cst,
+                       (u32)job.c);
                 break;
             }
         job_end(msg[0] ? msg : "NOT SAVED");
@@ -1131,7 +1310,7 @@ static void save_step(void)
     for (i = 0, k = 0; i < nfiles; i++) {
         files[i].was = files[i].on;
         files[i].on = files[i].keep;
-        if (files[i].keep && k < job.m && real_id(cst[k++].id, files[i].name))   /* the save's check names */
+        if (files[i].keep && !files[i].big && k < job.c && real_id(cst[k++].id, files[i].name))   /* the save's check names */
             copy_str(files[i].id, cst[k - 1].id, sizeof files[i].id);          /* the rows added since boot */
     }
     if (save_active()) {
@@ -1173,6 +1352,180 @@ static int save_set(u8 what, int n, int k)
             save_step();
     }
     return 0;
+}
+
+/* FORGET DATA's text for a parked mod (INFO, and ticking its row): its parked bits per scope,
+ * two scopes a line, then the lock codes and CCs kept for it. out holds 160. */
+static void park_text(const struct dl_park *p, char *out, char *end)
+{
+    char *at = cat(out, end, "PARKED DATA"), *line = at, item[24];
+    int i, first = 1;
+    for (i = 0; i < DL_STORE_SCOPES; i++) {
+        char *e = item + sizeof item;
+        if (!p->bits[i])
+            continue;
+        cat(num(cat(cat(item, e, dl_store_scopes[i]), e, ": "), e, p->bits[i]), e, " bits");
+        if (!first && (u32)(at - line) + 2 + dl_strlen(item) <= BOX_LINE)
+            at = cat(at, end, ", ");
+        else {
+            at = cat(at, end, "\n");
+            line = at;
+        }
+        first = 0;
+        at = cat(at, end, item);
+    }
+    if (p->codes || p->ccs) {
+        at = cat(at, end, "\n");
+        if (p->codes)
+            at = cat(num(at, end, p->codes), end, p->codes == 1 ? " LOCK CODE" : " LOCK CODES");
+        if (p->codes && p->ccs)
+            at = cat(at, end, ", ");
+        if (p->ccs)
+            cat(num(at, end, p->ccs), end, p->ccs == 1 ? " CC" : " CCS");
+    }
+}
+
+/* FORGET DATA in steps (decided 2026-11-10: a stepped save, one file a tick, as LOAD TO BUILD):
+ * read /mods/.store, write it again without the marked mods' parked fields, lock codes and CCs
+ * to .store.tmp, then the old file goes and the tmp file takes its name. Their bits go back to
+ * the scope only at its next repack (docs/DRIVE.md, "+Drive storage"). */
+static void forget_step(void)
+{
+    char tmp[DL_PATH_MAX], path[DL_PATH_MAX];
+    const char **ids;
+    dl_file f;
+    int i, n, r;
+    if (job.phase == FP_READ) {
+        dl_lock();
+        store_len = read_store(&store_raw);
+        dl_unlock();
+        if (store_len == -2) {
+            job_end("NO MEMORY");
+            return;
+        }
+        if (store_len < 0 || dl_park_list(store_raw, (u32)store_len, 0, 0) <= 0) {
+            job_end("NO PARKED DATA");   /* gone since the page read it: a boot repacked it */
+            return;
+        }
+        job.phase = FP_WRITE;
+        return;
+    }
+    if (job.phase == FP_WRITE) {
+        ids = dl_alloc((u32)(npark > 0 ? npark : 1) * sizeof *ids);
+        store_out = dl_alloc((u32)store_len);
+        if (!ids || !store_out) {
+            dl_free(ids);
+            job_end("NO MEMORY");
+            return;
+        }
+        for (i = n = 0; i < npark; i++)
+            if (forgetting[i])
+                ids[n++] = parks[i].id;
+        store_len = dl_park_forget(store_raw, (u32)store_len, ids, n, store_out);
+        dl_free(ids);
+        if (store_len < 0) {
+            job_end("NOT SAVED");
+            return;
+        }
+        path_of(tmp, DL_STORE_NAME ".tmp");
+        dl_lock();
+        dl_memset(&f, 0, sizeof f);
+        r = dl_fs_open(&f, tmp, 1);
+        if (!r)
+            r = dl_fs_write(&f, store_out, (u32)store_len);
+        dl_fs_close(&f);
+        if (!r && dl_fs_file_size(tmp) != store_len)
+            r = -1;
+        if (r)
+            dl_fs_delete(tmp);
+        dl_unlock();
+        if (r) {
+            job_end("SAVE FAILED");
+            return;
+        }
+        job.phase = FP_COMMIT;
+        return;
+    }
+    path_of(tmp, DL_STORE_NAME ".tmp");
+    path_of(path, DL_STORE_NAME);
+    dl_lock();
+    dl_fs_delete(path);
+    r = dl_fs_rename(tmp, path);
+    dl_unlock();
+    if (r) {
+        job_end("SAVE FAILED");
+        return;
+    }
+    n = job.n;
+    if (parks_from(store_out, store_len)) {
+        job_end("NO MEMORY");
+        return;
+    }
+    page_rows();
+    cursor_to(nbuild < list_n() ? nbuild : 0);
+    {
+        char *end = msg + sizeof msg;
+        cat(num(cat(msg, end, "DATA FORGOTTEN ("), end, (u32)n), end, n == 1 ? " MOD)" : " MODS)");
+    }
+    job_end(msg);
+}
+
+/* the save or FORGET DATA's next step */
+static void job_step(void)
+{
+    if (job.what == J_FORGET)
+        forget_step();
+    else
+        save_step();
+}
+
+/* FORGET DATA in the build list: the ticked parked mods (decided 2026-11-10), after its confirm */
+static int forget_marks(void)
+{
+    int *v = ((int **)view)[10], *e = ((int **)view)[11], n = 0, k;
+    for (k = 0; k < npark; k++)
+        forgetting[k] = 0;
+    for (; v && v < e; v++)
+        if ((k = park_k(*v)) >= 0 && !forgetting[k]) {
+            forgetting[k] = 1;
+            n++;
+        }
+    return n;
+}
+
+static void ask_forget(void)
+{
+    char *end = msg + sizeof msg;
+    int n;
+    if (!npark) {
+        show_box("NO PARKED DATA");
+        return;
+    }
+    n = forget_marks();
+    if (!n) {
+        show_box("NO PARKED MOD SELECTED");
+        return;
+    }
+    cat(num(cat(msg, end, "FORGET DATA? ("), end, (u32)n), end, n == 1 ? " MOD)" : " MODS)");
+    pending = P_FORGET;
+    confirm(msg);
+}
+
+static void do_forget(void)
+{
+    int n;
+    if (job.what) {
+        show_box("BUSY: TRY AGAIN");
+        return;
+    }
+    n = forget_marks();                  /* the ticks again: the confirm window took no keys */
+    if (!n)
+        return;
+    dl_memset(&job, 0, sizeof job);
+    job.what = J_FORGET;
+    job.phase = FP_READ;
+    job.n = n;
+    show_box("FORGETTING DATA");
 }
 
 static void keep_none(void)
@@ -1293,6 +1646,8 @@ void dl_page_yes(void **f, int yes)
             do_clear();
         else if (pending == P_RMDIR)
             do_rmdir();
+        else if (pending == P_FORGET)
+            do_forget();
     }
     pending = P_NONE;
 }
@@ -1325,13 +1680,13 @@ static int row_reason(const struct file *r, char *out, char *end)
     if (mode == M_DRIVE) {
         if (!r->file_code)
             return 0;
-        reason(out, end, r->file_code, 0, r->detail);
+        reason(out, end, r->file_code, 0, r->detail, 0, 0);
         return 1;
     }
     if (r->boot != DL_ST_REFUSED && r->boot != DL_ST_DROPPED)
         return 0;
     reason_line(out, cat(out, end, "BOOT: "), end, r->boot_code ? r->boot_code : DL_R_LIMIT, r->boot_arg,
-                r->boot_detail);
+                r->boot_detail, dl_status, dl_status_n < DL_MAX_MODS ? dl_status_n : DL_MAX_MODS);
     return 1;
 }
 
@@ -1363,11 +1718,17 @@ static void info_text(const struct file *r, char *out, char *end)
     *at = 0;
 }
 
-/* INFO in the build list: the cursor's mod's folder and file name, in a box closed with NO */
+/* INFO in the build list: the cursor's mod's folder and file name, in a box closed with NO; on a
+ * parked mod, its parked data */
 static void do_info(void)
 {
     static char info[160];
     int row = cursor_row();
+    if (park_k(row) >= 0) {
+        park_text(&parks[park_k(row)], info, info + sizeof info);
+        show_box(info);
+        return;
+    }
     if (row < 0 || row >= nbuild) {
         show_box("NO MODS IN BUILD");
         return;
@@ -1380,8 +1741,11 @@ static void do_info(void)
 static int set_pick(int row, int on)
 {
     int k = file_k(row);
-    if (k < 0)
+    if (k < 0) {
+        if (park_k(row) >= 0)            /* a parked mod: ticked for FORGET DATA */
+            tick(row, on);
         return 1;
+    }
     if (mode == M_DRIVE) {
         if (on && !files[k].pick && npicks() >= DL_MAX_MODS)
             return 0;
@@ -1396,7 +1760,7 @@ static int set_pick(int row, int on)
  * whole reason, reachable from the page). */
 static void row_yes(void)
 {
-    static char why[80];
+    static char why[160];
     int row = cursor_row(), on, k;
     if (row < 0 || row >= list_n())
         return;
@@ -1407,6 +1771,18 @@ static void row_yes(void)
         }
         if (go(lrows[row].kind == R_UP ? 0 : lrows[row].name))
             show_box("NO MEMORY");
+        return;
+    }
+    if (park_k(row) >= 0) {             /* a parked mod: its tick, and its data in the box */
+        on = !is_ticked(row);
+        set_pick(row, on);
+        if (row + 1 < list_n())
+            cursor_to(row + 1);
+        VIEW_DIRTY((char *)view + 0x38);
+        if (on) {
+            park_text(&parks[park_k(row)], why, why + sizeof why);
+            show_box(why);
+        }
         return;
     }
     k = file_k(row);
@@ -1459,6 +1835,8 @@ void dl_page_select(void **f)
         ask(mode == M_DRIVE ? "LOAD" : "UNLOAD", mode == M_DRIVE ? P_LOAD : P_UNLOAD);
     else if (i == 3 && mode == M_BUILD)
         do_info();
+    else if (i == 4 && mode == M_BUILD)
+        ask_forget();
     else if (i == 3 && mode == M_DRIVE) {
         pending = P_CLEAR;
         confirm("CLEAR THE BUILD?");
@@ -1499,11 +1877,18 @@ static void page_rows(void)
     ((int *)view)[11] = ((int *)view)[10];   /* no ticks carried across lists */
     for (i = 0; i < list_n(); i++)
         add_item(view, i + 1, i);
-    /* stock's file view hangs the UI when it is first shown with no row (DLP7, 2026-11-07); its
-     * own lists never are (a folder has "..", VIEW RAM its slots). So a file list with no row
-     * gets one that says so and does nothing (YES on it changes nothing: it is no file). Only
-     * DL_DIR itself can be empty: a folder below it has "..". */
-    if (mode == M_DRIVE && !nlrows)
+    /* stock's list is never left with no row: its own lists never are (a folder has "..", VIEW
+     * RAM its slots), and its label scroll (0x4006dce8, every third UI tick) reads the cursor's
+     * row with no count check. LIST_CLEAR (0x40072914) frees the rows but keeps the vector's
+     * storage, so on an empty list that read takes a freed row and calls its label through
+     * whatever the heap has put there since: an illegal instruction and the OS's fatal halt
+     * (FORGET DATA of the build list's last rows, the DV2B emulator runs, 3 in 4 tries, found
+     * 2026-11-11). A list never shown with rows reads past a null vector instead (DLP7,
+     * 2026-11-07: the UI hung). So a list with no row gets one that says so and does nothing
+     * (YES on it changes nothing: it is no file): DL_DIR itself with nothing in it (a folder
+     * below it has ".."), or a build list that a CLEAR, UNLOAD or FORGET DATA has emptied, or
+     * that has nothing in it. */
+    if (!list_n())
         add_item(view, I_EMPTY, 0);
     LIST_CLEAR(right);
     for (i = 0; i < (mode == M_BUILD ? NACT_BUILD : NACT_DRIVE); i++)
@@ -1533,7 +1918,7 @@ void dl_mods_open(void **f)
     int busy;
     read_stop();                         /* a read left running when its page closed */
     if (job.what) {                      /* a save left running when its page closed */
-        if (job.phase == JP_STEPS)
+        if (job.what != J_FORGET && job.phase == JP_STEPS)
             dl_check_cancel();
         job.what = J_NONE;
     }
@@ -1548,7 +1933,8 @@ void dl_mods_open(void **f)
     p = NEW(PANE_SIZE);
     /* left panel on (+0x508), action panel on (+0x509); with no file and no folder both stay
      * shut, as there is nothing to act on or view (decided 2026-11-07) */
-    PANE_CTOR(p, "ModsManager", 0x80, nlrows != 0, nlrows != 0, 0);
+    PANE_CTOR(p, "ModsManager", 0x80, nlrows || npark, nlrows || npark, 0);   /* parked data: VIEW BUILD
+                                          * opens for FORGET DATA with /mods empty */
     view = p;
     page_rows();
     dl_call_a0(VIEW_SP, sp, menu, (unsigned)((char *)p + 0x38));
@@ -1635,6 +2021,24 @@ static void check_next(void)
     if (!inspect(&files[lrows[next_check].f]))   /* checked (not a stretch of its read, not busy): its
                                                   * row now shows its id or "!"; the frame that */
         VIEW_DIRTY((char *)view + 0x38);          /* draws it keeps drawn_at fresh, so the next follows */
+}
+
+/* Does the MODS page show? Drawn within SHOWN ticks, or not yet asked: then a frame is asked
+ * for, as check_next asks, and a page that asked and got none SHOWN ticks on has been left (or
+ * something covers it). boot.c's crash guard waits for it after a boot that applied sites. */
+int dl_page_shown(void)
+{
+    if (!view)
+        return 0;
+    if (ticks - drawn_at <= SHOWN)
+        return 1;
+    if ((s32)(probed - drawn_at) > 0 && ticks - probed > SHOWN)
+        return 0;
+    if (ticks - probed > SHOWN) {
+        probed = ticks;
+        VIEW_DIRTY((char *)view + 0x38);
+    }
+    return 1;
 }
 
 /* The route's changes over USB (route.c): dl_fs_gen counts them, and a move leaves its FROM and TO
@@ -1738,7 +2142,7 @@ void dl_page_tick(void *ctrl)
         u32 t0 = DL_BUS_NOW(), us;
         check_next();
         if (job.what && (reading || !(ticks % CHECK_EVERY)) && ticks - last_input >= QUIET)
-            save_step();                 /* a file being read goes on each tick it may work */
+            job_step();                  /* a file being read goes on each tick it may work */
         us = dl_bus_us(t0, DL_BUS_NOW());
         rest_until = ticks + 1 + (us > 10 * TICK_US ? 10 * TICK_US : us) * (WORK_SHARE - 1) / TICK_US;
     }

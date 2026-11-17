@@ -448,7 +448,9 @@ Pyodide, and `app.js` loads it only when the view first opens:
   a folder row, or on a part of the path, go into that folder. They are checked
   first, together with the files in `/mods`, in any folder, that they
   require. If one would not load, nothing is sent.
-- **The last boot** shows `/mods/.status`.
+- **The last boot** shows `/mods/.status`; its `stage:` line is the
+  largest upload the room shows, and a file over it is refused before
+  anything is sent.
 - **The shop's mods** for the build's device and OS are each marked
   **+Drive** or **flash** (`drive.flashOnly`: sites, storage and the other
   things only a flashed build carries), and a +Drive one can be uploaded from

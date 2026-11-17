@@ -14,13 +14,20 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
 
 - **The file list.** One row a file: its id (its file name until one is known) and, on the
   right where SAMPLES puts sizes, its size in whole KB once the check has read it (blank
-  before), or `!` for a file pass 1 refuses (a bad file, another device, a newer core, over
-  512 KB). The ticks start as the saved build on entering MODS and after each change; coming
+  before), or `!` for a file pass 1 refuses (a bad file, another device, a newer core, larger
+  than the +Drive area). A file over the stage but within the area (STAGE.md) shows
+  its size, and a save leaves its check to the next boot. The ticks start as the saved build on entering MODS and after each change; coming
   back from the build list keeps the ticks as they were.
 - **Why a `!`.** Ticking a `!` row also shows its whole refusal in stock's message box: in the
   file list the file's own (`OTHER DEVICE/OS`, `NEEDS CORE 0.12`, `NOT FORMAT 2`...), in the
   build list the last boot's after `BOOT: ` (`BOOT: NOT FOUND core_fn`, `BOOT: NO ROOM +12K`,
-  `BOOT: FULL ev_x (0 SPARE)`), with the detail name the linker kept. A reason longer than 30
+  `BOOT: FULL ev_x (0 SPARE)`), with the detail name the linker kept. A storage-room refusal
+  gives its scope and bits on a second line (`NO STORAGE ROOM` over `sound: 62 of 56 bits`;
+  `codes: 3 of 1 free` for lock codes, `core_handles: 3 of 2 spare` for a table), and a site
+  refusal the site and who has it (`SITE 0x400a005e` over `TAKEN BY duck`, `TAKEN BY THE BUILD`
+  or the flashed module, `IN A PRE-LINK RANGE` or `NOT STOCK BYTES`; a copied block's clash
+  names its first address), the other +Drive mod named from the set's records (docs/FORMAT.md,
+  "+Drive refusal codes": `store`, `site`). A reason longer than 30
   characters puts its detail on a second line: stock's box splits at newlines (`0x400764cc`)
   and about 32 characters fit the screen. The box closes by itself after a few seconds.
   Unticking shows nothing; tick it again to see it again.
@@ -72,11 +79,29 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   UNLOAD, which saves the build without the ticked mods through the same checks
   (`MOD NOT LOADED` for a ticked mod the build does not hold), and INFO, which shows the
   cursor's mod's folder (`/mods/drums/kicks`, clipped from the left behind a `<` past 30
-  characters) and its file name below it (30 characters a line) in a box closed with NO.
+  characters) and its file name below it (30 characters a line) in a box closed with NO, and
+  FORGET DATA (below, "Parked data").
+- **Parked data.** After the build's rows the build list shows each mod `/mods/.store` keeps
+  parked fields, lock codes or CCs of (docs/DRIVE.md, "+Drive storage"), by its id, with `PARK`
+  in the state column, in the order they were parked. Ticking one, or INFO on it, shows
+  `PARKED DATA` and its bits per scope (`sound: 12 bits, kit: 4 bits`, two a line), then the
+  lock codes and CCs kept for it. FORGET DATA asks `FORGET DATA? (n MODS)` for the ticked
+  parked rows (`NO PARKED MOD SELECTED` with none, `NO PARKED DATA` when there is none), then
+  rewrites `/mods/.store` without their parked fields, codes and CCs, one step a tick as a save
+  does: the file read, `.store.tmp` written, the old file deleted and the tmp renamed, each under
+  `dl_lock`; a box says `FORGETTING DATA`, then `DATA FORGOTTEN (n MODS)`. The rest of the file
+  stays as it is, so the bits go back to the scope only at its next repack, as
+  `drive_store.forget` (`park.c`; `tests/test_drive_page.py` checks its bytes against it). A
+  file that is missing or doesn't read (its CRC, its records) parks nothing. With `/mods` empty
+  and data parked, the panels open so that VIEW BUILD and FORGET DATA can be reached; the file
+  list keeps its `NO MODS ON +DRIVE` row.
 - **No files.** With no `.elemod` and no folder in `/mods` the list has one row,
-  `NO MODS ON +DRIVE`, which YES does nothing to, and neither panel opens. Stock's file view
-  hangs the UI when it is first shown with no row at all; its own lists never are (a folder
-  has `..`, VIEW RAM its 128 slots).
+  `NO MODS ON +DRIVE`, which YES does nothing to, and neither panel opens unless data is parked.
+  A build list with no row (nothing in the build and nothing parked, or after CLEAR BUILD,
+  UNLOAD or FORGET DATA took its last rows) has one row the same way, `BUILD EMPTY` (short enough for the list beside its panels).
+  Stock's lists are never left with no row: its label scroll reads the cursor's row without
+  checking the count, which on a cleared list is a freed row (a fatal halt, the DV2B emulator
+  runs) and on a list never filled a null one (the UI hung on DLP7).
 - **Messages** are stock's message box: on opening, why the boot skipped the mods
   (`SKIPPED: [NO] HELD`, `SKIPPED: CRASH`, `NO +DRIVE`, ...); after a change, `SAVE FAILED`,
   `BUSY: TRY AGAIN` or `OVER 256 MODS` (a build of more than the boot links); `NO MEMORY` when
@@ -104,7 +129,8 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   `dl_check`), taking the staging buffer and the mutex for one file at a time, so the key path
   and USB stay free between files (a LOAD of 18 files of 482 KB in one call held them for
   minutes). A box says `CHECKING n MODS`, and the result's box follows. Until it ends, the
-  page's actions answer `BUSY: TRY AGAIN` and its background check waits.
+  page's actions answer `BUSY: TRY AGAIN` and its background check waits. FORGET DATA runs
+  the same way, and waits 1 s after a key as the save does.
 - **Keys first.** Work in the UI task holds stock's UI event queue. Reading a whole 481 KB
   file every 2 ticks lets it grow about 40 events a second, and past 16 queued analoghealth
   refuses a remote key as busy until it expires at 2 s; the refused key never reaches
@@ -126,9 +152,9 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   3.2 s.
 - **The boot's verdicts** come from the boot's own records, matched by file name
   (`dl_boot_choice`), so a second file with a loaded mod's id isn't shown as loaded.
-- **Reading files.** The page reads each file into the staging buffer, which it takes only
-  while it reads that one file. The route answers `busy` then, and only then. A separate
-  buffer for the UI task would cost another 512 KB, or limit what the page can check. Every
+- **Reading files.** The page reads each file into the stage (STAGE.md), which it
+  takes only while it reads that one file. The route answers `busy` then, and only then. A
+  separate buffer for the UI task would cost area, or limit what the page can check. Every
   ekFS call is made under `dl_lock`.
 - **Keeping off reads.** Stock streams a read out of the buffer after the route fills it, so
   a page check during a read would hand the client the page's bytes under a good CRC.

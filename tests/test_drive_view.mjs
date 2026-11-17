@@ -41,7 +41,7 @@ execFileSync('node', [join(ROOT, 'js', 'tools', 'build.ts'), join(site, 'engine'
 writeFileSync(join(site, 'engine', 'devices.js'), readFileSync(join(site, 'engine', 'devices.js'), 'utf8')
   + `\nANALOG_RYTM_MK2.releases.push(${JSON.stringify({ ...V.release, binSha256: '' })});\n`);
 // a shop with one mod that loads from +Drive and one that only a flashed build can carry
-const put = V.exchanges.filter(s => s.op === 'put' && s.args[0] !== 'active');
+const put = V.exchanges.filter(s => s.op === 'upload' && !s.args[0].includes('/'));   // the CLI's uploads of the two examples
 const hello = { name: put[0].args[0], raw: Buffer.from(put[0].args[1], 'hex') };
 const user = { name: put[1].args[0], raw: Buffer.from(put[1].args[1], 'hex') };
 const sites = V.cases.find(c => c.name === 'feature: refused').files[0];
@@ -85,7 +85,7 @@ function mock(buildHex) {
     ...body, ...be([crc(body, 0xffffffff), 4], [body.length, 4], [0xaaa1daaa, 4])];
   // files by their path below /mods; folders too, as the route keeps them (an upload makes the ones it needs, and
   // an upload to FOLDER/.dir makes FOLDER and writes no file)
-  const files = { '.build': [...hexb(buildHex)], '.status': [...new TextEncoder().encode('drive-hello.elemod loaded 0 loaded\n')] };
+  const files = { '.build': [...hexb(buildHex)], '.status': [...new TextEncoder().encode('stage: 70000 bytes at 0x40c40000, free tail\ndrive-hello.elemod loaded 0 loaded\n')] };
   const dirs = new Set(), DEPTH = 3;
   const up = p => p.split('/').slice(0, -1).join('/');
   const jobs = {};
@@ -176,6 +176,8 @@ try {
   check('the build reads as the Python labels it', (await page.textContent('#dm-build-label')) === V.label, await page.textContent('#dm-build-label'));
   check('the +Drive area reads size first, area in brackets', /^\d+(\.\d)? K?B \(0x[0-9a-f]{8}\.\.0x[0-9a-f]{8}\)$/.test(await page.textContent('#dm-room dd')),
     await page.textContent('#dm-room dd'));
+  check('the largest upload is the live stage of the unit\'s .status', (await page.textContent('#dm-room')).includes('68 KB'),
+    await page.textContent('#dm-room'));
   check('the spare entries are collapsed', !(await page.evaluate(() => document.getElementById('dm-spares').open))
     && !(await page.isVisible('#dm-tables')));
   await page.click('#dm-spares summary');

@@ -19,7 +19,7 @@ static int seg_ok(const char *s)
  * them P_READ), which start with "." */
 static int name_ok(const char *s)
 {
-    if (same(s, ".build") || same(s, ".status") || same(s, DL_MOVE))
+    if (same(s, ".build") || same(s, ".status") || same(s, DL_MOVE) || same(s, DL_STORE))
         return 1;
 #ifdef DL_TEST_ARMED
     if (same(s, ".armed"))               /* test builds only: plant the crash flag */
@@ -53,7 +53,7 @@ static int writable(const char *s)
 
 /* The route's captures (a vector of std::string, one pointer to the chars each: one a `*` of the
  * pattern, so one a folder or file name) joined into a path below DL_DIR. -> its folders (the
- * captures less one), or -1 for a name that isn't one (the first may be .build, .status, .armed:
+ * captures less one), or -1 for a name that isn't one (the first may be .build, .status, .store, .armed:
  * name_ok; the others must be plain names, but for a last DL_MKDIR after a folder) or a path past
  * DL_NAME_MAX. */
 static int join_caps(char *out, void **caps)

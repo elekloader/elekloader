@@ -161,7 +161,8 @@ usual. A core serves them through its `std` map, from each standard name to
 one of its tables: the native table when the prototype is the same or its
 first part, or a table of its own that it calls with converted arguments.
 std and native mods go in one build. A subscription to an event the core's
-map lacks is refused at link time; each core's README lists what it maps.
+map lacks is refused at link time, and by the Drive Loader at boot for a
++Drive mod (`std`); each core's README lists what it maps.
 The core's own events never change, so a mod without the flag builds as
 before.
 
@@ -1870,7 +1871,9 @@ as when it was first made. Copies go in the build's manifest (`store`) and in th
 itself, after the mods' image (`ELKSTORE`, its length, then the lockfile's
 text; about 1-2 KB, never copied into RAM), so a lost lockfile comes back
 from the last .syx: `elekloader.patch --lockfile-from OLD.syx`. The unit
-itself can't give it back: it never sends its OS out.
+itself can't give it back: it never sends its OS out. On a unit with the
+Drive Loader, `--drive-store` keeps the lock codes and CCs its +Drive mods
+hold free (docs/DRIVE.md, "+Drive storage").
 
 **What is checked.** Sounds and kits carry the layout ID and their
 generation in their own spare bytes and are checked on every load. Pattern
@@ -2792,10 +2795,12 @@ The Rytm's knob looks (above) with `analog-four-mk2/pages.h`: an entry in
 
 The Rytm's knob ids by count (above) with `analog-four-mk2/pages.h`:
 declare `"knobs": n` and use `CORE_KNOB(k)`. The A4's ids: stock's are 1..0x126, core-a4mk2 keeps 0x127..0x1ff (its lock
-pseudo ids and room for more), a mod's own start at 0x200. A mod that picks
-its ids itself still may, from 0x200: the linker refuses a `core_params` or
-`core_knob_looks` entry in 0x127..0x1ff, a `core_knob_looks` entry below
-0x200, and two mods sharing an id.
+pseudo ids and room for more), a mod's own start at 0x200. Flashed mods'
+runs stay below 0x4000; 0x4000..0x7fff are the +Drive mods' (docs/DRIVE.md,
+"Knob ids on the +Drive"), so a reflash never moves them. A mod that picks
+its ids itself still may, from 0x200 to 0x3fff: the linker refuses a
+`core_params` or `core_knob_looks` entry in 0x127..0x1ff or in the +Drive
+range, a `core_knob_looks` entry below 0x200, and two mods sharing an id.
 
 ### Screen calls (core-a4mk2 0.6, Analog Four MKII)
 

@@ -1,0 +1,2720 @@
+{
+ "mods": {
+  "dist": {
+   "id": "dist",
+   "storage": [
+    {
+     "bits": 1,
+     "lock": true,
+     "scope": "sound",
+     "sym": "dist_dig"
+    },
+    {
+     "bits": 2,
+     "lock": true,
+     "scope": "sound",
+     "sym": "dist_chr"
+    },
+    {
+     "bits": 7,
+     "cc": true,
+     "lock": true,
+     "mod": true,
+     "scope": "sound",
+     "sym": "dist_drv"
+    },
+    {
+     "bits": 7,
+     "cc": true,
+     "lock": true,
+     "mod": true,
+     "scope": "sound",
+     "sym": "dist_bit"
+    },
+    {
+     "bits": 7,
+     "cc": true,
+     "lock": true,
+     "mod": true,
+     "scope": "sound",
+     "sym": "dist_srr"
+    },
+    {
+     "bits": 7,
+     "cc": true,
+     "lock": true,
+     "mod": true,
+     "scope": "sound",
+     "sym": "dist_lev"
+    },
+    {
+     "bits": 1,
+     "scope": "sound",
+     "sym": "dist_sld_f"
+    }
+   ]
+  },
+  "hand": {
+   "id": "hand",
+   "storage": [
+    {
+     "bits": 16,
+     "handle": true,
+     "scope": "project",
+     "sym": "hd"
+    },
+    {
+     "bits": 3,
+     "init": 5,
+     "scope": "global",
+     "sym": "hg"
+    }
+   ]
+  },
+  "kcv": {
+   "id": "kcv",
+   "storage": [
+    {
+     "bits": 8,
+     "cc": true,
+     "init": 3,
+     "lock": true,
+     "scope": "kit",
+     "sym": "kc_a",
+     "track": "cv"
+    }
+   ]
+  },
+  "kcv2": {
+   "id": "kcv",
+   "storage": [
+    {
+     "bits": 8,
+     "cc": true,
+     "init": 3,
+     "lock": true,
+     "scope": "kit",
+     "sym": "kc_a"
+    }
+   ]
+  },
+  "kfx": {
+   "id": "kfx",
+   "storage": [
+    {
+     "bits": 8,
+     "cc": true,
+     "lock": true,
+     "mod": true,
+     "scope": "kit",
+     "sym": "kf_a"
+    },
+    {
+     "bits": 3,
+     "lock": true,
+     "scope": "kit",
+     "sym": "kf_b"
+    }
+   ]
+  },
+  "reslim": {
+   "id": "res-limit",
+   "storage": [
+    {
+     "bits": 4,
+     "scope": "kit",
+     "sym": "res_lim"
+    }
+   ]
+  },
+  "syn1": {
+   "id": "syn1",
+   "storage": [
+    {
+     "bits": 1,
+     "lock": true,
+     "scope": "sound",
+     "sym": "y1"
+    }
+   ]
+  },
+  "syn2": {
+   "id": "syn2",
+   "storage": [
+    {
+     "bits": 1,
+     "lock": true,
+     "scope": "sound",
+     "sym": "y2"
+    },
+    {
+     "bits": 1,
+     "lock": true,
+     "scope": "sound",
+     "sym": "y3"
+    }
+   ]
+  },
+  "wave": {
+   "id": "wave",
+   "storage": [
+    {
+     "bits": 2,
+     "lock": true,
+     "scope": "sound",
+     "sym": "wave_mode"
+    },
+    {
+     "bits": 4,
+     "cc": true,
+     "lock": true,
+     "mod": true,
+     "scope": "sound",
+     "smooth": false,
+     "sym": "wave_chord"
+    }
+   ]
+  }
+ },
+ "runs": [
+  {
+   "name": "a4 fresh, nothing",
+   "results": [
+    {
+     "ancestors": [
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [],
+     "fields": {},
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x5a17c0de",
+     "inits": [],
+     "lfo_dsts": {},
+     "notes": [],
+     "parked": [],
+     "store": "444c535400020000000000584a4e2d055a17c0de5a17c0de7f000000000000000000000000007f7f010100000000002001010000000000800101000000000040010100000000001001010000000000200101000000004730"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      []
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "a4 the AE mods",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "1100001c00000065"
+     ],
+     "codes": [
+      "1080001a0000007e",
+      "1100001c0000067f"
+     ],
+     "fields": {
+      "res-limit/res_lim": "0x2100007c",
+      "wave/wave_chord": "0x1100001c",
+      "wave/wave_mode": "0x1080001a"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x24e32d08",
+     "inits": [],
+     "lfo_dsts": {},
+     "notes": [
+      "res-limit res_lim: 4 bits of kit storage at bit 124",
+      "wave wave_chord: 4 bits of sound storage at bit 28",
+      "wave wave_mode: 2 bits of sound storage at bit 26",
+      "wave wave_chord: lock code 127 (synth tracks)",
+      "wave wave_mode: lock code 126 (synth tracks)",
+      "wave wave_chord: CC 101",
+      "layout ID 0x24e32d08 (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400020000000000ec0a1b0f375a17c0de24e32d087d010003000000020000000100007f7f010100000000001a010100000000007c01010000000000400101000000000010010100000000002001010000000047305a17c0de0102001a000000000409000077617665776176655f6d6f64650000000104001c00000000040a000077617665776176655f63686f726400000204007c00000000090700007265732d6c696d69747265735f6c696d7e04090177617665776176655f6d6f64650000007f040a0177617665776176655f63686f7264000065040a0077617665776176655f63686f72640000"
+    },
+    {
+     "fit": [
+      [
+       "wave",
+       "sound",
+       6
+      ]
+     ]
+    },
+    {
+     "ancestors": [
+      "0x24e32d08",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "11c000000000003f",
+      "11c0000800000060",
+      "11c0000f00000061",
+      "11c0001900000064"
+     ],
+     "codes": [
+      "11c0000000000478",
+      "11c0000800000479",
+      "11c0000f0000047a",
+      "104000160000007b",
+      "108000170000007c",
+      "11c000190000047d"
+     ],
+     "fields": {
+      "dist/dist_bit": "0x11c00019",
+      "dist/dist_chr": "0x10800017",
+      "dist/dist_dig": "0x10400016",
+      "dist/dist_drv": "0x11c0000f",
+      "dist/dist_lev": "0x11c00008",
+      "dist/dist_sld_f": "0x10400007",
+      "dist/dist_srr": "0x11c00000",
+      "res-limit/res_lim": "0x2100007c"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 2,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x320e93e6",
+     "inits": [],
+     "lfo_dsts": {},
+     "notes": [
+      "+Drive sound storage repacked (generation 2), as its never-used bits ran out: projects and sounds saved before load it at defaults",
+      "wave wave_mode (sound): parked, and its scope repacked, its data is dropped",
+      "wave wave_chord (sound): parked, and its scope repacked, its data is dropped",
+      "dist dist_bit: 7 bits of sound storage at bit 25",
+      "dist dist_chr: 2 bits of sound storage at bit 23",
+      "dist dist_dig: 1 bits of sound storage at bit 22",
+      "dist dist_drv: 7 bits of sound storage at bit 15",
+      "dist dist_lev: 7 bits of sound storage at bit 8",
+      "dist dist_sld_f: 1 bits of sound storage at bit 7",
+      "dist dist_srr: 7 bits of sound storage at bit 0",
+      "wave wave_mode: lock code 126 (synth tracks) kept for it while it is out",
+      "wave wave_chord: lock code 127 (synth tracks) kept for it while it is out",
+      "dist dist_bit: lock code 125 (synth tracks)",
+      "dist dist_chr: lock code 124 (synth tracks)",
+      "dist dist_dig: lock code 123 (synth tracks)",
+      "dist dist_drv: lock code 122 (synth tracks)",
+      "dist dist_lev: lock code 121 (synth tracks)",
+      "dist dist_srr: lock code 120 (synth tracks)",
+      "wave wave_chord: CC 101 kept for it until the unused CCs run out",
+      "dist dist_bit: CC 100",
+      "dist dist_drv: CC 97",
+      "dist dist_lev: CC 96",
+      "dist dist_srr: CC 63",
+      "layout ID 0x320e93e6 (from 0x24e32d08, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c53540002000000000204a6833e9c5a17c0de320e93e677020008000000060002000400017f7f0102000000000000010100000000007c010100000000004001010000000000100101000000000020010100000000473024e32d085a17c0de01070000000000000408000064697374646973745f7372720101000700000000040a000064697374646973745f736c645f66000001070008000000000408000064697374646973745f6c65760107000f000000000408000064697374646973745f64727601010016000000000408000064697374646973745f64696701020017000000000408000064697374646973745f63687201070019000000000408000064697374646973745f6269740204007c00000000090700007265732d6c696d69747265735f6c696d7804080164697374646973745f7372727904080164697374646973745f6c65767a04080164697374646973745f6472767b04080164697374646973745f6469677c04080164697374646973745f6368727d04080164697374646973745f6269747e04090177617665776176655f6d6f64650000007f040a0177617665776176655f63686f726400003f04080064697374646973745f7372726004080064697374646973745f6c65766104080064697374646973745f6472766404080064697374646973745f62697465040a0077617665776176655f63686f72640000"
+    },
+    {
+     "ancestors": [
+      "0x320e93e6",
+      "0x24e32d08",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "1100001c00000065"
+     ],
+     "codes": [
+      "1080001a00000076",
+      "1100001c00000677"
+     ],
+     "fields": {
+      "res-limit/res_lim": "0x2100007c",
+      "wave/wave_chord": "0x1100001c",
+      "wave/wave_mode": "0x1080001a"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 3,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x44172ad6",
+     "inits": [],
+     "lfo_dsts": {},
+     "notes": [
+      "+Drive sound storage repacked (generation 3), as its never-used bits ran out: projects and sounds saved before load it at defaults",
+      "dist dist_srr (sound): parked, and its scope repacked, its data is dropped",
+      "dist dist_sld_f (sound): parked, and its scope repacked, its data is dropped",
+      "dist dist_lev (sound): parked, and its scope repacked, its data is dropped",
+      "dist dist_drv (sound): parked, and its scope repacked, its data is dropped",
+      "dist dist_dig (sound): parked, and its scope repacked, its data is dropped",
+      "dist dist_chr (sound): parked, and its scope repacked, its data is dropped",
+      "dist dist_bit (sound): parked, and its scope repacked, its data is dropped",
+      "wave wave_chord: 4 bits of sound storage at bit 28",
+      "wave wave_mode: 2 bits of sound storage at bit 26",
+      "dist dist_srr: lock code 120 (synth tracks) kept for it while it is out",
+      "dist dist_lev: lock code 121 (synth tracks) kept for it while it is out",
+      "dist dist_drv: lock code 122 (synth tracks) kept for it while it is out",
+      "dist dist_dig: lock code 123 (synth tracks) kept for it while it is out",
+      "dist dist_chr: lock code 124 (synth tracks) kept for it while it is out",
+      "dist dist_bit: lock code 125 (synth tracks) kept for it while it is out",
+      "wave wave_chord: lock code 119 (synth tracks)",
+      "wave wave_mode: lock code 118 (synth tracks)",
+      "dist dist_srr: CC 63 kept for it until the unused CCs run out",
+      "dist dist_lev: CC 96 kept for it until the unused CCs run out",
+      "dist dist_drv: CC 97 kept for it until the unused CCs run out",
+      "dist dist_bit: CC 100 kept for it until the unused CCs run out",
+      "wave wave_chord: back with CC 101",
+      "layout ID 0x44172ad6 (from 0x320e93e6, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c53540002000000000194c592d8a15a17c0de44172ad675030003000000020006000100047f7f010300000000001a010100000000007c0101000000000040010100000000001001010000000000200101000000004730320e93e624e32d085a17c0de0102001a000000000409000077617665776176655f6d6f64650000000104001c00000000040a000077617665776176655f63686f726400000204007c00000000090700007265732d6c696d69747265735f6c696d7604090177617665776176655f6d6f646500000077040a0177617665776176655f63686f726400007804080164697374646973745f7372727904080164697374646973745f6c65767a04080164697374646973745f6472767b04080164697374646973745f6469677c04080164697374646973745f6368727d04080164697374646973745f62697465040a0077617665776176655f63686f726400003f04080064697374646973745f7372726004080064697374646973745f6c65766104080064697374646973745f6472766404080064697374646973745f626974"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        40,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "wave",
+       "reslim"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        40,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "fit",
+      [
+       "dist",
+       "wave",
+       "reslim"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        40,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "dist",
+       "reslim"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        40,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "wave",
+       "reslim"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "a4 kinds",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "1100001c00000061",
+      "2200007000000064",
+      "2201007800000065"
+     ],
+     "codes": [
+      "1080001a0000007e",
+      "1100001c0000067f",
+      "20c0006d0000007e",
+      "220000700000047f",
+      "220100780000087f"
+     ],
+     "fields": {
+      "kcv/kc_a": "0x22010078",
+      "kfx/kf_a": "0x22000070",
+      "kfx/kf_b": "0x20c0006d",
+      "wave/wave_chord": "0x1100001c",
+      "wave/wave_mode": "0x1080001a"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x619d6639",
+     "inits": [
+      "00000003"
+     ],
+     "lfo_dsts": {},
+     "notes": [
+      "kcv kc_a: 8 bits of kit storage at bit 120",
+      "kfx kf_a: 8 bits of kit storage at bit 112",
+      "kfx kf_b: 3 bits of kit storage at bit 109",
+      "wave wave_chord: 4 bits of sound storage at bit 28",
+      "wave wave_mode: 2 bits of sound storage at bit 26",
+      "kcv kc_a: lock code 127 (CV track)",
+      "kfx kf_a: lock code 127 (FX track)",
+      "kfx kf_b: lock code 126 (FX track)",
+      "wave wave_chord: lock code 127 (synth tracks)",
+      "wave wave_mode: lock code 126 (synth tracks)",
+      "kcv kc_a: CC 101",
+      "kfx kf_a: CC 100",
+      "wave wave_chord: CC 97",
+      "layout ID 0x619d6639 (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c53540002000000000148fb9add5d5a17c0de619d66397d010005000000050000000300007d7e010100000000001a010100000000006d01010000000000400101000000000010010100000000002001010000000047305a17c0de0102001a000000000409000077617665776176655f6d6f64650000000104001c00000000040a000077617665776176655f63686f726400000203006d00000000030400006b66786b665f62000208007000000000030400006b66786b665f61000208007800000003030400006b63766b635f61007e04090177617665776176655f6d6f64650000007f040a0177617665776176655f63686f726400007e0304026b66786b665f62007f0304026b66786b665f61007f0304036b63766b635f610061040a0077617665776176655f63686f72640000640304006b66786b665f6100650304006b63766b635f6100"
+    },
+    {
+     "ancestors": [
+      "0x619d6639",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "1100001c00000061",
+      "2200007000000064",
+      "2201007800000065"
+     ],
+     "codes": [
+      "1080001a0000007e",
+      "1100001c0000067f",
+      "220100780000007d",
+      "20c0006d0000007e",
+      "220000700000047f"
+     ],
+     "fields": {
+      "kcv/kc_a": "0x22010078",
+      "kfx/kf_a": "0x22000070",
+      "kfx/kf_b": "0x20c0006d",
+      "wave/wave_chord": "0x1100001c",
+      "wave/wave_mode": "0x1080001a"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0xadc095b8",
+     "inits": [
+      "00000003"
+     ],
+     "lfo_dsts": {},
+     "notes": [
+      "kcv kc_a: lock code 127 (CV track) kept for it while it is out",
+      "kcv kc_a: lock code 125 (FX track)",
+      "layout ID 0xadc095b8 (from 0x619d6639, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c5354000200000000014c5d4d65a45a17c0deadc095b87d020005000000050000000300007c7e010100000000001a010100000000006d0101000000000040010100000000001001010000000000200101000000004730619d66395a17c0de0102001a000000000409000077617665776176655f6d6f64650000000104001c00000000040a000077617665776176655f63686f726400000203006d00000000030400006b66786b665f62000208007000000000030400006b66786b665f61000208007800000003030400006b63766b635f61007e04090177617665776176655f6d6f64650000007f040a0177617665776176655f63686f726400007d0304026b63766b635f61007e0304026b66786b665f62007f0304026b66786b665f610061040a0077617665776176655f63686f72640000640304006b66786b665f6100650304006b63766b635f6100"
+    },
+    {
+     "ancestors": [
+      "0xadc095b8",
+      "0x619d6639",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "1100001c00000061",
+      "2201007800000065"
+     ],
+     "codes": [
+      "1080001a0000007e",
+      "1100001c0000067f",
+      "220100780000087e"
+     ],
+     "fields": {
+      "kcv/kc_a": "0x22010078",
+      "wave/wave_chord": "0x1100001c",
+      "wave/wave_mode": "0x1080001a"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0xcad03bf8",
+     "inits": [
+      "00000003"
+     ],
+     "lfo_dsts": {},
+     "notes": [
+      "kfx kf_b (kit): parked; its bits and values are kept for when it comes back",
+      "kfx kf_a (kit): parked; its bits and values are kept for when it comes back",
+      "kcv kc_a: lock code 125 (FX track) kept for it while it is out",
+      "kfx kf_b: lock code 126 (FX track) kept for it while it is out",
+      "kfx kf_a: lock code 127 (FX track) kept for it while it is out",
+      "kcv kc_a: lock code 126 (CV track)",
+      "kfx kf_a: CC 100 kept for it until the unused CCs run out",
+      "layout ID 0xcad03bf8 (from 0xadc095b8, whose projects it still reads)"
+     ],
+     "parked": [
+      "kfx/kf_b 0x20c0006d",
+      "kfx/kf_a 0x22000070"
+     ],
+     "store": "444c53540002000000000150133a5cf85a17c0decad03bf87d030003000200030002000200017c7d010100000000001a010100000000006d0101000000000040010100000000001001010000000000200101000000004730adc095b8619d66395a17c0de0102001a000000000409000077617665776176655f6d6f64650000000104001c00000000040a000077617665776176655f63686f726400000208007800000003030400006b63766b635f61000203006d00000000030400006b66786b665f62000208007000000000030400006b66786b665f61007e04090177617665776176655f6d6f64650000007f040a0177617665776176655f63686f726400007e0304036b63766b635f61007e0304026b66786b665f62007f0304026b66786b665f610061040a0077617665776176655f63686f72640000650304006b63766b635f6100640304006b66786b665f6100"
+    },
+    {
+     "ancestors": [
+      "0xadc095b8",
+      "0x619d6639",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "1100001c00000061",
+      "2200007000000064",
+      "2201007800000065"
+     ],
+     "codes": [
+      "1080001a0000007e",
+      "1100001c0000067f",
+      "20c0006d0000007e",
+      "220000700000047f",
+      "220100780000087e"
+     ],
+     "fields": {
+      "kcv/kc_a": "0x22010078",
+      "kfx/kf_a": "0x22000070",
+      "kfx/kf_b": "0x20c0006d",
+      "wave/wave_chord": "0x1100001c",
+      "wave/wave_mode": "0x1080001a"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0xcad03bf8",
+     "inits": [
+      "00000003"
+     ],
+     "lfo_dsts": {},
+     "notes": [
+      "kfx kf_a: back at bit 112 of kit storage, with the values it had",
+      "kfx kf_b: back at bit 109 of kit storage, with the values it had",
+      "kfx kf_a: back with lock code 127 (FX track)",
+      "kfx kf_b: back with lock code 126 (FX track)",
+      "kfx kf_a: back with CC 100"
+     ],
+     "parked": [],
+     "store": "444c535400020000000001507a7113c35a17c0decad03bf87d030005000000050000000300007c7d010100000000001a010100000000006d0101000000000040010100000000001001010000000000200101000000004730adc095b8619d66395a17c0de0102001a000000000409000077617665776176655f6d6f64650000000104001c00000000040a000077617665776176655f63686f726400000203006d00000000030400006b66786b665f62000208007000000000030400006b66786b665f61000208007800000003030400006b63766b635f61007e04090177617665776176655f6d6f64650000007f040a0177617665776176655f63686f726400007e0304026b66786b665f62007f0304026b66786b665f61007e0304036b63766b635f610061040a0077617665776176655f63686f72640000640304006b66786b665f6100650304006b63766b635f6100"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        268435456,
+        112
+       ],
+       [
+        268435457,
+        113
+       ],
+       [
+        536870912,
+        112
+       ],
+       [
+        536870914,
+        2160
+       ]
+      ],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "wave",
+       "kfx",
+       "kcv"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        268435456,
+        112
+       ],
+       [
+        268435457,
+        113
+       ],
+       [
+        536870912,
+        112
+       ],
+       [
+        536870914,
+        2160
+       ]
+      ],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "wave",
+       "kfx",
+       "kcv2"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        268435456,
+        112
+       ],
+       [
+        268435457,
+        113
+       ],
+       [
+        536870912,
+        112
+       ],
+       [
+        536870914,
+        2160
+       ]
+      ],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "wave",
+       "kcv"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        268435456,
+        112
+       ],
+       [
+        268435457,
+        113
+       ],
+       [
+        536870912,
+        112
+       ],
+       [
+        536870914,
+        2160
+       ]
+      ],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "wave",
+       "kfx",
+       "kcv"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "a4 flashed takes a code",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "1100001c00000064",
+      "2200007800000065"
+     ],
+     "codes": [
+      "1080001a0000007e",
+      "1100001c0000067f",
+      "20c000750000007e",
+      "220000780000047f"
+     ],
+     "fields": {
+      "kfx/kf_a": "0x22000078",
+      "kfx/kf_b": "0x20c00075",
+      "wave/wave_chord": "0x1100001c",
+      "wave/wave_mode": "0x1080001a"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x023101cb",
+     "inits": [],
+     "lfo_dsts": {},
+     "notes": [
+      "kfx kf_a: 8 bits of kit storage at bit 120",
+      "kfx kf_b: 3 bits of kit storage at bit 117",
+      "wave wave_chord: 4 bits of sound storage at bit 28",
+      "wave wave_mode: 2 bits of sound storage at bit 26",
+      "kfx kf_a: lock code 127 (FX track)",
+      "kfx kf_b: lock code 126 (FX track)",
+      "wave wave_chord: lock code 127 (synth tracks)",
+      "wave wave_mode: lock code 126 (synth tracks)",
+      "kfx kf_a: CC 101",
+      "wave wave_chord: CC 100",
+      "layout ID 0x023101cb (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c5354000200000000011c7b4f55b65a17c0de023101cb7d010004000000040000000200007d7f010100000000001a010100000000007501010000000000400101000000000010010100000000002001010000000047305a17c0de0102001a000000000409000077617665776176655f6d6f64650000000104001c00000000040a000077617665776176655f63686f726400000203007500000000030400006b66786b665f62000208007800000000030400006b66786b665f61007e04090177617665776176655f6d6f64650000007f040a0177617665776176655f63686f726400007e0304026b66786b665f62007f0304026b66786b665f610064040a0077617665776176655f63686f72640000650304006b66786b665f6100"
+    },
+    {
+     "ancestors": [
+      "0x023101cb",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "1100001c00000064",
+      "2200007800000065"
+     ],
+     "codes": [
+      "1100001c0000067d",
+      "1080001a0000007e",
+      "220000780000047d",
+      "20c000750000007e"
+     ],
+     "fields": {
+      "kfx/kf_a": "0x22000078",
+      "kfx/kf_b": "0x20c00075",
+      "wave/wave_chord": "0x1100001c",
+      "wave/wave_mode": "0x1080001a"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0xabd59647",
+     "inits": [],
+     "lfo_dsts": {},
+     "notes": [
+      "wave wave_chord: lock code 127 (synth tracks) is the flashed build's now",
+      "kfx kf_a: lock code 127 (FX track) is the flashed build's now",
+      "kfx kf_a: lock code 125 (FX track)",
+      "wave wave_chord: lock code 125 (synth tracks)",
+      "layout ID 0xabd59647 (from 0x023101cb, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400020000000001208f72f8785a17c0deabd596477d020004000000040000000200007d7f010100000000001a01010000000000750101000000000040010100000000001001010000000000200101000000004730023101cb5a17c0de0102001a000000000409000077617665776176655f6d6f64650000000104001c00000000040a000077617665776176655f63686f726400000203007500000000030400006b66786b665f62000208007800000000030400006b66786b665f61007d040a0177617665776176655f63686f726400007e04090177617665776176655f6d6f64650000007d0304026b66786b665f61007e0304026b66786b665f620064040a0077617665776176655f63686f72640000650304006b66786b665f6100"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "wave",
+       "kfx"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        268435456,
+        127
+       ],
+       [
+        536870912,
+        127
+       ]
+      ],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "wave",
+       "kfx"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "a4 codes run out",
+   "results": [
+    {
+     "error": "syn2 does not fit: codes-synth is 1 short"
+    },
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [
+      "1040001f0000007f"
+     ],
+     "fields": {
+      "syn1/y1": "0x1040001f"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0xcaad7464",
+     "inits": [],
+     "lfo_dsts": {},
+     "notes": [
+      "syn1 y1: 1 bits of sound storage at bit 31",
+      "syn1 y1: lock code 127 (synth tracks)",
+      "layout ID 0xcaad7464 (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c5354000200000000007c77a5788e5a17c0decaad74647e010001000000010000000000007f7f010100000000001f010100000000008001010000000000400101000000000010010100000000002001010000000047305a17c0de0101001f000000000402000073796e31793100007f04020173796e3179310000"
+    },
+    {
+     "fit": [
+      [
+       "syn2",
+       "codes-synth",
+       2
+      ]
+     ]
+    },
+    {
+     "ancestors": [
+      "0xcaad7464",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2200007800000065"
+     ],
+     "codes": [
+      "1040001f0000007f",
+      "20c000750000007e",
+      "220000780000047f"
+     ],
+     "fields": {
+      "kfx/kf_a": "0x22000078",
+      "kfx/kf_b": "0x20c00075",
+      "syn1/y1": "0x1040001f"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x6ea6d439",
+     "inits": [],
+     "lfo_dsts": {},
+     "notes": [
+      "kfx kf_a: 8 bits of kit storage at bit 120",
+      "kfx kf_b: 3 bits of kit storage at bit 117",
+      "kfx kf_a: lock code 127 (FX track)",
+      "kfx kf_b: lock code 126 (FX track)",
+      "kfx kf_a: CC 101",
+      "layout ID 0x6ea6d439 (from 0xcaad7464, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400020000000000cc21e173ab5a17c0de6ea6d4397e020003000000030000000100007d7f010100000000001f01010000000000750101000000000040010100000000001001010000000000200101000000004730caad74645a17c0de0101001f000000000402000073796e31793100000203007500000000030400006b66786b665f62000208007800000000030400006b66786b665f61007f04020173796e31793100007e0304026b66786b665f62007f0304026b66786b665f6100650304006b66786b665f6100"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        268435456,
+        112
+       ],
+       [
+        268435457,
+        113
+       ],
+       [
+        268435458,
+        114
+       ],
+       [
+        268435459,
+        115
+       ],
+       [
+        268435460,
+        116
+       ],
+       [
+        268435461,
+        117
+       ],
+       [
+        268435462,
+        118
+       ],
+       [
+        268435463,
+        119
+       ],
+       [
+        268435464,
+        120
+       ],
+       [
+        268435465,
+        121
+       ],
+       [
+        268435466,
+        122
+       ],
+       [
+        268435467,
+        123
+       ],
+       [
+        268435468,
+        124
+       ],
+       [
+        268435469,
+        125
+       ],
+       [
+        268435470,
+        126
+       ]
+      ],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "syn2"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        268435456,
+        112
+       ],
+       [
+        268435457,
+        113
+       ],
+       [
+        268435458,
+        114
+       ],
+       [
+        268435459,
+        115
+       ],
+       [
+        268435460,
+        116
+       ],
+       [
+        268435461,
+        117
+       ],
+       [
+        268435462,
+        118
+       ],
+       [
+        268435463,
+        119
+       ],
+       [
+        268435464,
+        120
+       ],
+       [
+        268435465,
+        121
+       ],
+       [
+        268435466,
+        122
+       ],
+       [
+        268435467,
+        123
+       ],
+       [
+        268435468,
+        124
+       ],
+       [
+        268435469,
+        125
+       ],
+       [
+        268435470,
+        126
+       ]
+      ],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "syn1"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        268435456,
+        112
+       ],
+       [
+        268435457,
+        113
+       ],
+       [
+        268435458,
+        114
+       ],
+       [
+        268435459,
+        115
+       ],
+       [
+        268435460,
+        116
+       ],
+       [
+        268435461,
+        117
+       ],
+       [
+        268435462,
+        118
+       ],
+       [
+        268435463,
+        119
+       ],
+       [
+        268435464,
+        120
+       ],
+       [
+        268435465,
+        121
+       ],
+       [
+        268435466,
+        122
+       ],
+       [
+        268435467,
+        123
+       ],
+       [
+        268435468,
+        124
+       ],
+       [
+        268435469,
+        125
+       ],
+       [
+        268435470,
+        126
+       ]
+      ],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "fit",
+      [
+       "syn1",
+       "syn2",
+       "kfx"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        268435456,
+        112
+       ],
+       [
+        268435457,
+        113
+       ],
+       [
+        268435458,
+        114
+       ],
+       [
+        268435459,
+        115
+       ],
+       [
+        268435460,
+        116
+       ],
+       [
+        268435461,
+        117
+       ],
+       [
+        268435462,
+        118
+       ],
+       [
+        268435463,
+        119
+       ],
+       [
+        268435464,
+        120
+       ],
+       [
+        268435465,
+        121
+       ],
+       [
+        268435466,
+        122
+       ],
+       [
+        268435467,
+        123
+       ],
+       [
+        268435468,
+        124
+       ],
+       [
+        268435469,
+        125
+       ],
+       [
+        268435470,
+        126
+       ]
+      ],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "syn1",
+       "kfx"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "a4 park, forget, return",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "220100780000003f",
+      "11c0000000000060",
+      "11c0000800000061",
+      "11c0000f00000064",
+      "11c0001900000065"
+     ],
+     "codes": [
+      "11c000000000047a",
+      "11c000080000047b",
+      "11c0000f0000047c",
+      "104000160000007d",
+      "108000170000007e",
+      "11c000190000047f",
+      "220100780000087f"
+     ],
+     "fields": {
+      "dist/dist_bit": "0x11c00019",
+      "dist/dist_chr": "0x10800017",
+      "dist/dist_dig": "0x10400016",
+      "dist/dist_drv": "0x11c0000f",
+      "dist/dist_lev": "0x11c00008",
+      "dist/dist_sld_f": "0x10400007",
+      "dist/dist_srr": "0x11c00000",
+      "kcv/kc_a": "0x22010078"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x8c78db86",
+     "inits": [
+      "00000003"
+     ],
+     "lfo_dsts": {},
+     "notes": [
+      "dist dist_bit: 7 bits of sound storage at bit 25",
+      "dist dist_chr: 2 bits of sound storage at bit 23",
+      "dist dist_dig: 1 bits of sound storage at bit 22",
+      "dist dist_drv: 7 bits of sound storage at bit 15",
+      "dist dist_lev: 7 bits of sound storage at bit 8",
+      "dist dist_sld_f: 1 bits of sound storage at bit 7",
+      "dist dist_srr: 7 bits of sound storage at bit 0",
+      "kcv kc_a: 8 bits of kit storage at bit 120",
+      "dist dist_bit: lock code 127 (synth tracks)",
+      "dist dist_chr: lock code 126 (synth tracks)",
+      "dist dist_dig: lock code 125 (synth tracks)",
+      "dist dist_drv: lock code 124 (synth tracks)",
+      "dist dist_lev: lock code 123 (synth tracks)",
+      "dist dist_srr: lock code 122 (synth tracks)",
+      "kcv kc_a: lock code 127 (CV track)",
+      "dist dist_bit: CC 101",
+      "dist dist_drv: CC 100",
+      "dist dist_lev: CC 97",
+      "dist dist_srr: CC 96",
+      "kcv kc_a: CC 63",
+      "layout ID 0x8c78db86 (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400020000000001d4395286c45a17c0de8c78db8679010008000000070000000500007f7e0101000000000000010100000000007801010000000000400101000000000010010100000000002001010000000047305a17c0de01070000000000000408000064697374646973745f7372720101000700000000040a000064697374646973745f736c645f66000001070008000000000408000064697374646973745f6c65760107000f000000000408000064697374646973745f64727601010016000000000408000064697374646973745f64696701020017000000000408000064697374646973745f63687201070019000000000408000064697374646973745f6269740208007800000003030400006b63766b635f61007a04080164697374646973745f7372727b04080164697374646973745f6c65767c04080164697374646973745f6472767d04080164697374646973745f6469677e04080164697374646973745f6368727f04080164697374646973745f6269747f0304036b63766b635f61003f0304006b63766b635f61006004080064697374646973745f7372726104080064697374646973745f6c65766404080064697374646973745f6472766504080064697374646973745f626974"
+    },
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "220100780000003f"
+     ],
+     "codes": [
+      "220100780000087f"
+     ],
+     "fields": {
+      "kcv/kc_a": "0x22010078"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x8c78db86",
+     "inits": [
+      "00000003"
+     ],
+     "lfo_dsts": {},
+     "notes": [
+      "dist dist_srr (sound): parked; its bits and values are kept for when it comes back",
+      "dist dist_sld_f (sound): parked; its bits and values are kept for when it comes back",
+      "dist dist_lev (sound): parked; its bits and values are kept for when it comes back",
+      "dist dist_drv (sound): parked; its bits and values are kept for when it comes back",
+      "dist dist_dig (sound): parked; its bits and values are kept for when it comes back",
+      "dist dist_chr (sound): parked; its bits and values are kept for when it comes back",
+      "dist dist_bit (sound): parked; its bits and values are kept for when it comes back",
+      "dist dist_srr: lock code 122 (synth tracks) kept for it while it is out",
+      "dist dist_lev: lock code 123 (synth tracks) kept for it while it is out",
+      "dist dist_drv: lock code 124 (synth tracks) kept for it while it is out",
+      "dist dist_dig: lock code 125 (synth tracks) kept for it while it is out",
+      "dist dist_chr: lock code 126 (synth tracks) kept for it while it is out",
+      "dist dist_bit: lock code 127 (synth tracks) kept for it while it is out",
+      "dist dist_srr: CC 96 kept for it until the unused CCs run out",
+      "dist dist_lev: CC 97 kept for it until the unused CCs run out",
+      "dist dist_drv: CC 100 kept for it until the unused CCs run out",
+      "dist dist_bit: CC 101 kept for it until the unused CCs run out"
+     ],
+     "parked": [
+      "dist/dist_srr 0x11c00000",
+      "dist/dist_sld_f 0x10400007",
+      "dist/dist_lev 0x11c00008",
+      "dist/dist_drv 0x11c0000f",
+      "dist/dist_dig 0x10400016",
+      "dist/dist_chr 0x10800017",
+      "dist/dist_bit 0x11c00019"
+     ],
+     "store": "444c535400020000000001d478f909a25a17c0de8c78db8679010001000700010006000100047f7e0101000000000000010100000000007801010000000000400101000000000010010100000000002001010000000047305a17c0de0208007800000003030400006b63766b635f610001070000000000000408000064697374646973745f7372720101000700000000040a000064697374646973745f736c645f66000001070008000000000408000064697374646973745f6c65760107000f000000000408000064697374646973745f64727601010016000000000408000064697374646973745f64696701020017000000000408000064697374646973745f63687201070019000000000408000064697374646973745f6269747f0304036b63766b635f61007a04080164697374646973745f7372727b04080164697374646973745f6c65767c04080164697374646973745f6472767d04080164697374646973745f6469677e04080164697374646973745f6368727f04080164697374646973745f6269743f0304006b63766b635f61006004080064697374646973745f7372726104080064697374646973745f6c65766404080064697374646973745f6472766504080064697374646973745f626974"
+    },
+    {
+     "changed": true,
+     "store": "444c53540002000000000088329061425a17c0de8c78db8679010001000000010000000100007f7e0101000000000000010100000000007801010000000000400101000000000010010100000000002001010000000047305a17c0de0208007800000003030400006b63766b635f61007f0304036b63766b635f61003f0304006b63766b635f6100"
+    },
+    {
+     "ancestors": [
+      "0x8c78db86",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "220100780000003f",
+      "11c0000000000060",
+      "11c0000800000061",
+      "11c0000f00000064",
+      "11c0001900000065"
+     ],
+     "codes": [
+      "11c0000000000474",
+      "11c0000800000475",
+      "11c0000f00000476",
+      "1040001600000077",
+      "1080001700000078",
+      "11c0001900000479",
+      "220100780000087f"
+     ],
+     "fields": {
+      "dist/dist_bit": "0x11c00019",
+      "dist/dist_chr": "0x10800017",
+      "dist/dist_dig": "0x10400016",
+      "dist/dist_drv": "0x11c0000f",
+      "dist/dist_lev": "0x11c00008",
+      "dist/dist_sld_f": "0x10400007",
+      "dist/dist_srr": "0x11c00000",
+      "kcv/kc_a": "0x22010078"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 2,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x6f98b343",
+     "inits": [
+      "00000003"
+     ],
+     "lfo_dsts": {},
+     "notes": [
+      "+Drive sound storage repacked (generation 2), as its never-used bits ran out: projects and sounds saved before load it at defaults",
+      "dist dist_bit: 7 bits of sound storage at bit 25",
+      "dist dist_chr: 2 bits of sound storage at bit 23",
+      "dist dist_dig: 1 bits of sound storage at bit 22",
+      "dist dist_drv: 7 bits of sound storage at bit 15",
+      "dist dist_lev: 7 bits of sound storage at bit 8",
+      "dist dist_sld_f: 1 bits of sound storage at bit 7",
+      "dist dist_srr: 7 bits of sound storage at bit 0",
+      "dist dist_bit: lock code 121 (synth tracks)",
+      "dist dist_chr: lock code 120 (synth tracks)",
+      "dist dist_dig: lock code 119 (synth tracks)",
+      "dist dist_drv: lock code 118 (synth tracks)",
+      "dist dist_lev: lock code 117 (synth tracks)",
+      "dist dist_srr: lock code 116 (synth tracks)",
+      "dist dist_bit: CC 101",
+      "dist dist_drv: CC 100",
+      "dist dist_lev: CC 97",
+      "dist dist_srr: CC 96",
+      "layout ID 0x6f98b343 (from 0x8c78db86, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400020000000001d853db17dc5a17c0de6f98b34373020008000000070000000500007f7e0102000000000000010100000000007801010000000000400101000000000010010100000000002001010000000047308c78db865a17c0de01070000000000000408000064697374646973745f7372720101000700000000040a000064697374646973745f736c645f66000001070008000000000408000064697374646973745f6c65760107000f000000000408000064697374646973745f64727601010016000000000408000064697374646973745f64696701020017000000000408000064697374646973745f63687201070019000000000408000064697374646973745f6269740208007800000003030400006b63766b635f61007404080164697374646973745f7372727504080164697374646973745f6c65767604080164697374646973745f6472767704080164697374646973745f6469677804080164697374646973745f6368727904080164697374646973745f6269747f0304036b63766b635f61003f0304006b63766b635f61006004080064697374646973745f7372726104080064697374646973745f6c65766404080064697374646973745f6472766504080064697374646973745f626974"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "dist",
+       "kcv"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "kcv"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "forget",
+      "dist"
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "kcv",
+       "dist"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "a4 ccs",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "1100001c00000060",
+      "2200007000000061",
+      "2201007800000064"
+     ],
+     "codes": [
+      "1080001a0000007e",
+      "1100001c0000067f",
+      "20c0006d0000007e",
+      "220000700000047f",
+      "220100780000087f"
+     ],
+     "fields": {
+      "kcv/kc_a": "0x22010078",
+      "kfx/kf_a": "0x22000070",
+      "kfx/kf_b": "0x20c0006d",
+      "wave/wave_chord": "0x1100001c",
+      "wave/wave_mode": "0x1080001a"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x619d6639",
+     "inits": [
+      "00000003"
+     ],
+     "lfo_dsts": {},
+     "notes": [
+      "kcv kc_a: 8 bits of kit storage at bit 120",
+      "kfx kf_a: 8 bits of kit storage at bit 112",
+      "kfx kf_b: 3 bits of kit storage at bit 109",
+      "wave wave_chord: 4 bits of sound storage at bit 28",
+      "wave wave_mode: 2 bits of sound storage at bit 26",
+      "kcv kc_a: lock code 127 (CV track)",
+      "kfx kf_a: lock code 127 (FX track)",
+      "kfx kf_b: lock code 126 (FX track)",
+      "wave wave_chord: lock code 127 (synth tracks)",
+      "wave wave_mode: lock code 126 (synth tracks)",
+      "kcv kc_a: CC 100",
+      "kfx kf_a: CC 97",
+      "wave wave_chord: CC 96",
+      "layout ID 0x619d6639 (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c53540002000000000148a23452285a17c0de619d66397d010005000000050000000300007d7e010100000000001a010100000000006d01010000000000400101000000000010010100000000002001010000000047305a17c0de0102001a000000000409000077617665776176655f6d6f64650000000104001c00000000040a000077617665776176655f63686f726400000203006d00000000030400006b66786b665f62000208007000000000030400006b66786b665f61000208007800000003030400006b63766b635f61007e04090177617665776176655f6d6f64650000007f040a0177617665776176655f63686f726400007e0304026b66786b665f62007f0304026b66786b665f61007f0304036b63766b635f610060040a0077617665776176655f63686f72640000610304006b66786b665f6100640304006b63766b635f6100"
+    },
+    {
+     "fit": [
+      [
+       "wave",
+       "core_lock_codes",
+       2
+      ],
+      [
+       "hand",
+       "core_field_inits",
+       1
+      ]
+     ]
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [
+       [
+        0,
+        101
+       ]
+      ],
+      "codes": [],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "wave",
+       "kfx",
+       "kcv"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 0,
+       "core_handles": 0,
+       "core_lock_ccs": 0,
+       "core_lock_codes": 0
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "fit",
+      [
+       "hand",
+       "wave"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "a4 handles and inits",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2203007800000065"
+     ],
+     "codes": [
+      "220300780000087f"
+     ],
+     "fields": {
+      "hand/hd": "0x64004720",
+      "hand/hg": "0x30c4003d",
+      "kcv/kc_a": "0x22030078"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [
+      "64004720"
+     ],
+     "id": "0xf2e6e1f0",
+     "inits": [
+      "00000003",
+      "00000005"
+     ],
+     "lfo_dsts": {},
+     "notes": [
+      "hand hd: 16 bits of project storage at bit 18208",
+      "hand hg: 3 bits of global storage at bit 61",
+      "kcv kc_a: 8 bits of kit storage at bit 120",
+      "kcv kc_a: lock code 127 (CV track)",
+      "kcv kc_a: CC 101",
+      "layout ID 0xf2e6e1f0 (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400020000000000b028e7173f5a17c0def2e6e1f07f010003000000010000000100007f7e01010000000000200101000000000078010100000000003d0101000000000010010100000000002001010000000047205a17c0de0208007800000003030400006b63766b635f61000303003d000000050402000068616e646867000006104720000000000402000068616e64686400007f0304036b63766b635f6100650304006b63766b635f6100"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-four-mk2",
+      "flashed_id": 1511506142,
+      "inits": 2,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        64,
+        0,
+        1
+       ],
+       "kit": [
+        128,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        18224,
+        0,
+        1
+       ],
+       "sound": [
+        32,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "hand",
+       "kcv"
+      ]
+     ]
+    ]
+   ]
+  }
+ ]
+}
