@@ -12,6 +12,6 @@
   {"event": "ev_seq_step", "fn": "sq_step", "order": 60},
   {"event": "ev_transport", "fn": "sq_transport", "order": 60}
  ],
- "resources": {"core": "0.8"},
+ "resources": {"core": "0.9"},
  "requires": ["core"]
 }

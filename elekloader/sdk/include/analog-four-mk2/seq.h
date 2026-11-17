@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-a4mk2: the sequencer's events and getters (mods/core-a4mk2/README.md,
+/* core-a4mk2 0.9: the sequencer's events and getters (mods/core-a4mk2/README.md,
  * "The sequencer"), the same names and arguments as the Analog Rytm
  * MKII's (analog-rytm-mk2/seq.h) for the A4's 6 tracks: synth 0..3, FX 4,
  * CV 5. Events are subscribed in mod.json, {"event": "ev_seq_step", "fn":

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-a4mk2: a restart a mod asks for (mods/core-a4mk2/README.md,
+/* core-a4mk2 0.9: a restart a mod asks for (mods/core-a4mk2/README.md,
  * "Restarts"); core-dn1 5.0's calls of the same names. */
 #ifndef ELEKLOADER_A4MK2_SYSTEM_H
 #define ELEKLOADER_A4MK2_SYSTEM_H

@@ -229,7 +229,7 @@ struct core_toggle {
 typedef void (*ev_sound_setup_fn)(void *menu);
 void core_sound_setup_toggle(void *menu, const struct core_toggle *t);
 
-/* ---- Audio events (native, not std1), in the audio interrupt,
+/* ---- Audio events (native, not std1, core-a4mk2 0.9), in the audio interrupt,
  * every block of 32 samples. Handlers follow the C ABI, must be short, and
  * leave the EMAC unit (accumulators, MACSR, MASK) as they found it.
  * voice_track[v] is voice v's track (0..3 synth).
@@ -270,7 +270,7 @@ typedef void (*ev_noise_fade_fn)(int32_t *env, const int32_t *voice_track);
 typedef void (*ev_noise_mix_fn)(int32_t *bufs, const int32_t *voice_track);
 extern volatile uint8_t core_dry_mute;
 
-/* ---- core_knob_names: a mod's names for knob ids of one
+/* ---- core_knob_names (core-a4mk2 0.9): a mod's names for knob ids of one
  * parameter set kind (0 synth, 1 FX, 2 CV), stock ids included,
  * asked before core's lock-param names and stock's, in contribution order.
  * name(id, long_name) returns the name, or 0 for an id the entry leaves to the

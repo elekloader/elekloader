@@ -2401,7 +2401,7 @@ def test_core_a4mk2_0_8_track_key():
         asm = fh.read()
     with open(os.path.join(mdir, 'trackkey.c'), encoding='utf-8') as fh:
         src = fh.read()
-    assert doc['version'] == '0.8' and 'trackkey.c' in doc['sources'] and 'trackkey.s' in doc['sources']
+    assert tuple(map(int, doc['version'].split('.'))) >= (0, 8) and 'trackkey.c' in doc['sources'] and 'trackkey.s' in doc['sources']
     site = [s for s in doc['sites'] if s.get('target') == 'core_track_key_site']
     # (its stock bytes are checked against the stock image in test_analog_four_mk2)
     assert site == [{'addr': '0x400c8ba2', 'len': 6, 'stock_sha256': '71b362f711c113689fd93a04c5b98ab51fd214ec779f9ad2bcbfc646d856b734', 'op': 'jmp',

@@ -9,7 +9,7 @@
  "device": "analog-four-mk2",
  "os": "1.56",
  "sources": ["moments.c", "remote.c"],
- "resources": {"core": "0.8"},
+ "resources": {"core": "0.9"},
  "requires": ["core"],
  "subscribe": [
   {"event": "ev_tick", "fn": "sc_moments_tick", "order": 62},

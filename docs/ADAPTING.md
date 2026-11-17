@@ -2420,7 +2420,7 @@ sites, with `analog-rytm-mk2/moments.h`:
   handle a project uses. A core without the table `core_handles` refuses
   the mark at link time.
 
-### Moments (core-a4mk2, Analog Four MKII)
+### Moments (core-a4mk2 0.9, Analog Four MKII)
 
 The Rytm's moments, above, with `analog-four-mk2/moments.h`: `core_midi_try_send` and `core_usb_midi_up`,
 `core_project_name()`, `"handle": true` fields with

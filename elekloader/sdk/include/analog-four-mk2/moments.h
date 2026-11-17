@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-a4mk2: core-ar2 0.11's moments on the Analog Four MKII (README,
+/* core-a4mk2 0.9: core-ar2 0.11's moments on the Analog Four MKII (README,
  * "Moments"). Events are subscribed in mod.json; calls are core's
  * exports.
  */
