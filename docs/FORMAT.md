@@ -322,21 +322,19 @@ Nothing is built unless all of these pass:
 A build with the Drive Loader (`mods/drive-loader-ar2/`, which imports
 `core_desc`) links more mods at boot from `/mods` on the unit's +Drive
 into the +Drive area. This section is what such a mod and `/mods/active`
-may hold; the link and the tools are in [DRIVE.md](DRIVE.md).
+may hold; the link and tools are in [DRIVE.md](DRIVE.md).
 
 **What a +Drive mod is.** A format-2 mod with only `.run` and `.bss`,
-relocations only in `.run` (`abs32`, `pc32`, `pc16`; `abs16` on `F_ABS16`), no
-`sharc`; `storage`, `sites`, `copied`, entry `claims`,
-`resources.regions` and `collections` only where the build takes them, a
-`.payload` only where the loader skips it. It adds whole entries to tables
-whose descriptor allows more (not DSP) or a +Drive mod declares, at an order below 2^31-1. It imports the build's exports,
-table names, `NAME_n` (the count after the merge), `core_desc` and other
+relocations only in `.run` (`abs32`, `pc32`, `pc16`), no `sharc`, and the
+rest only where the build's flags take it (DRIVE.md, "The build
+descriptor"). It adds whole entries to tables that allow more, at an order
+below 2^31-1. It imports the build's exports, table names, `NAME_n` (the count after the merge), `core_desc` and other
 +Drive mods' globals. Its `drive_init`, if any, is called after the link as
 `void drive_init(void)` in id order; never global. Its id is under 28 bytes.
 
 **`/mods/active`**: one line per chosen file, its path below `/mods`
 (up to 3 folders deep), a space, its CRC-32 (zlib's, 8 hex digits, `0x`
-optional) as the loader stages it (DRIVE.md). Blank, `#` and CRC-less lines are skipped; the path
+optional). Blank, `#` and CRC-less lines are skipped; the path
 is all before the last run of spaces, under 128 bytes. Over 256 lines and
 nothing loads.
 
@@ -379,10 +377,10 @@ nothing loads.
 | 26 | `busy` | |
 | 27 | `region` | regions overlap |
 | 28 | `outside` | no free area |
-| 29 | `store` | storage room short (detail `WHAT NEED HAVE`) |
-| 30 | `clash` | a site, copied block or claim clashes (argument: kind << 8 \| other's line; kinds 1 flashed, 2 +Drive, 3 pre-link, 4 not stock; detail: address) |
-| 31 | `std` | a standard event the core's `std` map lacks (detail: it) |
-| 32 | `ids` | knob ids taken, or no run free (detail: which) |
+| 29 | `store` | storage room short (detail: what, need, have) |
+| 30 | `clash` | a site, copied block or claim clashes (DRIVE.md; detail: address) |
+| 31 | `std` | an event not in the core's `std` map |
+| 32 | `ids` | knob ids taken, none free |
 
 When nothing is linked, the loader keeps why:
 
@@ -508,7 +506,7 @@ the layout ID. A mod keeps its run while its count holds; one that leaves
 keeps it in `freed_knobs` and gets it back when it returns; one whose count
 changes keeps its first id when the new run has room there; any other takes
 never-used ids from `next_knob` up. Only when those run out (past 65535,
-which an `abs16` holds; 0x3fff on the Analog Four MKII) are freed runs
+which an `abs16` holds; the A4's 0x3fff) are freed runs
 given out again. A build whose core keeps no lockfile gets the same ids for
 the same mods. The build's manifest carries the runs as `knobs` (`{mod:
 [first, count]}`).
