@@ -105,6 +105,24 @@ class Page(unittest.TestCase):
         frames, _takes, _states = self.run_page('oyrddyyTnlyf', 'a.elemod', 'b.elemod')
         self.assertEqual(self.texts(frames[-1]), ['ADD', 'a'])
 
+    def test_saved_data_marks_a_build_row_with_a_star_in_its_own_column(self):
+        frames, _takes, _states = self.run_page('oyrddyyTnlyf', 'a.elemod', '@store=a', '@park=dist')
+        rows = [(x, y, t) for x, y, _inv, t in frames[-1]]
+        self.assertIn((106, 0, 'ADD'), rows)                # the state word as before
+        star = [(x, y) for x, y, t in rows if t == '*']
+        self.assertEqual(star, [(95, 0), (95, 8)])          # "* ADD", then the parked mod: one column
+        self.assertIn((8, 8, 'dist'), rows)
+        self.assertNotIn('PARK', [t for _x, _y, t in rows])
+
+    def test_no_star_without_saved_data(self):
+        frames, _takes, _states = self.run_page('oyrddyyTnlyf', 'a.elemod', '@store=b')
+        self.assertEqual(self.texts(frames[-1]), ['ADD', 'a'])
+
+    def test_a_parked_mod_back_in_the_build_has_one_row_and_forget_data_reaches_it(self):
+        frames, _takes, states = self.run_page('oyrddyyTnlyfyrddddys', 'a.elemod', '@park=a')
+        self.assertEqual(self.texts(frames[-1]), ['ADD', '*', 'a'])   # no second row for its parked data
+        self.assertEqual(states[-1]['pending'], '6')        # FORGET DATA? on the ticked build row
+
     def test_the_cursor_scrolls_with_up_down_func_and_the_data_encoder(self):
         files = ['m%02d.elemod' % i for i in range(10)]
         _frames, _takes, states = self.run_page('odddddddsUs++-sus', *files)

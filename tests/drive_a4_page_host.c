@@ -10,7 +10,9 @@
  *   T   200 ticks                              f   a frame: prints its text, "F" lines
  *   s   print the state ("S" line)             k   the PERF key (0x30)
  * Every key and turn prints "TAKE key=... ret=n" when the page took it (n 1) or not (n 0).
- * argv[2..] are the files in /mods ("name:size", a folder as "dir/"; "dir/x.elemod:size" inside). */
+ * argv[2..] are the files in /mods ("name:size", a folder as "dir/"; "dir/x.elemod:size" inside),
+ * and /mods/.store's made-up content: "@park=ID" a mod with parked data, "@store=ID" one with
+ * live data only. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -103,7 +105,33 @@ int dl_staging_take_idle(unsigned now, unsigned stall) { (void)now, (void)stall;
 void dl_staging_give(void) { staging = 0; }
 void dl_readers_poll(unsigned now) { (void)now; }
 int dl_area(u32 desc, u32 *lo, u32 *hi) { (void)desc; *lo = 0; *hi = 0x100000; return 0; }
-int dl_park_list(const u8 *raw, u32 len, struct dl_park *out, int max) { (void)raw, (void)len, (void)out, (void)max; return 0; }
+static char parked[8][DL_STORE_NAME_MAX + 1], live[8][DL_STORE_NAME_MAX + 1];
+static int nparked, nlive;
+int dl_park_list(const u8 *raw, u32 len, struct dl_park *out, int max)
+{
+    int i;
+    (void)raw, (void)len;
+    for (i = 0; out && i < nparked && i < max; i++) {
+        memset(&out[i], 0, sizeof out[i]);
+        strcpy(out[i].id, parked[i]);
+        out[i].fields = 1;
+        out[i].bits[0] = 8;
+    }
+    return nparked;
+}
+static int has_id(char (*ids)[DL_STORE_NAME_MAX + 1], int n, const char *id, int prefix)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        if (prefix ? !strncmp(ids[i], id, strlen(id)) : !strcmp(ids[i], id))
+            return 1;
+    return 0;
+}
+int dl_store_has(const u8 *raw, u32 len, const char *id, int prefix)
+{
+    (void)raw, (void)len;
+    return id[0] && (has_id(parked, nparked, id, prefix) || has_id(live, nlive, id, prefix));
+}
 s32 dl_park_forget(const u8 *raw, u32 len, const char *const *ids, int n, u8 *out) { (void)raw, (void)ids, (void)n, (void)out; return (s32)len; }
 
 static const char *rel_of(const char *path)  /* DL_DIR "/x" -> "x" */
@@ -149,12 +177,18 @@ int dl_fs_file_size(const char *path)
         return active_len;
     if (!strcmp(r, "active.tmp"))
         return tmp_len;
+    if (!strcmp(r, ".store"))
+        return nparked || nlive ? 16 : -1;
     e = find(r);
     return e && !e->dir ? (int)e->size : -1;
 }
 
 s32 dl_read_file(const char *name, u8 *buf, u32 max)
 {
+    if (!strcmp(name, ".store") && (nparked || nlive) && max >= 16) {
+        memset(buf, 0, 16);
+        return 16;
+    }
     if (strcmp(name, "active") || active_len < 0)
         return -1;
     if ((u32)active_len > max)
@@ -344,7 +378,16 @@ int main(int argc, char **argv)
     for (i = 2; i < argc && nents < 64; i++) {
         char *c = strchr(argv[i], ':');
         size_t l = strlen(argv[i]);
-        struct ent *e = &ents[nents++];
+        struct ent *e;
+        if (!strncmp(argv[i], "@park=", 6) && nparked < 8) {
+            snprintf(parked[nparked++], sizeof parked[0], "%s", argv[i] + 6);
+            continue;
+        }
+        if (!strncmp(argv[i], "@store=", 7) && nlive < 8) {
+            snprintf(live[nlive++], sizeof live[0], "%s", argv[i] + 7);
+            continue;
+        }
+        e = &ents[nents++];
         if (argv[i][l - 1] == '/') {
             snprintf(e->path, sizeof e->path, "%.*s", (int)l - 1, argv[i]);
             e->dir = 1;

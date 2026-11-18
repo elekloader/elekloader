@@ -57,8 +57,9 @@ As the Rytm's page, with these differences:
 - **Rows.** The file list: `..` (below `/mods`), the folders with `(D)` or `(n)` ticked
   below, then the `.elemod` files by file name without `.elemod`, their size in KB once the
   background check has read them, `!` for a file pass 1 refuses. The build list: each mod's id
-  with `KEEP`, `ADD`, `DROP` or `!`, then parked mods with `PARK`. Every label is clipped from
-  the left behind `<` to the room before its right-hand column (`clip.inc`, `core_text_width`).
+  with `KEEP`, `ADD`, `DROP` or `!`, and `*` before it when the mod has saved data (below),
+  then the parked mods not in the build with `*` alone. Every label is clipped from the left
+  behind `<` to the room before its right-hand column (`clip.inc`, `core_text_width`).
 - **Action panel** (x 62..127): SELECT ALL, DESELECT ALL, LOAD TO BUILD (UPDATE BUILD), CLEAR
   BUILD, DELETE (DELETE DIR on a folder with nothing ticked here); in the build list SELECT ALL,
   DESELECT ALL, UNLOAD, INFO, FORGET DATA, and APPLY & RESTART while the saved set differs
@@ -87,14 +88,20 @@ As the Rytm's page, with these differences:
   skipped (`skip.h`, `dl_stage_more`), so pass 1 sees what the boot sees and the CRC is the one
   `/mods/active` names; a row's KB is the whole file on the +Drive, payload included.
 
-## Parked data
+## Saved data
 
-As the Rytm's: the mods whose fields `/mods/.store` keeps parked (no chosen mod declares them any
-more) are read when the page opens and after FORGET DATA (`park.h`), and the build list shows them
-after the build's rows with `PARK`. YES ticks one and shows its parked bits per scope, lock codes
-and CCs; FORGET DATA drops the ticked ones' parked data after its confirm, in steps (read, write
-`.store.tmp`, swap). With `/mods` empty but data parked, the panels still open, so FORGET DATA can
-be reached.
+`/mods/.store` is read when the page opens and after FORGET DATA (`park.h`). A build row whose mod
+it keeps anything for (fields, lock codes or CCs, live or parked: `dl_store_has`) gets a `*`
+(decided 2026-11-18, in place of the Rytm's `PARK` word). The `*` has a column of its own, its
+right edge `STATE_GAP` left of the widest state word, so every row's `*` lines up whatever word
+follows it: `* KEEP`, `* ADD`, `* DROP`, `* !`.
+
+The parked mods (fields no chosen mod declares any more) that have no build row follow the
+build's rows, with the `*` alone in that column. A parked mod back in the build has no second
+row: its build row carries the `*`. YES on a parked-only row ticks it and shows its parked bits
+per scope, lock codes and CCs; FORGET DATA drops the ticked rows' parked data, on a build row or
+a parked-only one, after its confirm, in steps (read, write `.store.tmp`, swap). With `/mods`
+empty but data parked, the panels still open, so FORGET DATA can be reached.
 
 ## APPLY & RESTART
 
