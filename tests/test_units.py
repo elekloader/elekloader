@@ -2466,7 +2466,10 @@ def test_core_a4mk2_room_for_drive_mods():
     room (pages.s VIEW_MAX 16: every A4 page is a view), core_params by the loader's mods, and
     core_lock_params left to the linker's default (a +Drive mod has no storage, so no lock codes);
     ev_boot_drive and ev_drive_format none: the Drive Loader runs in them, no +Drive mod."""
-    with open(os.path.join(HERE, '..', 'mods', 'core-a4mk2', 'mod.json'), encoding='utf-8') as fh:
+    path = os.path.join(HERE, '..', 'mods', 'core-a4mk2', 'mod.json')
+    if not os.path.exists(path):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(path, encoding='utf-8') as fh:
         doc = json.load(fh)
     cols = doc['collections']
     render = {'ev_render_in', 'ev_render_out', 'ev_analog_frame', 'std_voice_start', 'std_voice_end',
@@ -2497,6 +2500,8 @@ def test_core_a4mk2_audio_events():
     ev_noise_mix in the noise generator, each stub resuming where stock does; core clears core_dry_mute
     in ev_render_out before the value snapshot; and core_knob_names is asked before core's own names."""
     base = os.path.join(HERE, '..', 'mods', 'core-a4mk2')
+    if not os.path.isdir(base):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
     with open(os.path.join(base, 'mod.json'), encoding='utf-8') as fh:
         doc = json.load(fh)
     with open(os.path.join(base, 'audio.s'), encoding='utf-8') as fh:
@@ -2533,6 +2538,8 @@ def test_core_a4mk2_drive_storage_hooks():
     reads; ev_boot_drive comes before 0x400f1b18, the boot's project load, so the A4 loads once (no
     deferred load), and has no core_lfo_dsts (its LFOs are "mod" destinations)."""
     d = os.path.join(HERE, '..', 'mods', 'core-a4mk2')
+    if not os.path.isdir(d):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
     with open(os.path.join(d, 'store.c'), encoding='utf-8') as fh:
         store_c = fh.read()
     with open(os.path.join(d, 'std.c'), encoding='utf-8') as fh:
