@@ -7,7 +7,8 @@
  *   store HEX      the store's bytes to work on
  *   count          dl_park_list counting only -> "COUNT n"
  *   list           dl_park_list -> "LIST n", then "PARK id fields codes ccs b1 .. b6" each
- *   forget ID|ID   dl_park_forget -> "FORGET HEX" (or "FORGET -1") */
+ *   forget ID|ID   dl_park_forget -> "FORGET HEX" (or "FORGET -1")
+ *   has ID         dl_store_has, whole ids -> "HAS 0|1"; hasp ID the same with a prefix */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,6 +55,9 @@ int main(void)
                     printf(" %u", p[i].bits[j]);
                 printf("\n");
             }
+        } else if (!strncmp(line, "has ", 4) || !strncmp(line, "hasp ", 5)) {
+            int prefix = line[3] == 'p';
+            printf("HAS %d\n", dl_store_has(raw, len, line + 4 + prefix, prefix));
         } else if (!strncmp(line, "forget ", 7)) {
             const char *ids[32];
             char *s = line + 7, *t;
