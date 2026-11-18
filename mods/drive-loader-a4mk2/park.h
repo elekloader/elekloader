@@ -30,16 +30,16 @@ extern const char *const dl_store_scopes[DL_STORE_SCOPES];
  * boot then places afresh, so nothing is parked. */
 int dl_park_list(const u8 *raw, u32 len, struct dl_park *out, int max);
 
+/* The build list's "*": 1 when raw (as dl_park_list takes it) keeps anything for the mod id,
+ * live or parked (a field, a lock code or a CC, or a freed one), else 0 (a bad file too). With
+ * prefix, id may be the first bytes of a longer id (the page's are cut to DL_ID_MAX - 1). */
+int dl_store_has(const u8 *raw, u32 len, const char *id, int prefix);
+
 /* FORGET DATA (drive_store.forget, then encode): raw without the parked fields, freed codes and
  * freed CCs of the mods ids[0..n), into out (len bytes: it never grows). The rest of the file,
  * the live layout ID included, stays as it is. -> the new length, or -1 for a file
  * dl_park_list refuses. Forgetting a mod with nothing parked changes nothing but leaves a valid
  * file (the same bytes). */
-/* "* " on the build list: 1 when raw (as dl_park_list takes it) keeps anything for the mod id,
- * live or parked (a field, a lock code or a CC, or a freed one), else 0 (a bad file too). With
- * prefix, id may be the first bytes of a longer id (the page's are cut to DL_ID_MAX - 1). */
-int dl_store_has(const u8 *raw, u32 len, const char *id, int prefix);
-
 s32 dl_park_forget(const u8 *raw, u32 len, const char *const *ids, int n, u8 *out);
 
 #endif
