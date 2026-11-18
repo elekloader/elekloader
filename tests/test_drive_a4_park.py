@@ -95,6 +95,13 @@ class Park(unittest.TestCase):
                     sum(1 for c in st['freed_ccs'] if c['mod'] == m)] + bits
             self.assertEqual(line, 'PARK %s %s' % (m, ' '.join(map(str, want))))
 
+    def test_store_has_any_live_or_parked_mod(self):
+        raw = ds.encode(state())
+        out = self.ask(raw, 'has ~T live', 'has ~T ae-cover', 'has ~T rand', 'has ~T cc-mod', 'has ~T other',
+                       'has ~T liv', 'hasp ~T liv', 'hasp ~T x')
+        self.assertEqual(out, ['HAS 1', 'HAS 1', 'HAS 1', 'HAS 1', 'HAS 0', 'HAS 0', 'HAS 1', 'HAS 0'])
+        self.assertEqual(self.ask(raw[:-1], 'has ~T live'), ['HAS 0'])   # a bad file keeps nothing
+
     def test_forget_matches_drive_store(self):
         st = state()
         raw = ds.encode(st)
