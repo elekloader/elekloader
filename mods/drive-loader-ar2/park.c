@@ -8,6 +8,7 @@ const char *const dl_store_scopes[DL_STORE_SCOPES] = {"sound", "kit", "global", 
 #define HEAD 0x28
 #define SCOPE_REC 8
 #define FORMAT 1
+#define FORMAT_KNOBS 4                   /* and the +Drive mods' knob runs after the CCs (dstore.h DS_FORMAT_KNOBS) */
 #define MAX_BITS 32
 #define MAX_RECS (DL_MAX_MODS * 64)      /* no store holds more records: a bound for a bad count */
 
@@ -29,15 +30,20 @@ struct walk {
     u32 len, at;
     u16 count[NCOUNTS];
     int list, left;
+    int knobs;                           /* format 4: the knob runs follow the CC records, kept whole */
 };
+
+/* Format 4 (drive_store.py, the Rytm with +Drive knob ids) is format 1 with the +Drive mods' knob runs
+ * after the CCs, as the A4's format 3: no mod is parked for them, and FORGET DATA keeps them
+ * (drive_store.forget). */
 
 static int walk_start(struct walk *w, const u8 *raw, u32 len)
 {
     u32 crc, i;
     if (!raw || len < HEAD + SCOPE_REC * DL_STORE_SCOPES)
         return -1;
-    if (raw[0] != 'D' || raw[1] != 'L' || raw[2] != 'S' || raw[3] != 'T' || dl_rd16(raw + 4) != FORMAT ||
-        dl_rd32(raw + 8) != len)
+    if (raw[0] != 'D' || raw[1] != 'L' || raw[2] != 'S' || raw[3] != 'T' ||
+        (dl_rd16(raw + 4) != FORMAT && dl_rd16(raw + 4) != FORMAT_KNOBS) || dl_rd32(raw + 8) != len)
         return -1;
     crc = dl_crc32_add(0xFFFFFFFF, raw, 0x0c);
     crc = dl_crc32_add(crc, (const u8 *)"\0\0\0\0", 4);
@@ -49,6 +55,7 @@ static int walk_start(struct walk *w, const u8 *raw, u32 len)
     for (i = 0; i < NCOUNTS; i++)
         w->count[i] = dl_rd16(raw + 0x1a + 2 * i);
     w->at = HEAD + SCOPE_REC * DL_STORE_SCOPES + 4 * (u32)raw[0x19];   /* past the scopes and the IDs */
+    w->knobs = dl_rd16(raw + 4) == FORMAT_KNOBS;
     w->list = 0;
     w->left = w->count[0];
     return w->at > len ? -1 : 0;
@@ -59,8 +66,8 @@ static int walk_next(struct walk *w, struct rec *r)
     const u8 *p;
     u32 lm, ls, head;
     while (!w->left) {
-        if (++w->list >= NCOUNTS)
-            return w->at == w->len ? 0 : -1;
+        if (++w->list >= NCOUNTS)     /* the end; in format 4 the knob runs' block (8 bytes and more) */
+            return w->at == w->len || (w->knobs && w->at + 8 <= w->len) ? 0 : -1;
         w->left = w->count[w->list];
     }
     w->left--;
@@ -199,6 +206,8 @@ s32 dl_park_forget(const u8 *raw, u32 len, const char *const *ids, int n, u8 *ou
         dl_memcpy(out + at, raw + r.at, r.size);
         at += r.size;
     }
+    dl_memcpy(out + at, raw + w.at, len - w.at);   /* format 4's knob runs, as they are */
+    at += len - w.at;
     for (i = 0; i < NCOUNTS; i++)
         dl_wr16(out + 0x1a + 2 * i, count[i]);
     dl_wr32(out + 8, at);

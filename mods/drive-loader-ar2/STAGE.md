@@ -14,6 +14,10 @@ set that fills the area leaves the floor. `/mods/.status` names it, `stage: N by
 
 - **Reads.** A file over the stage lists and clears but doesn't read (`file_perm`); the fill
   zeroes only to the entry's size.
+- **Clears.** Stock 1.74's Clear zeroes a RAM entry's `[addr, addr + size)` before the `+0x4c`
+  call, with no bound (worker `0x4002d0b4`, traced 2026-11-11), so the entry of a file over the
+  stage has size 0 (`entry_size`) and `dl_pre` refuses its read from the closure's size. The
+  listing shows the real size. A Clear of a smaller file zeroes that much of the stage.
 - **Uploads.** Stock 1.74 puts no size cap on a RAM entry and writes the first chunk to the
   entry's address before the `+0x6c` header check (`FUN_4008c1c6`, traced 2026-11-11), so
   `+0x1c` (`dl_pre`) refuses an upload whose size, which stock has put in the entry by then, is

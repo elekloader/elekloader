@@ -63,6 +63,13 @@ int dl_fs_read(dl_file *f, void *buf, unsigned n)
     return FILE_READ(f, buf, n);
 }
 
+void dl_fs_seek(dl_file *f, unsigned at)
+{
+    if (at > 0xFFFFFFFFu - DL_HEADER)
+        at = 0xFFFFFFFFu - DL_HEADER;    /* past any file: the next read gives 0 */
+    *(unsigned *)(f->raw + 0x0c) = DL_HEADER + at;
+}
+
 int dl_fs_write(dl_file *f, const void *buf, unsigned n)
 {
     const unsigned char *p = buf;

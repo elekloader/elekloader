@@ -17,6 +17,7 @@ export const MAGIC = 'DLST'
 export const FORMAT = 1
 export const FORMAT_KINDS = 2                   // lock codes per track kind (the Analog Four MKII)
 export const FORMAT_KNOBS = 3                   // format 2 and the +Drive mods' knob ids
+export const FORMAT_ONE_KNOBS = 4               // format 1 and the +Drive mods' knob ids (the Rytm)
 export const MAX_KNOB_RUNS = 512   // knob runs, and again freed runs, a .store keeps (dstore.h)
 const KINDS = ['synth', 'fx', 'cv']             // format 2's kind numbers 1..3
 const HEAD = 0x28
@@ -57,7 +58,7 @@ export type State = {
   flashed_id: number; id: number; ids: number[]; scopes: Record<string, ScopeState>
   next_code: number | Record<string, number>
   fields: Field[]; parked: Field[]; codes: Code[]; freed_codes: Code[]; ccs: Cc[]; freed_ccs: Cc[]
-  knobs?: store.Knob[]; freed_knobs?: store.Knob[]; next_knob?: number   // format 3: the +Drive mods' knob runs
+  knobs?: store.Knob[]; freed_knobs?: store.Knob[]; next_knob?: number   // formats 3 and 4: the +Drive mods' knob runs
 }
 
 // ---- what the flashed build gives ----------------------------------------------------------------------------
@@ -294,9 +295,9 @@ const codeOrder = (a: Code, b: Code) => (a.kind ? KINDS.indexOf(a.kind) : 0) - (
 /** The state -> /mods/.store's bytes (format 2 for a state with codes per track kind). drive_store.encode. */
 export function encode(st: State): Uint8Array {
   const o = new Out(), kd = kinded(st), nc = st.next_code as any
-  const kn = kd && !!(st.knobs?.length || st.freed_knobs?.length || st.next_knob)
+  const kn = !!(st.knobs?.length || st.freed_knobs?.length || st.next_knob)
   for (const c of [...MAGIC]) o.u8(c.charCodeAt(0))
-  o.u16(kn ? FORMAT_KNOBS : kd ? FORMAT_KINDS : FORMAT); o.u16(0); o.u32(0); o.u32(0)
+  o.u16(kn ? (kd ? FORMAT_KNOBS : FORMAT_ONE_KNOBS) : kd ? FORMAT_KINDS : FORMAT); o.u16(0); o.u32(0); o.u32(0)
   o.u32(st.flashed_id); o.u32(st.id); o.u8(kd ? nc.synth : nc); o.u8(st.ids.length)
   for (const n of [st.fields.length, st.parked.length, st.codes.length, st.freed_codes.length, st.ccs.length, st.freed_ccs.length]) o.u16(n)
   o.u8(kd ? nc.fx : 0); o.u8(kd ? nc.cv : 0)
@@ -336,7 +337,7 @@ export function decode(raw: Uint8Array | null): State | null {
     if (raw.length < HEAD + SCOPE_REC * 6) return null
     const v = new DataView(raw.buffer, raw.byteOffset, raw.length)
     const fmt = v.getUint16(4)
-    if (String.fromCharCode(...raw.subarray(0, 4)) !== MAGIC || (fmt !== FORMAT && fmt !== FORMAT_KINDS && fmt !== FORMAT_KNOBS)
+    if (String.fromCharCode(...raw.subarray(0, 4)) !== MAGIC || (fmt !== FORMAT && fmt !== FORMAT_KINDS && fmt !== FORMAT_KNOBS && fmt !== FORMAT_ONE_KNOBS)
       || v.getUint32(8) !== raw.length) return null
     const kd = fmt === FORMAT_KINDS || fmt === FORMAT_KNOBS
     const z = new Uint8Array(raw); z.fill(0, 0x0c, 0x10)
@@ -380,7 +381,7 @@ export function decode(raw: Uint8Array | null): State | null {
         ;(list as any[]).push(e)
       }
     }
-    if (fmt === FORMAT_KNOBS) {
+    if (fmt === FORMAT_KNOBS || fmt === FORMAT_ONE_KNOBS) {
       if (at + 8 > raw.length) return null
       const nk = v.getUint16(at), nfk = v.getUint16(at + 2), nxt = v.getUint32(at + 4)
       at += 8

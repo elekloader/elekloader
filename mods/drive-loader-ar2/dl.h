@@ -19,6 +19,34 @@ typedef int s32;
                                              * included: "a/b/c/x.elemod"), NUL included */
 #define DL_VER_MAX 12                        /* a version as dl_check reports it, NUL included */
 
+/* Payloads on the +Drive (docs/DRIVE.md, "Payloads on the +Drive"; drive-loader 0.8, from the
+ * A4's skip.c and payload.c): the boot stages a file without its .payload's hex (skip.h), the linker
+ * takes a .payload left as one empty hex part and refuses relocations into it, and the loaded mods'
+ * payloads go into drive_payloads for sidecar-core. route.s exports drive_payload_skip. */
+#define DL_PAYLOAD_SKIP 1
+
+/* +Drive collections (docs/DRIVE.md, "+Drive collections"; drive-loader 0.8, from the A4's
+ * dlink.c): a +Drive mod may declare tables, which other +Drive mods add to; the layout places
+ * each after every .bss. route.s exports drive_collections, so the descriptor says so. */
+#define DL_COLLECTIONS 1
+
+/* Knob ids on the +Drive (docs/DRIVE.md, "Knob ids on the +Drive"; drive-loader 0.8, from the
+ * A4's dlink.c): a +Drive mod may declare "knobs": n and gets a run of n ids from DL_KNOB_LO up,
+ * kept from boot to boot in /mods/.store (format 4); its entries' own ids follow link.py's rules
+ * (id_problems). The Rytm profile's param_ids and drive_knobs
+ * (elekloader/devices/analog_rytm_mk2.py): stock's records are 0..468, core-ar2's lockable
+ * parameters 469..554, a mod's own ids from 555 (pages.h CORE_PARAM_LOCK_FIRST), and the +Drive
+ * runs 0x4000..0x7FFF, far past any flashed build's runs (as the A4's). */
+#define DL_KNOBS 1
+#define DL_KNOB_LO 0x4000                /* the +Drive mods' runs: DL_KNOB_LO..DL_KNOB_HI */
+#define DL_KNOB_HI 0x7FFF
+#define DL_KNOB_OWN 555                  /* a mod's own ids start here */
+#define DL_KNOB_CORE_LO 469              /* the core's ids, which no entry may take */
+#define DL_KNOB_CORE_HI 554
+#define DL_KNOBS_MAX 1024                /* a mod's "knobs" (link.MAX_KNOBS) */
+/* the tables whose entries name ids (the profile's param_ids): {table, own ids only} */
+#define DL_KNOB_TABLES {{"core_params", 0}, {"core_param_locks", 1}, {"core_knob_looks", 1}}
+
 /* ---- status records: /mods/.status and the MODS page (32 bytes per /mods/active line) -- */
 struct dl_status {
     u8 state;                            /* DL_ST_* */
@@ -49,7 +77,7 @@ enum {
     DL_R_TABLE = 15,                     /* adds to a table +Drive mods can't use (detail) */
     DL_R_FULL = 16,                      /* a table has no spare entry left (detail: it) */
     DL_R_ROOM = 17,                      /* the area is full (arg: KB over) */
-    DL_R_RANGE = 18,                     /* a pc16 reference out of range */
+    DL_R_RANGE = 18,                     /* a pc16 or abs16 reference out of range */
     DL_R_LIMIT = 19,                     /* past the loader's own limits (symbols, entries) */
     DL_R_COUNT = 20,                     /* more than DL_MAX_MODS lines in /mods/active */
     /* the Octatrack's TELOS (DL_SITES): mods that write sites */
@@ -67,6 +95,7 @@ enum {
     /* +Drive storage and the boot-linked sites (without DL_SITES) */
     DL_R_STORE = 29,                     /* +Drive storage room is short (detail: "WHAT NEED HAVE") */
     DL_R_CLASH = 30,                     /* a site or copied block clashes (arg: kind << 8 | line; detail: address) */
+    DL_R_IDS = 32,                       /* knob ids its entries name are taken, or no run is left (detail) */
 };
 enum { DL_SITE_CORE = 1, DL_SITE_MOD, DL_SITE_PRELINK, DL_SITE_STOCK };   /* DL_R_CLASH's kind */
 
@@ -256,6 +285,7 @@ int dl_parse_active(const char *text, u32 len, struct dl_choice *out);
 #define DL_POOL_ERELOCS 256                  /* their relocations */
 #define DL_POOL_SITES 256                    /* +Drive sites and copied blocks */
 #define DL_POOL_SDATA 4096                   /* the sites' bytes */
+#define DL_POOL_COLLS 64                     /* +Drive tables (DL_COLLECTIONS) */
 #define DL_POOL_CAP 0xFFF0                   /* every pool's most */
 
 #endif

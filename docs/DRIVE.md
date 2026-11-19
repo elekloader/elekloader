@@ -101,8 +101,8 @@ are found through hash buckets, in the order a scan would find them.
 
 ## Payloads on the +Drive
 
-A loader whose descriptor has `F_PAYLOAD_SKIP` (drive-loader-a4mk2, decided
-2026-11-15) keeps a mod's `.payload` on the +Drive: its bytes never take
+A loader whose descriptor has `F_PAYLOAD_SKIP` (drive-loader-a4mk2 and
+drive-loader-ar2) keeps a mod's `.payload` on the +Drive: its bytes never take
 room in the area. The `.elemod` stays one JSON file.
 
 - **Skippable.** A `.payload` whose `"len"` and 64-digit `"sha256"` come
@@ -131,15 +131,16 @@ room in the area. The `.elemod` stays one JSON file.
   before the mods' `drive_init`. `drive_payload_find(id)` looks one up and
   `dl_payload_read(p, at, out, n)` decodes n bytes from byte at, under the
   loader's mutex, from a task only; it refuses (-2) when the file's sector
-  or size changed since the boot, so a reader still checks the sha256 of
+  or size changed since the boot (on the Rytm's ekFS, which has no sector,
+  the size alone: `sector` is 0), so a reader still checks the sha256 of
   what it ships. sidecar-core looks a payload up in `core_payloads` (a
   flashed mod's, in RAM) and then here; caching on the Pi by hash is its
   side.
 
 ## +Drive collections
 
-A loader whose descriptor has `F_COLLECTIONS` (drive-loader-a4mk2, decided
-2026-11-16) links tables +Drive mods declare, so a flashed mod's
+A loader whose descriptor has `F_COLLECTIONS` (drive-loader-a4mk2 and
+drive-loader-ar2) links tables +Drive mods declare, so a flashed mod's
 `collections` and the contributions to them load from the +Drive unchanged.
 Flashed code never reads a +Drive table: its link is done at build.
 
@@ -168,19 +169,24 @@ Flashed code never reads a +Drive table: its link is done at build.
 
 ## Knob ids on the +Drive
 
-A loader whose descriptor has `F_KNOBS` (drive-loader-a4mk2) gives +Drive
-mods knob ids by count, as the linker gives flashed mods theirs
-(docs/ADAPTING.md, "Knob ids by count (Analog Four MKII)"), so a flashed
-mod's `"knobs"` and its `__knobs` relocations load from the +Drive
-unchanged. The flashed ids are below 0x4000; the +Drive's are 0x4000..0x7fff,
-so a reflash never moves them.
+A loader whose descriptor has `F_KNOBS` (drive-loader-a4mk2 and
+drive-loader-ar2) gives +Drive mods knob ids by count, as the
+linker gives flashed mods theirs (docs/ADAPTING.md, "Knob ids by count
+(Analog Four MKII)"), so a flashed mod's `"knobs"` and its `__knobs`
+relocations load from the +Drive unchanged. The flashed ids are below
+0x4000; the +Drive's are 0x4000..0x7fff on both devices (the profile's
+`drive_knobs`), so a reflash never moves them. The rules below are the
+device profile's `param_ids`, which each loader's dl.h has as constants:
+the A4's are given here, the Rytm's are the core's 469..554, own ids from
+555 (0x22b), and three tables (`core_params`, and `core_param_locks` and
+`core_knob_looks`, whose entries take own ids only).
 
 - **The flashed ids.** The descriptor names the ids each flashed module's
   `core_params` and `core_knob_looks` entries take, its run included, as
   claims of kind 4 (`"<first> <last>"`, hex).
 - **Form.** `"knobs"` is 0..1024 and `__knobs` no mod's symbol; a relocation
-  to `__knobs` is `abs32` or `abs16` with an addend below `"knobs"` (else
-  `format`). `__knobs` is the import of a mod with `"knobs"` only.
+  to `__knobs` is `abs32` or `abs16` (`abs16` on a build with `F_ABS16`)
+  with an addend below `"knobs"` (else `format`). `__knobs` is the import of a mod with `"knobs"` only.
 - **Fixed ids.** The ids a mod's entries name in its own `.run` bytes
   follow the linker's rules, in the check rounds after `claim`: none of the
   core's 0x127..0x1ff, a `core_knob_looks` entry's from 0x200 up, and from
@@ -192,7 +198,7 @@ so a reflash never moves them.
   never-used ids run out, then goes out again. A mod with no run left is
   refused (`ids`, `run of N: none free`), and the rounds start again.
 - **Kept.** The runs, the freed runs (the latest 512) and the next id go into
-  `/mods/.store` (format 3). A link that never settles keeps the old ones;
+  `/mods/.store` (format 3 on the A4, format 4 on the Rytm). A link that never settles keeps the old ones;
   FORGET DATA keeps them too.
 
 ## Sites
@@ -240,7 +246,8 @@ checked only against a built image (a `.build` file alone has none).
 
 ## Claims
 
-On a build whose descriptor has `F_CLAIMS` (the A4's loader, `drive_claims`),
+On a build whose descriptor has `F_CLAIMS` (both +Drive loaders,
+`drive_claims`),
 a +Drive mod's contribution may carry `claims`, `[[lo, hi], ...]`: byte
 ranges of the main OS its entry relies on, which no other mod may change or
 claim, as the build's linker checks them (link.py `check`). Nothing is
@@ -258,7 +265,7 @@ contribution's claims (kind 7, by its module). The checks are the sites':
   copied block may overlap.
 
 A +Drive site over a flashed claim is refused as one over a flashed site.
-Without the flag (drive-loader-ar2), `claims` is the feature refusal
+Without the flag (an older loader), `claims` is the feature refusal
 `claims`.
 
 ## Regions on the A4
@@ -426,6 +433,11 @@ knob id, then each run and freed run (oldest first): u32 first id, u16
 count, u8 the mod's name length, u8 0, the name, zeros to 4. Not part of the
 layout ID.
 
+Format 4 (the Rytm with +Drive knob ids, drive-loader-ar2 0.8; written only
+when there are any) is format 1 with the same runs after the CC records. A
+loader before 0.8 reads a format 4 file as none: going back to one after a
+boot that gave knob ids places +Drive storage afresh.
+
 `js/tools/drivestore_vectors.py` writes the runs in
 `js/test/drivestore-vectors.json` and, for the A4,
 `js/test/drivestore-a4-vectors.json` (placements, notes and `.store`
@@ -489,7 +501,8 @@ image>` prints it.
   with the shadow. The twins
   (drive.py, js/src/drive.ts) check the same, leaving the stock hash to the
   unit when they have the descriptor alone.
-  A loader that exports `drive_stock_shadow` (the A4's) gets the same shadow
+  A loader that exports `drive_stock_shadow` (the A4's, and the Rytm's from
+  drive-loader-ar2 0.8) gets the same shadow
   for its stock parts alone, with flags bit 6 `F_STOCK_SHADOW`: the build
   matches each run of a mod's own code against the whole stock OS, so a
   part can name an address a flashed site wrote, where the running OS no
