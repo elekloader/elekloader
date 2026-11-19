@@ -1,13 +1,15 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """+Drive knob ids (docs/DRIVE.md, "Knob ids on the +Drive"): the A4 loader's boot linker
 (mods/drive-loader-a4mk2/dlink.c) gives each +Drive mod's "knobs" a run of ids in 0x4000..0x7fff, kept
-from boot to boot in /mods/.store (format 3), as store.knobs keeps them in the lockfile, and refuses a
+from boot to boot in /mods/.store (format 3; the Rytm's, drive-loader-ar2 0.8, format 4), as store.knobs keeps them in the lockfile, and refuses a
 mod whose entries name ids the core's, a flashed module's or an earlier mod's (link.id_problems). Its
 descriptor says so (F_KNOBS, the loader's export drive_knobs; the flashed ids as claims of kind 4), so
 the host twin (elekloader/drive.py) does the same on that build only.
 
 Built for the computer and run on a made-up Analog Four MKII build against the twin, with /mods/.store
-carried from one boot to the next: the same records, area bytes, tables and .store.
+carried from one boot to the next: the same records, area bytes, tables and .store; then the Rytm's
+loader on a made-up Analog Rytm MKII build, with the Rytm's rules (core ids 469..554, own ids from 555,
+three tables, abs16 from drive-loader-ar2 0.9).
 
     python tests/test_drive_knobs.py
 
@@ -28,28 +30,33 @@ sys.path.insert(0, HERE)
 from elekloader import desc, drive, drive_store as ds, link                 # noqa: E402
 from test_link_refusals import Bench                                         # noqa: E402
 import test_drive as TD                                                      # noqa: E402
-from test_drive_abs16 import A4, build_host                                  # noqa: E402
+from test_drive_abs16 import A4, AR2, build_host                             # noqa: E402
+
+RYTM_FIXED = (0x300, 0x306)                     # the flashed module's ids, past 555 on the Rytm too
 
 
-def flashed(B, knobs=True):
+def flashed(B, knobs=True, rytm=False):
     """The A4 loader's kind of build, keeping +Drive storage, with core_params and core_knob_looks,
-    a flashed module whose entry takes ids 0x300..0x306, and (knobs) a loader exporting drive_knobs."""
+    a flashed module whose entry takes ids 0x300..0x306, and (knobs) a loader exporting drive_knobs;
+    rytm: the Rytm loader's kind (abs16 from drive-loader-ar2 0.9), with core_param_locks too."""
     mods = TD.flashed(B, store=True, stage_top=True, payload_skip=True, abs16=True, collections=True)
     core, loader = mods[0], mods[1]
     core['collections'].update({'core_params': {'entry': 4}, 'core_knob_looks': {'entry': 4}})
+    if rytm:
+        core['collections']['core_param_locks'] = {'entry': 4}
     if knobs:
         loader['symbols']['drive_knobs'] = ['abs', 1]
         loader['exports'].append('drive_knobs')
     fx = B.other('fixed-ae')
-    fx['sections']['.run'] = {'align': 4, 'len': 8, 'parts': [['hex', '%08x%08x' % (0x300, 0x306)]]}
+    fx['sections']['.run'] = {'align': 4, 'len': 8, 'parts': [['hex', '%08x%08x' % RYTM_FIXED]]}
     fx['symbols'] = {'e': ['.run', 0]}
     fx['contribute'] = [{'to': 'core_params', 'data': '00000000', 'relocs': [[0, 'abs32', 'sym:e', 0]]}]
     return mods + [fx]
 
 
 class Built:
-    def __init__(self, B, knobs=True):
-        out = link.link([link.Mod2(d, d['id']) for d in flashed(B, knobs)], B.img)
+    def __init__(self, B, knobs=True, rytm=False):
+        out = link.link([link.Mod2(d, d['id']) for d in flashed(B, knobs, rytm)], B.img)
         self.B, self.out = B, out
         self.build = drive.load_build(out.image)
         ddr_base, run_end = out.layout['ddr']
@@ -59,7 +66,7 @@ class Built:
         self.desc_at = out.map['core_desc']
 
 
-def km(B, ident, n=0, fixed=None, table='core_params', refs=None, entry=True):
+def km(B, ident, n=0, fixed=None, table='core_params', refs=None, entry=True, abs16=True):
     """A +Drive mod with 24 bytes of .run and an entry in `table` pointing at .run+12: with n, "knobs": n
     and .run+12..+24 relocated to __knobs (first, last, and an abs16 of first + 1), so the entry names its
     run; with fixed (a, b), its own ids a..b there."""
@@ -70,8 +77,8 @@ def km(B, ident, n=0, fixed=None, table='core_params', refs=None, entry=True):
         d['knobs'] = n
         d['imports'] = d['imports'] + ['__knobs']
         d['relocs'] = d['relocs'] + (refs if refs is not None else
-                                     [['.run', 12, 'abs32', 'sym:__knobs', 0], ['.run', 16, 'abs32', 'sym:__knobs', n - 1],
-                                      ['.run', 20, 'abs16', 'sym:__knobs', 1]])
+                                     [['.run', 12, 'abs32', 'sym:__knobs', 0], ['.run', 16, 'abs32', 'sym:__knobs', n - 1]]
+                                     + ([['.run', 20, 'abs16', 'sym:__knobs', 1]] if abs16 else []))
     if fixed:
         a, b = fixed
         d['sections']['.run']['parts'] = [['hex', '4e714e714e750000' + '00000000'
@@ -247,8 +254,72 @@ def main():
         check('without drive_knobs: refused as an import, C and twin agree', why(r)['ka'][0] == 'import'
               and not compare(N, sm, ram, st, r), (why(r), compare(N, sm, ram, st, r)))
 
+    rytm(work, check)
     print('all passed' if not fails else '%d failed' % len(fails))
     return 1 if fails else 0
+
+
+def rytm(work, check):
+    """The Rytm's loader (drive-loader-ar2 0.8) on its kind of build: runs from 0x4000 in format 4, the
+    Rytm's id rules, and the twin alike."""
+    exe = build_host(work, AR2, 'drive_link_host_ar2')
+    with Bench('analog-rytm-mk2') as B:
+        F = Built(B, rytm=True)
+        b = F.build
+        check('rytm: drive_knobs sets F_KNOBS, the flashed ids are claims of kind 4, the profile''s range',
+              b.d['flags'] & desc.F_KNOBS and b.knobs and (0x300, 0x306, 'fixed-ae') in b.knob_ids
+              and b.knob_range == (0x4000, 0x7FFF), (b.d['flags'], b.knob_ids, b.knob_range))
+
+        def k(ident, n=0, **kw):
+            return km(B, ident, n, abs16=False, **kw)
+
+        def alike(name, mods, prev=None):
+            sm, ram, st = boot(exe, F, mods, prev, work)
+            r = drive.link(b, [(m['id'] + '.elemod', raw(m)) for m in mods], prev)
+            bad = compare(F, sm, ram, st, r)
+            check('rytm: ' + name + ': C and twin agree', not bad, bad)
+            return sm, ram, st, r
+
+        def why(r):
+            return {c.id: (drive.CODES[c.code][0] if c.code else 'ok', c.detail) for c in r.choices}
+
+        sm, ram, st1, r = alike('boot 1', [k('ka', 4), k('kb', 2), k('fx', fixed=(0x400, 0x405))])
+        check('rytm: boot 1: ka 0x4000..0x4003, kb 0x4004..0x4005', r.knobs == {'ka': [0x4000, 4], 'kb': [0x4004, 2]}
+              and [x['state'] for x in sm['status']] == [1, 1, 1], (r.knobs, why(r)))
+        o = r.base[('kb', '.run')] + 12 - F.ram_base
+        check('rytm: boot 1: __knobs relocated in .run', struct.unpack('>II', ram[o:o + 8]) == (0x4004, 0x4005))
+        check('rytm: boot 1: the .store is format 4 with the runs', st1 is not None and st1[4:6] == b'\x00\x04'
+              and ds.decode(st1)['knobs'] == [{'mod': 'ka', 'first': 0x4000, 'count': 4},
+                                              {'mod': 'kb', 'first': 0x4004, 'count': 2}], st1 and ds.decode(st1))
+        sm, ram, st2, r = alike('boot 2', [k('kb', 2), k('kc', 3)], st1)
+        check('rytm: boot 2: kb keeps 0x4004, kc gets 0x4006, ka''s run freed',
+              r.knobs == {'kb': [0x4004, 2], 'kc': [0x4006, 3]}
+              and ds.decode(st2)['freed_knobs'] == [{'mod': 'ka', 'first': 0x4000, 'count': 4}], r.knobs)
+        sm, ram, st3, r = alike('boot 3', [k('ka', 4), k('kb', 2)], st2)
+        check('rytm: boot 3: ka back at 0x4000', r.knobs == {'ka': [0x4000, 4], 'kb': [0x4004, 2]}, r.knobs)
+        sm, ram, st, r = alike('fixed ids refused', [
+            k('f1', fixed=(500, 501)), k('f2', fixed=(0x302, 0x302)), k('f3', fixed=(0x500, 0x501)),
+            k('f4', fixed=(0x501, 0x502)), k('f5', fixed=(0x10, 0x11), table='core_knob_looks'),
+            k('f6', fixed=(0x10, 0x11)), k('f7', fixed=(0x20, 0x21), table='core_param_locks'),
+            k('f8', fixed=(600, 601), table='core_param_locks')])
+        check('rytm: fixed ids refused: details', why(r) == {
+            'f1': ('ids', "0x1f4-0x1f5 are core's"), 'f2': ('ids', "0x302-0x302 are fixed-ae's"),
+            'f3': ('ok', ''), 'f4': ('ids', "0x501-0x501 are f3's"), 'f5': ('ids', '0x10-0x11 are below 0x22b'),
+            'f6': ('ok', ''), 'f7': ('ids', '0x20-0x21 are below 0x22b'), 'f8': ('ok', '')}, why(r))
+        sm, ram, st, r = alike('an abs16 to __knobs', [km(B, 'a16', 2)])
+        check('rytm: an abs16 to __knobs loads (abs16 from drive-loader-ar2 0.9)',
+              why(r)['a16'][0] == 'ok', why(r))
+        sm, ram, st6, r = alike('no knobs mods', [k('fx', fixed=(0x400, 0x405))], st3)
+        s6 = ds.decode(st6)
+        check('rytm: no knobs mods: the runs freed, kept, format 4', s6['knobs'] == [] and st6[4:6] == b'\x00\x04'
+              and [x['mod'] for x in s6['freed_knobs']] == ['kc', 'ka', 'kb'], s6)   # kc freed at boot 3
+        sm, ram, st7, r = alike('no knobs ever', [k('fx', fixed=(0x400, 0x405))])
+        check('rytm: no runs held: the .store stays format 1', st7 is not None and st7[4:6] == b'\x00\x01', st7 and st7[:8])
+        N = Built(B, knobs=False, rytm=True)
+        sm, ram, st = boot(exe, N, [k('ka', 4)], None, work)[:3]
+        r = drive.link(N.build, [('ka.elemod', raw(k('ka', 4)))])
+        check('rytm: without drive_knobs: refused as an import, C and twin agree', why(r)['ka'][0] == 'import'
+              and not compare(N, sm, ram, st, r), (why(r), compare(N, sm, ram, st, r)))
 
 
 if __name__ == '__main__':

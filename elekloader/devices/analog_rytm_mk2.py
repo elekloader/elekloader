@@ -225,6 +225,9 @@ DEVICE = Device(
     param_ids=(555, (469, 554, "core's lockable parameters' ids"),
                (('core_params', False), ('core_param_locks', True), ('core_knob_looks', True),
                 ('core_knob_faces', False))),
+    # +Drive mods' knob ids (drive-loader 0.8, dl.h DL_KNOB_LO/HI): far past any flashed build's runs from
+    # 555, as the A4's
+    drive_knobs=(0x4000, 0x7FFF),
     toolchain={
         'prefix': 'm68k-linux-gnu-',              # or ELEKLOADER_CROSS=m68k-elf-
         'asflags': ['-mcpu=54455'],                 # ColdFire V4 (the MCF5441x's ISA), as the Digitakt mk1

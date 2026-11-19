@@ -210,8 +210,8 @@ def test_core_ar2_sites():
     # led_colour's slot colour sends), and the engine push's sound (0.15: core_trig_sound), and
     # the mod folders' fourteen (drive.c: ten filesystem routines, LOAD TO PROJ's and CREATE
     # DIR's calls, and the two SampleManager vtables' tick), and the SAMPLE view's draw (0.15),
-    # and the USB input's shift index (usbin.s)
-    assert len(mod['sites']) == 147
+    # and the USB input's shift index (usbin.s), and main()'s call at 0x401009e0 (0.14, ev_boot_drive)
+    assert len(mod['sites']) == 148
     # the sound push's arguments, followed by its PC-relative jsr to 0x4011dace, which stays
     x = [x for x in mod['sites'] if x.get('target') == 'core_trig_sound'][0]
     assert x['op'] == 'jsr' and x['addr'] == '0x4011f5f6', x
@@ -511,7 +511,7 @@ def test_core_ar2_screen():
     assert ('ev_key', 'core_screen_key', -1000000) in sub
     assert ('ev_enc', 'core_screen_enc', 1000000) in sub
     assert ('ev_tick', 'core_screen_tick', 3) in sub
-    assert 'screen.c' in j['sources'] and j['version'] == '0.15'
+    assert 'screen.c' in j['sources'] and elemod.version_key(j['version']) >= elemod.version_key('0.13')
 
 
 def test_core_ar2_screen_check_needs_0_12():

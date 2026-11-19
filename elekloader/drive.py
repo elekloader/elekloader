@@ -1471,7 +1471,7 @@ class Result:
 
 
 def _knob_prev(build, raw):
-    """The runs /mods/.store keeps (format 3): {'knobs', 'freed_knobs', 'next_knob'}, or {} (none, or a
+    """The runs /mods/.store keeps (format 3, the Rytm's 4): {'knobs', 'freed_knobs', 'next_knob'}, or {} (none, or a
     file the allocator does not take)."""
     st = ds.decode(raw) if build.knobs and raw is not None else None
     return {k: st[k] for k in ('knobs', 'freed_knobs', 'next_knob') if k in st} if st else {}

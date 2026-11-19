@@ -146,18 +146,17 @@ class Page(unittest.TestCase):
 
     def test_no_on_the_restart_confirm_does_nothing(self):
         frames, _takes, states = self.run_page('oyrddyyTnlyrdddddyfntTs', 'a.elemod')
-        self.assertEqual(self.texts(frames[-1])[-4:], ['RESTART NOW?', 'UNSAVED PROJECT', 'CHANGES ARE LOST',
-                                                       'CONFIRM Y/N'])
+        self.assertEqual(self.texts(frames[-1])[-2:], ['RESTART NOW?', 'CONFIRM Y/N'])
         self.assertEqual(states[-1]['pending'], '0')
         self.assertEqual(self.restarts, [])
 
-    def test_yes_on_the_restart_confirm_says_so_then_restarts_without_the_guard(self):
+    def test_yes_on_the_restart_confirm_says_so_keeps_the_project_then_restarts_without_the_guard(self):
         frames, takes, states = self.run_page('oyrddyyTnlyrdddddyystnfstt', 'a.elemod')
         self.assertEqual(states[-2]['box'], 'RESTARTING')   # 1 s on: not yet
         self.assertEqual(states[-2]['panel'], '0')
         self.assertEqual(states[-1]['box'], 'RESTARTING')   # NO after YES: the box stays
         self.assertIn('RESTARTING', self.texts(frames[-1]))
-        self.assertEqual(self.restarts, ['locked=1 guard_off=1 box=RESTARTING'])
+        self.assertEqual(self.restarts, ['kept=1 locked=1 guard_off=1 box=RESTARTING'])
 
 
 if __name__ == '__main__':

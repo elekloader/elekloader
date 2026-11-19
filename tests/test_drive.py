@@ -91,14 +91,15 @@ def flashed(B, pad=0, store=False, stage_top=False, payload_skip=False, abs16=Fa
 def built(B, area=None):
     """The flashed build, and the Build the boot linker sees; with `area`, its loader's .bss grown
     until the +Drive area is about that many bytes (its pools are sized to the area)."""
-    top = area in ('top', 'skip', 'a4') or isinstance(area, tuple)   # 'top', or ('top', N): a loader that
+    top = area in ('top', 'skip', 'a4', 'ar2') or isinstance(area, tuple)   # 'top', or ('top', N): a loader that
     kind = area[0] if isinstance(area, tuple) else area   # stages files at the area's top, and its area;
-    skip = kind in ('skip', 'a4')                    # 'skip', ('skip', N): one that also skips payloads;
-    abs16 = coll = kind == 'a4'                      # 'a4', ('a4', N): and takes abs16 and +Drive
-                                                     # collections (the A4's)
+    skip = kind in ('skip', 'a4', 'ar2')             # 'skip', ('skip', N): one that also skips payloads;
+    abs16 = kind in ('a4', 'ar2')                    # 'a4', ('a4', N): and takes abs16 and +Drive
+    coll = kind in ('a4', 'ar2')                   # collections (the A4's); 'ar2': the same
+                                                     # (drive-loader-ar2 0.9's)
     if isinstance(area, tuple):
         area = area[1]
-    elif area in ('top', 'skip', 'a4'):
+    elif area in ('top', 'skip', 'a4', 'ar2'):
         area = None
     if top:
         out = link.link([link.Mod2(d, d['id']) for d in flashed(B, stage_top=True, payload_skip=skip,

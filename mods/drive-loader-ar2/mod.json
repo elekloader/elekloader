@@ -1,6 +1,6 @@
 {
  "id": "drive-loader",
- "version": "0.6",
+ "version": "0.9",
  "title": "Drive Loader",
  "category": "Framework",
  "license": "GPL-2.0-or-later",
@@ -15,6 +15,8 @@
   "flush.s",
   "boot.c",
   "dlink.c",
+  "skip.c",
+  "payload.c",
   "json.c",
   "sha256.c",
   "dstore.c",

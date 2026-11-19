@@ -73,3 +73,23 @@ st_proj_save_body:                      | 0x400b07a4 (0.10)
         lea     -48(%sp),%sp
         movem.l %d2-%d4/%a2-%a6,(%sp)
         jmp     0x400b07ac
+
+| (0.14) the site 0x401009e0 in main() (FUN_401006ee), stock `jsr 0x4009da0e.l`:
+| the displaced call first, with the stack as the site had it (its own return
+| address taken off and kept), then core_boot_drive (store.c): ev_boot_drive,
+| then the end of the boot's project load. d0 as the call left it.
+        .globl  core_boot_drive_site
+        .align  2
+core_boot_drive_site:
+        move.l  (%sp)+, boot_drive_ret
+        jsr     0x4009da0e
+        move.l  %d0, -(%sp)
+        jsr     core_boot_drive
+        move.l  (%sp)+, %d0
+        move.l  boot_drive_ret, -(%sp)
+        rts
+
+        .bss
+        .align  4
+boot_drive_ret:
+        .skip   4

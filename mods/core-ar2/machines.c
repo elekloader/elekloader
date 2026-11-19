@@ -137,6 +137,8 @@ static uint8_t *ref_record(int32_t k)
     return 0;
 }
 
+void core_store_boot_init(void);    /* store.c (0.14) */
+
 /* (0.15) looks.c: the look core_machines gives stock record id, while a
  * mod fills its slot (CORE_MACHINE_LOOKS; machines.h), else 0 */
 const struct core_machine_look *core_machine_look_of(int32_t id)
@@ -283,6 +285,7 @@ void core_boot_init(void)
 {
     uint32_t done = 0;
     const struct core_machine *const *e;
+    core_store_boot_init();
     for (e = core_machines; *e; e++) {
         const struct core_machine *m = *e;
         int32_t s = m->slot;

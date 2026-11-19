@@ -1257,7 +1257,7 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
 
     std_map = any(desc.STD_MAP in m.exports for m in order)   # the loader maps std1 at boot
     claims_map = any(desc.CLAIMS in m.exports for m in order)  # the boot linker takes claims
-    # the loader copies +Drive mods' stock parts through the shadow (A4: dlink.c stock_part); an export,
+    # the loader copies +Drive mods' stock parts through the shadow (the A4's and the Rytm's dlink.c, shadow_over); an export,
     # not its value, so the sizing pass carries the shadow too
     stock_shadow = any(desc.STOCK_SHADOW in m.exports for m in order)
     # the loader gives +Drive mods knob ids (F_KNOBS): the flashed ids go into claims of kind 4

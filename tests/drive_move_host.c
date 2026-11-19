@@ -18,7 +18,10 @@
  *   put NAME SIZE  an upload's commit of SIZE bytes from the stage (dl_hdr, dl_change) -> what .status
  *                  notes, and the file's size
  *   status         .status's stage line
- * Each of the last five ends its line in " GUARD ok" when no byte around the stage changed (" GUARD
+ *   clear NAME     a Clear as stock 1.74 does it (0x4002d0b4): zero the entry's size from the stage,
+ *                  then +0x4c with no header (entry_size, dl_change) -> "SIZE" (the entry's), the note
+ *   readpre NAME   a read's +0x1c on the file's entry (entry_size, dl_pre) -> "ok" or the refusal
+ * Each of the last seven ends its line in " GUARD ok" when no byte around the stage changed (" GUARD
  * bad" when one did); nothing with the stage left at the floor.
  * A tree line "NAME=@N" is a file of N bytes.
  * After each, the tree: "TREE p1 ; p2 ; ..." sorted, and "ACTIVE text" with "|" for newlines. */
@@ -400,6 +403,24 @@ int main(void)
             dl_change(&f, h);
             path_of(path, line + 4, "");
             printf("%s %d", dl_note, dl_fs_file_size(path));
+            guard();
+            printf("\n");
+        } else if (!strncmp(line, "clear ", 6) || !strncmp(line, "readpre ", 8)) {
+            const char *name = strchr(line, ' ') + 1;
+            unsigned char res[12], ent[ENTRY_SIZE];
+            struct clo *c = file_clo(name);
+            void *f = c;
+            int esize = entry_size(c, (int)c->size);
+            memset(ent, 0, sizeof ent);
+            *(unsigned *)(ent + E_SIZE) = (unsigned)esize;
+            if (line[0] == 'c') {
+                memset(dl_stage_at, 0, (unsigned)esize);   /* stock's fill, unbounded */
+                dl_change(&f, 0);
+                printf("%d %s", esize, dl_note);
+            } else {
+                dl_pre(res, &f, ent);
+                printf("%s", res[0] ? "ok" : host_str);
+            }
             guard();
             printf("\n");
         } else if (!strcmp(line, "status")) {
