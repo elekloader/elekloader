@@ -1,0 +1,15 @@
+{
+ "id": "drive-hello",
+ "version": "0.1",
+ "title": "+Drive hello",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A test for the Drive Loader on the Analog Rytm MKII: a +Drive mod that counts core-ar2's ticks and exports the count. Loaded from /mods at boot, not flashed (docs/FORMAT.md, \"+Drive mods\").",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": ["hello.c"],
+ "subscribe": [
+  {"event": "ev_tick", "fn": "drive_hello_tick", "order": 50}
+ ],
+ "requires": ["core", "drive-loader"]
+}

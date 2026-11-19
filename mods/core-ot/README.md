@@ -36,13 +36,8 @@ changes nothing else the unit does.
     `__arena_fill`, `__arena_clear`. Core with track meters and OT HEALTH
     takes 1 page, so the arena keeps 14,601 of its 14,602 pages; the most
     is 1,707 pages, 0.2's whole reserve (0x40a955e0-0x41495de0).
-  - 0.2 took 1,707 pages whatever the mods used, and exported the moved
-    base as `arena_base` itself. With 0.3 the linker defines `arena_base`,
-    for mods that compare against it.
-  - tests/test_octatrack.py derives each write from the page count: the
-    stock value at 0 pages, 0.2's at 1,707. Under octabam's port, the
-    OS's free-page count (0x80006920) after boot is 1,706 pages higher
-    with 0.3 than with 0.2, for the same mods.
+  - 0.2 took 1,707 pages whatever the mods used; from 0.3 the linker
+    defines `arena_base`.
 - **At boot.** The boot site 0x4000050c called 0x40001e50; it now calls
   `boot`, at the end of the OS image (0x4010fdf0), where the bootstrap
   unpacks it.
@@ -139,7 +134,7 @@ changes nothing else the unit does.
 
   | event | site (was) | when |
   |---|---|---|
-  | `ev_project(how, dropped)` | 0x4008484e (`pea 0x460d17ce`, the receive every job goes back to), a jmp; 0x4008485e (the job switch) notes the job | when a job that loads a whole project (3, 4 LOAD PROJECT, 5 the power-up, 19 RELOAD) or makes one (9, 10, 13) has ended; the same prototype and constants as core-ar2's and core-a4's |
+  | `ev_project(how, dropped)` | 0x4008484e (`pea 0x460d17ce`, the receive every job goes back to), a jmp; 0x4008485e (the job switch) notes the job | when a job that loads a whole project (3, 4 LOAD PROJECT, 5 the power-up, 19 RELOAD) or makes one (9, 10, 13) has ended; the same prototype and constants as core-ar2's and the A4's |
   | `ev_banks_load(pre, mask)` | 0x40090504 and 0x400905d4, the bank loads, wrapped | before and after |
   | `ev_banks_write(pre, mask)` | 0x400918aa (inside the bank writer) and 0x400917c8 (around it) | before the first bank file, and after |
   | `ev_project_store(pre)`, `ev_project_reload(pre)` | 0x4008ee74 and 0x4008f180, wrapped | SAVE PROJECT's `.work` to `.strd` copy, RELOAD's copy back |
@@ -287,6 +282,9 @@ changes nothing else the unit does.
     too; `ev_voice_reset` in tasks and the frame interrupt, with the
     interrupts not yet masked; `ev_boot_early` before the OS. None but the
     reset is on the frame interrupt's path.
+- **0.9 to 0.42: events and tables from the map** (`mute.s` to `moments.s`).
+  Each has its section in docs/ADAPTING.md, from "Track mutes on the
+  Octatrack" on.
 - **The draw gate** (`gate.s`). The OS composes the screen twice before the
   boot site, so before `.run` is in the reserve. The draw site therefore
   calls `core_draw_gate`, which `mod.json` places (`fixed`) in the last 24
@@ -354,21 +352,9 @@ script:
 - **Core alone matches stock.** The firmware's key, encoder, CC and
   note-on handlers run as often as on stock, and the last frame the
   compositor sent to the LCD is the same, pixel for pixel.
-- **A test mod subscribed to every event** saw:
-  - 428 ticks and 440 frames composed;
-  - the 4 key events (the last, UP released: code 0x33, 0);
-  - both encoder turns (the last, encoder 3, -2);
-  - the MIDI messages that reached the firmware's handlers;
-  - 18,741 audio frames (2,756 a second).
-
-  No draw ran inside a tick. Its square was in the frame sent to the LCD,
-  and nothing else changed.
+- **A test mod subscribed to every event** saw each event the session made.
 - **With every handler taking its event**, the firmware's key, encoder, CC
   and note handlers never ran.
-- **The v1.0 files.** Every hardware-test group (T0–T7), every variant and
-  every one of the 34 mods alone links with 0.2. Each image differs from
-  its 0.1 build only at core's new sites, and in pointers that point at the
-  same symbol plus offset as before.
 
 0.5, in ot_emu (the checks are a probe mod that logs each event, and a copy
 of ot_emu whose park range for main can be set, for the idle loop):

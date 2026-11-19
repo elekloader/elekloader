@@ -161,7 +161,7 @@ def test_a_sounds_room_is_its_cores():
 
 
 def test_the_analog_four_mk2s_room():
-    """core-a4 (mods/core-a4/store.c): 32 bits a sound, 128 a kit, 64 a global
+    """core-a4mk2 (mods/core-a4mk2/store.c): 32 bits a sound, 128 a kit, 64 a global
     slot, and the 4,342 bytes of the tagged store for 129 x 6 pattern tracks,
     129 patterns and the project."""
     a4 = 'analog-four-mk2'
@@ -309,7 +309,7 @@ A4 = 'analog-four-mk2'
 
 
 def test_a4_codes_are_per_track_kind():
-    """core-a4 0.5: a sound field's code is the synth tracks', a kit field's the FX track's, or the CV
+    """core-a4mk2 0.5: a sound field's code is the synth tracks', a kit field's the FX track's, or the CV
     track's with "track": "cv", each kind from 0x70; a field that changes kind gets a new code, and a
     17th field of a kind is refused."""
     decls = [('a', 's', 'sound', 7), ('a', 'k', 'kit', 7), ('a', 'c', 'kit', 7)]
@@ -331,7 +331,7 @@ def test_a4_codes_are_per_track_kind():
 
 
 def test_a4_ccs():
-    """core-a4 0.5: a synth field's CC comes first from those the FX and CV tables map, a kit field's (FX or
+    """core-a4mk2 0.5: a synth field's CC comes first from those the FX and CV tables map, a kit field's (FX or
     CV) only from those every kind leaves free."""
     decls = [('m', 's', 'sound', 7), ('m', 'k', 'kit', 7), ('m', 'c', 'kit', 7)]
     locks = [('m', 's'), ('m', 'k'), ('m', 'c')]
@@ -342,7 +342,7 @@ def test_a4_ccs():
 
 def test_a4_flags():
     """On the A4 "lfo" is refused (every source is a destination of a "mod" field), "mod" is taken on
-    a kit field, and "cc" is taken (core-a4 0.5's CC pool); the Rytm has no CV track."""
+    a kit field, and "cc" is taken (core-a4mk2 0.5's CC pool); the Rytm has no CV track."""
     scopes = {('m', 'a'): 'sound', ('m', 'k'): 'kit'}
     store.check_flags(A4, scopes, (), [('m', 'a'), ('m', 'k')], [('m', 'k')])
     assert '"lfo" is the Analog Rytm MKII' in refused(store.check_flags, A4, scopes, [('m', 'a')])

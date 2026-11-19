@@ -5,7 +5,7 @@
 // talks to a network.
 import type { Lock } from './store.ts'
 import { isAscii, sha } from './bytes.ts'
-import { type Device, type Release, devices, linkable, supported } from './devices.ts'
+import { type Device, type Release, SYX_FAMILIES, devices, linkable, supported } from './devices.ts'
 import { EXTS, ModError } from './elemod.ts'
 import * as formats from './formats.ts'
 import { LoaderModel, OSError_, Store, suggestedName, withRequirements } from './model.ts'
@@ -38,10 +38,10 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
 export function device(d: Device, rel: Release | null = null) {
   return {
     key: d.key, name: d.name, releases: d.releases.map(r => r.version).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
-    container: d.container, version_len: d.versionLen, exact_len: d.container === 'ele3', recovery: d.recovery,
+    container: d.container, version_len: d.versionLen, exact_len: SYX_FAMILIES.includes(d.container), recovery: d.recovery,
     card_file: d.container === 'elek', linkable: linkable(d),
     // the window's default (gui.LoaderWindow.refresh_stock)
-    default_version: d.versionOptional ? (rel ? rel.version : '') : d.container === 'ele3' ? '2.0a' : rel ? `${rel.version} ELEK` : '',
+    default_version: d.versionOptional ? (rel ? rel.version : '') : SYX_FAMILIES.includes(d.container) ? '2.0a' : rel ? `${rel.version} ELEK` : '',
   }
 }
 
@@ -136,7 +136,7 @@ export class Bridge {
       throw e
     }
     if (v && !isAscii(v))
-      return `The OS version: the version is ${dev.container === 'ele3' ? `exactly ${dev.versionLen}` : `1 to ${dev.versionLen}`} ASCII characters.`
+      return `The OS version: the version is ${SYX_FAMILIES.includes(dev.container) ? `exactly ${dev.versionLen}` : `1 to ${dev.versionLen}`} ASCII characters.`
     return null
   }
 

@@ -107,8 +107,8 @@ function plan(configPath: string, casesPath: string) {
     if (cfg.stocks.ar173) add('ar173 core 0.3, made for 1.74', 'ar173', [core])
   }
   // the Analog Four MKII 1.56 (optional: stocks.a456, and dirs.a4 with core-0.3.elemod, hello-marker-1.0.elemod,
-  // hooks-check-0.1.elemod, store-check-1.0.elemod, ddr-canary-0.1.elemod and pages-check-0.2.elemod built from mods/core-a4 and
-  // examples/*-a4)
+  // hooks-check-0.1.elemod, store-check-1.0.elemod, ddr-canary-0.1.elemod and pages-check-0.2.elemod built from mods/core-a4mk2 and
+  // examples/hello-marker-a4 and examples/*-a4mk2)
   if (cfg.stocks.a456 && cfg.dirs.a4) {
     const core = f('a4', 'core-0.3.elemod'), hello = f('a4', 'hello-marker-1.0.elemod')
     const hooks = f('a4', 'hooks-check-0.1.elemod'), store = f('a4', 'store-check-1.0.elemod')
@@ -125,7 +125,7 @@ function plan(configPath: string, casesPath: string) {
     add('a456 store-check without core', 'a456', [store])
     add('a456 check only', 'a456', [core, store], 'TEST', { check_only: true })
     if (cfg.dirs.ar) add('a456 core-ar2 0.3', 'a456', [f('ar', 'core-0.3.elemod')])
-    if (cfg.stocks.ar174) add('ar174 core-a4', 'ar174', [core])
+    if (cfg.stocks.ar174) add('ar174 core-a4mk2', 'ar174', [core])
   }
 
   const scratch = cfg.scratch

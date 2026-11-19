@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""The Analog Four MKII: its profile, its file, and core-a4's sites (pytest,
+"""The Analog Four MKII: its profile, its file, and core-a4mk2's sites (pytest,
 or run with python).
 
 Needs a stock file, which never goes in the repo, named by an environment
@@ -10,6 +10,7 @@ Each test is the Analog Rytm MKII's (tests/test_rytm_mk2.py) with the A4's
 own addresses, measured on 1.56: the two OSes are the same platform, but no
 address or count is the Rytm's.
 """
+import hashlib
 import json
 import os
 import struct
@@ -52,10 +53,25 @@ def at(img, addr, n):
     return img[addr - DEV.main_load:addr - DEV.main_load + n]
 
 
+def sb(x, img):
+    """A site's stock bytes (hex) from the stock image; the manifest holds only their length and
+    SHA-256, which this checks."""
+    a, n = int(x['addr'], 16), x['len']
+    got = at(img, a, n)
+    assert len(got) == n and hashlib.sha256(got).hexdigest() == x['stock_sha256'], x
+    return got.hex()
+
+
 def test_profile():
     assert DEV.linkable() and DEV.flash_limit == 0x300000 and DEV.trailer is None
     assert (DEV.flash_limit - DEV.flash_at) % 0x40000 == 0      # whole 256 KB units
     assert DEV.ddr == DEV.areas['ddr'] == (0x47BE0000, 0x47C00000)
+    # core-a4mk2 0.6: the mods' area moves into the gap checked on a unit (ddr-canary-a4mk2),
+    # from its first 64 KB boundary, joined to the 128 KB area above it
+    assert DEV.ddr_for('0.5') == DEV.ddr
+    lo, hi = DEV.ddr_for('0.6')
+    assert (lo, hi) == (0x45650000, 0x47C00000) and lo % 0x10000 == 0
+    assert DEV.areas['gap'][0] <= lo and DEV.areas['gap'][1] == DEV.areas['ddr'][0] and hi == DEV.areas['ddr'][1]
     assert DEV.sysex_id == 0x0B
     assert len({d.sysex_id for d in devices.devices() if d.container == 'ele3'}) == \
         len([d for d in devices.devices() if d.container == 'ele3'])
@@ -84,10 +100,10 @@ def test_the_os_entry_is_the_rytms():
     call (the boot site) sets VBR to 0x40000000."""
     _r, _s, img = stock()
     assert struct.unpack('>I', img[:4])[0] == 0x40001130
-    assert at(img, 0x4000113a, 6) == bytes.fromhex('2e7c48000000')
-    assert at(img, 0x40001142, 6) == bytes.fromhex('41f9fc04002d')
-    assert at(img, 0x40001180, 6) == bytes.fromhex('4eb940002064')
-    assert at(img, 0x40002064, 12) == bytes.fromhex('203c400000004e7b08014e75')
+    assert hashlib.sha256(at(img, 0x4000113a, 6)).hexdigest() == 'f66fa54ead8136aec5c9c5d093862f18a95072bc22ade71b489ef0da1cb14b33'
+    assert hashlib.sha256(at(img, 0x40001142, 6)).hexdigest() == '06a6a908d74af5c65a5e76a6fafbd9055098b35b7c1c743c41814985329e0c74'
+    assert hashlib.sha256(at(img, 0x40001180, 6)).hexdigest() == '526ee1b155acc496fd523a13e9a84ba2dd4f35004ef4a475939bc88bc486ec2a'
+    assert hashlib.sha256(at(img, 0x40002064, 12)).hexdigest() == '91e184609ecdefbf5e5eb6d5c683ce075e8cf7095ea765408ef4eacd4714cc7f'
 
 
 def test_the_os_keeps_its_calibration_at_0x300000():
@@ -99,29 +115,32 @@ def test_the_os_keeps_its_calibration_at_0x300000():
     assert img.count(push(0x380000)) == 26 and img.count(push(0x3c0000)) == 11
     assert img.count(push(0x300000)) == 2 and img.count(push(0x340000)) == 0
     # read(0x300000, 0xe56, *0x40214c10) at 0x400f18e8, through 0x401155a2
-    assert at(img, 0x400f18e8, 22) == bytes.fromhex('2f3940214c1048780e562f3c003000004eb9401155a2')
+    assert hashlib.sha256(at(img, 0x400f18e8, 22)).hexdigest() == 'ffdd2aae574e0b64e4a740e3c191f4d57f08d6553dd45653333ac72e4dfd93b5'
 
 
-def test_core_a4_sites():
+def test_core_a4mk2_sites():
     """Every site's stock bytes, and that each covers whole instructions."""
     _r, _s, img = stock()
-    with open(os.path.join(ROOT, 'mods', 'core-a4', 'mod.json')) as fh:
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'mod.json')) as fh:
         j = json.load(fh)
     assert j['os'] == '1.56' and not j.get('ports')
     mod, port = build.for_release(j, DEV, REL)
     assert not port and mod['device'] == DEV.key and mod['os'] == REL.version
     for s in mod['sites']:
-        a, want = int(s['addr'], 16), bytes.fromhex(s['stock'])
-        assert img[a - DEV.main_load:a - DEV.main_load + len(want)] == want, s
+        a, want = int(s['addr'], 16), bytes.fromhex(sb(s, img))
+        assert 'stock' not in s, s              # the manifest holds no stock bytes
         if s['op'] == 'ptr':            # data (0.5): the lock get, set, clear and turn
             # (+0x48..+0x54) of the synth, FX and CV parameter sets' vtables; the turn is shared;
-            # and (part 2) their short and long names (+0x68, +0x6c), shared too
+            # and (part 2) their short and long names (+0x68, +0x6c), shared too; and (0.7, ui.c)
+            # their two value setters (+0x30, +0x38), ev_param_set's
             ptrs = {}
             for vt, (g, st, c) in ((0x401a164c, (0x400a0190, 0x400a0218, 0x400a02a4)),
                                    (0x401a16ec, (0x400a044a, 0x400a04d2, 0x400a055e)),
                                    (0x401a178c, (0x400a0704, 0x400a078c, 0x400a0818))):
                 ptrs.update({vt + 0x48: g, vt + 0x4c: st, vt + 0x50: c, vt + 0x54: 0x4009e74c,
                              vt + 0x68: 0x4009e79e, vt + 0x6c: 0x4009e7c2})
+            ptrs.update({0x401a1684: 0x400a0cec, 0x401a1724: 0x400a0e1e, 0x401a17c4: 0x400a0f08,
+                         0x401a167c: 0x400a0046, 0x401a171c: 0x400a0308, 0x401a17bc: 0x400a05c2})
             assert a in ptrs and want == ptrs[a].to_bytes(4, 'big'), s
             continue
         ok, note = elemod.insn_check(img, a, len(want), DEV)
@@ -134,7 +153,7 @@ def test_core_a4_sites():
     for t, k in (('boot', 'VBR_FN'), ('core_draw', 'DRAWALL'), ('core_key', 'KEYDISP'),
                  ('core_enc', 'ENCDISP')):
         x = [x for x in mod['sites'] if x.get('target') == t][0]
-        assert x['stock'] == '4eb9' + d[k][2:].lower().rjust(8, '0'), t
+        assert sb(x, img) == '4eb9' + d[k][2:].lower().rjust(8, '0'), t
     # SETTINGS: the jmp's 6 bytes, then where core_settings rejoins
     x = [x for x in mod['sites'] if x.get('target') == 'core_settings'][0]
     assert int(d['SETTINGS_RET'], 16) == int(x['addr'], 16) + 6
@@ -145,17 +164,23 @@ def test_core_a4_sites():
     for k, t in (('PAGE_INFO_RET', 'core_page_info'), ('GET_RET', 'core_param_get'),
                  ('DELTA_RET', 'core_param_delta'), ('TEXT_RET', 'core_param_text')):
         x = [x for x in mod['sites'] if x.get('target') == t][0]
-        assert x['op'] == 'jmp' and int(d[k], 16) == int(x['addr'], 16) + len(x['stock']) // 2, t
-    pages = {x['target']: x['stock'] for x in mod['sites'] if x.get('target', '').startswith('core_pa')}
-    assert pages['core_page_info'] == '722f202f0004'
-    assert pages['core_param_get'] == pages['core_param_delta'] == '4feffff448d7040c'
-    assert pages['core_param_text'] == '2f032f02242f0014'
-    # pages whose entry a function answers (core-a4 0.3, core-ar2 0.6's), asked before core_pages
-    assert mod['collections'].get('core_page_fns') == 4 and mod['collections'].get('core_pages') == 4
+        assert x['op'] == 'jmp' and int(d[k], 16) == int(x['addr'], 16) + x['len'], t
+    pages = {x['target']: (sb(x, img), x['stock_sha256'])[1] for x in mod['sites'] if x.get('target', '').startswith('core_pa')}
+    assert pages['core_page_info'] == '248c76631d87a332e3da30dd7cfa93feae90d47092e46072d6a5b0e04a609461'
+    assert pages['core_param_get'] == pages['core_param_delta'] == 'd43e64e0210fdd98e9dd8476d7cea57c93492ec611d50eddcbf6fd90ea80cef7'
+    assert pages['core_param_text'] == 'f0a59a90d819068375330c854f0ecd4610de7653746fd59369a25fc9cedcaea6'
+    # pages whose entry a function answers (core-a4mk2 0.3, core-ar2 0.6's), asked before core_pages
+    # (with the views' room as +Drive spares, tests/test_units.py)
+    assert all(mod['collections'].get(c) == {'entry': 4, 'spare': 16} for c in ('core_page_fns', 'core_pages'))
     # the audio load (0.2): core times its own render events, first in and last out
     sub = {x['event']: x for x in mod['subscribe']}
     assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0
     assert sub['ev_render_out']['fn'] == 'core_load_out' and sub['ev_render_out']['order'] == 100
+    # 0.6: the modified mark's and the screen calls' handlers (store.c, screen.c): the brain from
+    # ev_key before every mod, the LEVEL turn from ev_enc after every mod, the controller from ev_tick
+    subs = {(x['event'], x['fn']): x['order'] for x in mod['subscribe']}
+    assert subs[('ev_tick', 'core_edit_tick')] == 0 and subs[('ev_tick', 'core_screen_tick')] == 1
+    assert subs[('ev_key', 'core_screen_key')] == -1000000 and subs[('ev_enc', 'core_screen_enc')] == 1000000
     # views (0.2): the hook after the main screen's last view and the page
     # key's step, each resuming after its 8 bytes; and the current view's
     # range, 0..28, widened in the setter and the loader
@@ -165,51 +190,137 @@ def test_core_a4_sites():
     clamps = [x for x in mod['sites'] if x['op'] == 'bytes']
     assert len(clamps) == 5
     for x in clamps:
-        assert x['stock'][2:] == '1c' and x['new'] == x['stock'][:2] + '2c', x
-        assert x['stock'][0] == '7' and int(x['stock'][1], 16) % 2 == 0, x     # moveq #28,Dn
-    # mod storage's sites (core-a4 0.1: 28 of the 36), and 0.2's 4 page
+        was = sb(x, img)
+        assert was[2:] == '1c' and x['new'] == was[:2] + '2c', x
+        assert was[0] == '7' and int(was[1], 16) % 2 == 0, x     # moveq #28,Dn
+    # mod storage's sites (core-a4mk2 0.1: 28 of the 36), and 0.2's 4 page
     # sites, 2 view sites and 5 range bytes, 0.4's OS upgrade restart, and
-    # 0.5's 31 lock sites: 19 in code (rows.s) and 12 vtable entries; and 0.5's
+    # 0.5's 32 lock sites: 20 in code (rows.s; the voice apply among them) and 12 vtable entries; and 0.5's
     # 21 destination sites (dests.s): 15 in code and 6 vtable entries; and
     # 0.5's 2 MIDI sites (midi.s), the three sets' NRPN in and CC in, each a
-    # jmp resuming after the 8 bytes it displaced
-    assert len(mod['sites']) == 102
+    # jmp resuming after the 8 bytes it displaced; and 0.6's whole project
+    # save (store.s) and three knob look sites (looks.s); and 0.7's 10 std1 MIDI and tick sites (stdmidi.s,
+    # checked in test_units) and std1 voice frees (voice.s): a jsr over the cut's `jsr 0x40105410` and over
+    # the note length's `move.l d2,-(sp); jsr (a1); addq.l #4,sp`
+    std07 = [x for x in mod['sites'] if x.get('target', '').startswith('core_std_')]
+    assert len(std07) == 10
+    voice07 = [x for x in mod['sites'] if x.get('target') in ('core_voice_free_cut', 'core_voice_free_len')]
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in voice07] == [
+        ('0x40102174', 'jsr', '8c34f4568e59ebc95fa5468e2b433c2f1a71973e9b734774fc9c7f3c8be371a5'), ('0x40102e10', 'jsr', '40aac3f95f8913dd855bc9c53c5f13fb6ff983e2e6cef949300f242bd3b2dd71')]
+    # and 0.7's 70 UI and system sites (ui.s, ui.c; tests/test_units.py, test_core_a4mk2_0_7_ui_sites),
+    # 0.8's ev_track_key: a jmp over the sequencer view's key-code call (trackkey.s), ev_voice_params over
+    # the audio interrupt's VCA and pan call and ev_sound_setup over SOUND SETUP's next-row read (sound.s),
+    # and the two +Drive sites: main()'s call at 0x401061e8 (ev_boot_drive) and FORMAT +DRIVE's
+    # constant load at 0x40074af6 (ev_drive_format)
+    track08 = [x for x in mod['sites'] if x.get('target') in ('core_track_key_site', 'core_voice_params_site',
+                                                                'core_sound_setup_site')]
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in track08] == [
+        ('0x400c8ba2', 'jmp', '71b362f711c113689fd93a04c5b98ab51fd214ec779f9ad2bcbfc646d856b734'),
+        ('0x40103af6', 'jmp', 'd92ee75213456a7a13d91048d49cefad7ddab6b7d7f7d56eaa61332f042ae107'),
+        ('0x400e62c8', 'jmp', 'e8aa53b410decd67ab49630aef6dbe1806885013588d331d080875d7458a7113')]
+    drive = [x for x in mod['sites'] if x.get('target') in ('core_boot_drive_site', 'core_drive_format_site')]
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in drive] == [('0x401061e8', 'jsr', '2191bc0fbd58c2ca2de73154f96cbeefab902e00e9e39d779cd79165b2d2a25c'),
+                                                                ('0x40074af6', 'jsr', 'd591193fb5976f498f1504a122969002d042106a574926de3451910bc943c49d')]
+    # and the sequencer's fired site (seq.s): a jsr over the tick loop's test of the trig queue,
+    # after trig_fire's record was copied there, whose flags the branch after it takes (the sequencer's exit is
+    # 0.7's std tick site, from which core_std_seq_tick calls core_seq_exit)
+    seq_sites = [x for x in mod['sites'] if x.get('target') == 'core_seq_fired_site']
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in seq_sites] == [
+        ('0x4007b0e8', 'jsr', '1728c70ebaf0b291875e7275910efd34aab1a1be81e6e14e4362aab0e7114e1c')]
+    assert hashlib.sha256(at(img, 0x4007b0ee, 2)).hexdigest() == '768c71d785bf6bbbf8c4d6af6582041f2659027140a962cd0c55b11eddfd5e3d'    # the branch after it
+    assert mod['collections'].get('ev_seq_step', {}).get('entry') == 4
+    assert mod['collections'].get('ev_transport', {}).get('entry') == 4
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'stdmidi.c')) as fh:
+        assert 'core_seq_exit();' in fh.read()
+    # and the 2 moments sites (moments.s): the kit setter's and the kit push's first instructions,
+    # each body resuming after the bytes its jmp displaced
+    moments_sites = [x for x in mod['sites'] if x.get('target') in ('core_kit_select', 'core_kit_push')]
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in moments_sites] == [
+        ('0x4016796c', 'jmp', '4c19178dfb486a9c50e587ee5887b8a68f78e9adda993a3adb7b91c39498ec6d'),
+        ('0x401012ec', 'jmp', '784938370f9fb15c505636fe4e5a94b5efb1d9276ec09a27de55484f781bed1f')]
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'moments.s')) as fh:
+        src = fh.read()
+    assert 'jmp     0x40167972' in src and 'jmp     0x401012f4' in src
+    # and ev_live_rec's 3 sites (ui.s): live record's pattern writes (the played note, the step's
+    # value, the live p-lock), each a jmp over the method's first 8 bytes, its body resuming past them
+    # (tests/test_units.py, test_core_a4mk2_0_7_ui_sites)
+    live_sites = [x for x in mod['sites'] if x.get('target', '').startswith('core_live_')]
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in live_sites] == [
+        ('0x400a954a', 'jmp', 'b5725950e3019ca68464d8f86145f60eb14e936167b7c9df85b7fdd3f1ddef87'),
+        ('0x400a6a08', 'jmp', '7357d174dda33b71e4d29ed8e6d02a3b96a76167a0a44ebe35f2a439406880f4'),
+        ('0x400a690c', 'jmp', '4c0570fc6ef0682508e64de2367e111c27f895b6b78e58c300b3f2e7b8010118')]
+    assert mod['collections'].get('ev_live_rec', {}).get('entry') == 4
+    # and core-a4mk2's four audio sites (audio.s): the dry mute at the track levels' volume load, the
+    # effects block's call (ev_fx_in, ev_fx_out) and the noise generator's two (ev_noise_fade, ev_noise_mix)
+    audio = [x for x in mod['sites'] if x.get('target') in ('core_dry_mute_site', 'core_fx_site',
+                                                              'core_noise_fade_site', 'core_noise_mix_site')]
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in audio] == [
+        ('0x400fa6c4', 'jmp', 'c8793e55b2c7814904664d2a8dbb102942ebad0f136e89ac8ed9608894fda28f'),
+        ('0x40103dda', 'keep2', '5c9c590e21b87701b529e5e723fb2005a885a9fb5cfd119dad6ea29ea98fc21a'),
+        ('0x400ffe04', 'jmp', 'd55b13612d182ef0959ac6d738f07b263d1bd09059d1ad1d76fb7235a847d138'),
+        ('0x400ffe50', 'jmp', 'c67d4c6618f227fb0f987c50bb947413f64b7356f40599c30a2533d390e5ce5a')]
+    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + len(drive) + len(seq_sites)         + len(moments_sites) + len(live_sites) + len(audio)
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
-    assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
-        [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
-    with open(os.path.join(ROOT, 'mods', 'core-a4', 'midi.s')) as fh:
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in midi] == \
+        [('0x4009ff56', 'jmp', 'ba7573adceae0b4d98e7fca043628b41525f9bf3ec50663e051c89a57a79cb35'), ('0x400a0b62', 'jmp', '61767a52ec7cf722a3778309a6df16a655ee5b19ddbd6f1d0d24986a897cd064')]
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'midi.s')) as fh:
         src = fh.read()
     assert 'jmp     0x4009ff5e' in src and 'jmp     0x400a0b6a' in src
     assert mod['collections'].get('core_lock_ccs') == 8
-    locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi]
+    new06 = [x for x in mod['sites'] if x.get('target') in ('st_proj_save', 'core_uirec_hook', 'core_range_hook',
+                                                           'core_graphic_hook')]
+    assert [(x['addr'], (sb(x, img), x['stock_sha256'])[1]) for x in new06] == [
+        ('0x400a771a', '3637a4a24bbaa1fed7a0d33212cb843b64576c085b1121fa1be80bca77fbc54f'),
+        ('0x400f6232', '5e7e9348e98e7718ea0935dab80aaad44b1dd7b6edfd3826c5ebb50acaefe751'),
+        ('0x40007798', 'd6c9f1f60272197a17511f496fc19dd21ddd7df5f1f1ec0cab7a16cad60b0609'),
+        ('0x4009eaaa', '4c0570fc6ef0682508e64de2367e111c27f895b6b78e58c300b3f2e7b8010118')]
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'looks.s')) as fh:
+        assert 'jmp     0x4009eab2' in fh.read()
+    ui = [x for x in mod['sites'] if x.get('target', '').startswith((
+        'core_boot_done_site', 'core_idle_start', 'core_crash_install', 'core_usb_site', 'core_key_leds_site',
+        'core_pset', 'core_pattern_', 'core_mute_site', 'core_knob_site', 'core_clip_', 'core_view_push_site',
+        'core_view_sweep_site', 'core_view_remove_site', 'core_view_replace_', 'core_level_site', 'core_mixer_site',
+        'core_analog_frame_site', 'core_modset_'))]
+    assert len(ui) == 70                # 0.7's UI and system sites (ui.s, ui.c)
+    modset = [x for x in ui if x['target'].startswith('core_modset_')]
+    assert len(modset) == 6 and all(x['op'] == 'jmp' and sb(x, img).startswith('4e56') for x in modset)
+    for x in ui:
+        assert x['len'] >= (4 if x['op'] == 'ptr' else 6), x
+        if x['op'] == 'keep2':
+            assert sb(x, img).startswith('4eb9'), x
+    first = [y for y in j['sites'] if y.get('target') not in ('core_boot_drive_site', 'core_drive_format_site')][:48]
+    locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in first} and x not in midi
+             and x not in new06 and x not in std07 and x not in voice07 and x not in ui
+             and x not in track08 and x not in drive and x not in seq_sites
+             and x not in moments_sites and x not in live_sites and x not in audio]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6
     locks = [x for x in locks if x not in dests]
-    assert len(locks) == 31 and len([x for x in locks if x['op'] == 'ptr']) == 12
+    assert len(locks) == 32 and len([x for x in locks if x['op'] == 'ptr']) == 12
     # the event accept is a jsr over stock's `lea 0x80006178,a0`, which core's
     # stub does before it returns (rows.s)
     x = [x for x in locks if x.get('target') == 'core_accept'][0]
-    assert x['op'] == 'jsr' and x['stock'] == '41f980006178', x
+    assert x['op'] == 'jsr' and (sb(x, img), x['stock_sha256'])[1] == '1952aca0a49462dd5f4afaf4a654e29c405b6dbcdf89426cd8a017fc30dd0622', x
     x = [x for x in mod['sites'] if x.get('target') == 'core_finish_drain'][0]
-    assert x['op'] == 'jsr' and x['stock'] == '46fc27004eb9' + d['FINISH_DRAIN'][2:], x
-    assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 28
+    assert x['op'] == 'jsr' and x['len'] == 10 and sb(x, img).endswith(d['FINISH_DRAIN'][2:].lower().rjust(8, '0')), x
+    assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 29
 
 
-def test_core_a4_store_bodies():
+def test_core_a4mk2_store_bodies():
     """store.s: each jmp site's displaced instructions, then a jump back to
     the site plus the bytes it displaced (8 for each)."""
     import re
-    with open(os.path.join(ROOT, 'mods', 'core-a4', 'mod.json')) as fh:
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'mod.json')) as fh:
         sites = {x['target']: x for x in json.load(fh)['sites'] if x['op'] == 'jmp'}
-    with open(os.path.join(ROOT, 'mods', 'core-a4', 'store.s')) as fh:
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'store.s')) as fh:
         src = fh.read()
     bodies = re.findall(r'^(st_\w+)_body:\s*\|\s*(0x[0-9a-f]+).*?^\s+jmp\s+(0x[0-9a-f]+)', src, re.M | re.S)
-    assert len(bodies) == 14
+    assert len(bodies) == 15
     for name, addr, back in bodies:
         x = sites[name]
         assert int(x['addr'], 16) == int(addr, 16), name
-        assert int(back, 16) == int(addr, 16) + len(x['stock']) // 2 == int(addr, 16) + 8, name
+        assert int(back, 16) == int(addr, 16) + x['len'] == int(addr, 16) + 8, name
 
 
 def _disp16(img, lo, hi, d):
@@ -253,6 +364,67 @@ def test_the_bytes_mod_storage_uses_are_stocks_spare():
     for lo, n in ((0x4001141e, 0x34a), (0x40011054, 0x3ca)):
         code = at(img, lo, n)
         assert code.count(bytes.fromhex('beefbaba')) == 1 and bytes.fromhex('001f72d2') in code, hex(lo)
+
+
+def test_drive_loader_a4mk2_site_and_build():
+    """drive-loader-a4mk2's two sites, the /mods route at 0x40095ec8 (the resolver's guard set, after
+    stock's two handlers are added, as the Rytm's 0x400a005e) and the +Drive block writer's take
+    bound at 0x4001da16, and, with the cross compiler, a build
+    of core and the loader whose descriptor maps every site, the loader's too, and the A4's pre-link
+    ranges, and whose ev_boot_drive and ev_drive_format each call the loader."""
+    import shutil
+    import subprocess
+    import tempfile
+    from elekloader import desc
+    _r, _s, img = stock()
+    with open(os.path.join(ROOT, 'mods', 'drive-loader-a4mk2', 'mod.json')) as fh:
+        j = json.load(fh)
+    route, clamp = j['sites']
+    import hashlib
+    # the sites give their stock bytes by length and hash (the manifest holds none)
+    assert (route['addr'], route['len'], route['op'], route['target']) == ('0x40095ec8', 8, 'jsr', 'dl_route_site')
+    assert hashlib.sha256(at(img, 0x40095ec8, 8)).hexdigest() == route['stock_sha256']
+    # the +Drive block writer's take bound (README, "Uploads in more than one chunk"), given by
+    # length and hash: the conditional branch becomes an unconditional one to the same place
+    assert (clamp['addr'], clamp['len'], clamp['op'], clamp['kind']) == ('0x4001da16', 2, 'bytes', 'code')
+    was = at(img, 0x4001da16, 2)
+    assert hashlib.sha256(was).hexdigest() == clamp['stock_sha256']
+    assert bytes.fromhex(clamp['new']) == bytes([0x60]) + was[1:]
+    assert hashlib.sha256(at(img, 0x40095ed0, 4)).hexdigest() == \
+        '33d8a59f5abc7a2d24beae63293feee81fe9b16620106a871d5937d16a09ccf8'          # then the getter's movem and return
+    subs = {(x['event'], x['fn']) for x in j['subscribe']}
+    assert {('ev_boot_drive', 'dl_boot'), ('ev_drive_format', 'dl_format')} <= subs
+    cross = os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix'])
+    if not shutil.which(cross + 'gcc'):
+        raise Skip('no %sgcc' % cross)
+    with tempfile.TemporaryDirectory() as work:
+        mods = []
+        for m in ('core-a4mk2', 'drive-loader-a4mk2'):
+            out = os.path.join(work, m)
+            subprocess.run([sys.executable, '-m', 'elekloader.sdk.build', os.path.join(ROOT, 'mods', m),
+                            '--stock', SYX, '--out', out], check=True, capture_output=True, cwd=ROOT)
+            mods += [os.path.join(out, f) for f in os.listdir(out) if f.endswith('.elemod')]
+        syx_out = os.path.join(work, 't.syx')
+        args = [sys.executable, '-m', 'elekloader.patch', '--stock', SYX, '--out', syx_out, '--version', '0001',
+                '--lockfile', os.path.join(work, 'lock.json')]
+        for m in mods:
+            args += ['--mod', m]
+        subprocess.run(args, check=True, capture_output=True, cwd=ROOT)
+        with open(syx_out, 'rb') as fh:
+            image = desc._main_image(fh.read(), DEV.key)
+    found = desc.find(image)
+    assert len(found) == 1
+    d = desc.decode(image, found[0])
+    names = [m['name'] for m in d['modules']]
+    assert names == ['core', 'drive-loader']
+    sites = {(lo, hi, k, m) for lo, hi, k, m in d['sites']}
+    assert (0x40095ec8, 0x40095ed0, desc.SITE_SITE, 1) in sites
+    assert (0x4001da16, 0x4001da18, desc.SITE_SITE, 1) in sites
+    assert (0x401061e8, 0x401061ee, desc.SITE_SITE, 0) in sites and (0x40074af6, 0x40074afc, desc.SITE_SITE, 0) in sites
+    assert len(d['prelink']) == len(REL.prelink) == 164
+    assert d['flags'] & desc.F_STAGE_TOP
+    lo, hi = d['area'][1], d['area'][2]
+    assert hi == 0x47C00000 and lo % 0x1000 == 0
 
 
 def test_no_copy_of_the_bootstrap_in_the_main_os():
@@ -301,8 +473,8 @@ def test_every_flash_write_and_erase_in_the_os_is_known():
         assert refs, hex(routine)
         for r in refs:
             assert any(lo <= r < hi for lo, hi in known), (hex(routine), hex(r))
-    assert at(img, 0x4007da66, 6) == bytes.fromhex('267c00080000')        # a3 = 0x80000
-    assert at(img, 0x4011b008, 6) == bytes.fromhex('2f3c00040000')        # the bootstrap at 0x40000
+    assert hashlib.sha256(at(img, 0x4007da66, 6)).hexdigest() == '4b33e8bb6b8082d96980a4dd3b1bf5d43fb28f4dc4764fdb142e39a1f95eef4e'        # a3 = 0x80000
+    assert hashlib.sha256(at(img, 0x4011b008, 6)).hexdigest() == '037dfd3d3c2c02d05b013422de64bc14544ac4b7ebedb40d1a0dba242f3c0ddc'        # the bootstrap at 0x40000
 
 
 if __name__ == '__main__':

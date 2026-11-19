@@ -48,9 +48,10 @@ may ask for n of them with `"pool_ids": {"name": n}`: the linker gives each a st
 (store.pool_ids, kept in the lockfile), and a relocation to `__pool_<name>` with addend i (abs32 or
 abs16) is written as the i-th id, not as a sum.
 """
+import hashlib
 import struct
 
-from . import dsp, sharc, store, syx
+from . import desc, dsp, sharc, store, syx
 from .elemod import (ModError, sha, _int, _hex, common_checks, insn_check, overlaps, summarize,
                     parse_needs_core, parse_parts, parse_resources, parse_sites, parts_bytes,
                     resolve_target, format_of, version_key,
@@ -82,12 +83,68 @@ MAX_PAGES = 256                   # a mod's "pages": at most this many ids
 MAX_POOL_IDS = 4096               # an id pool's size, and a mod's "pool_ids" from one
 MAX_ALIGN = 4096                  # a section's alignment: a power of two up to this
 LINKER_SYMS = {'__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end',
-               '__bss_words', '__run_hash'}
+               '__bss_words', '__run_hash', desc.SYM}
+STD_SETS = ('std1',)              # what a mod's "events" names (ADAPTING.md, "Standard events (std1)")
+MAX_SPARE = 4096                  # a table's spare entries (a collection's "spare")
+# the tables a build descriptor gives no spare entries: the linker fills them, from storage and payloads
+NO_SPARE = (PAYLOADS,)
+# the tables the linker fills from storage that a build descriptor opens to the loader alone (desc.F_LOADER):
+# spare entries for the +Drive mods' fields, which a mod's own contributions may not take
+LOADER_ONLY = (store.IDS_TABLE, store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE, store.HANDLES_TABLE)
+# a table's spare entries in a build descriptor where its collection gives no "spare" (else desc.SPARE)
+DRIVE_SPARE = {'core_lock_params': 32, store.CODES_TABLE: 32, store.CCS_TABLE: 32, store.INITS_TABLE: 32,
+               store.HANDLES_TABLE: 32, store.IDS_TABLE: 1 + store.MAX_ANCESTORS}
+# a table's most entries, flashed and spare, where its collection gives no "max"
+DRIVE_MAX = {store.INITS_TABLE: store.MAX_INITS}
 HASH_SEED, HASH_MUL = 5381, 33    # __run_hash: h = seed; h = h * 33 + word (mod 2^32), per word
 
 
 def _align(v, a):
     return (v + a - 1) // a * a
+
+
+# ---- the order, layout and relocation every link uses (this linker's, and the +Drive twin's) --
+
+def by_id(mods):
+    """Mods in link order after the core: by id."""
+    return sorted(mods, key=lambda m: m.id)
+
+
+def entry_key(order, mod_id, index):
+    """A table entry's place: by order, then the mod's id, then its index in that mod."""
+    return (order, mod_id, index)
+
+
+def lay_out(mods, sec, at, base):
+    """Place each mod's `sec`, in the given order, from `at`, each at its alignment (at least 4):
+    base[(mod id, sec)] = its address. -> the address after the last."""
+    for m in mods:
+        if m.size(sec):
+            at = _align(at, max(4, m.sections[sec]['align']))
+            base[(m.id, sec)] = at
+            at += m.size(sec)
+    return at
+
+
+def put_reloc(buf, off, typ, value, p, where):
+    """Write a relocation's value into `buf` at `off`: `p` is the address of that byte."""
+    if typ == 'dsp24':                     # a DSP word, little-endian, as the payloads hold it
+        if not 0 <= value <= 0xFFFFFF:
+            raise ModError('%s: a DSP address out of range (0x%x)' % (where, value))
+        buf[off:off + 3] = bytes((value & 0xFF, (value >> 8) & 0xFF, value >> 16))
+    elif typ == 'abs32':
+        struct.pack_into('>I', buf, off, value & 0xFFFFFFFF)
+    elif typ == 'abs16':
+        if not -0x8000 <= value <= 0xFFFF:
+            raise ModError('%s: a 16-bit value out of range (%d)' % (where, value))
+        struct.pack_into('>H', buf, off, value & 0xFFFF)
+    elif typ == 'pc32':
+        struct.pack_into('>i', buf, off, value - p)
+    else:
+        d = value - p
+        if not -0x8000 <= d < 0x8000:
+            raise ModError('%s: a 16-bit PC-relative reference spans %d bytes' % (where, d))
+        struct.pack_into('>h', buf, off, d)
 
 
 def payload_id(mod_id):
@@ -123,7 +180,8 @@ class Mod2:
             raise ModError('%s: not a format-2 .elemod file' % name)
         extra = set(doc) - COMMON - {'sections', 'symbols', 'exports', 'imports', 'weak',
                                      'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc',
-                                     'sharc_raw', 'knobs', 'machine_knobs', 'pages', 'id_pools', 'pool_ids'}
+                                     'sharc_raw', 'knobs', 'machine_knobs', 'pages', 'id_pools', 'pool_ids',
+                                     'events', 'std'}
         if extra:
             raise ModError('%s: unknown fields %s' % (name, sorted(extra)))
         for k in ('id', 'version', 'target', 'sections'):
@@ -154,6 +212,9 @@ class Mod2:
             n = sum(len(p[1]) if p[0] == 'hex' else p[2] for p in parts)
             if n != _int(d.get('len', n), name):
                 raise ModError('%s %s: parts make %d bytes, not %s' % (name, sec, n, d.get('len')))
+            if sec == '.payload' and 'sha256' in d and all(p[0] == 'hex' for p in parts) \
+                    and hashlib.sha256(b''.join(p[1] for p in parts)).hexdigest() != str(d['sha256']).lower():
+                raise ModError('%s .payload: its bytes do not match its sha256' % name)
             self.sections[sec] = {'align': align, 'parts': parts, 'len': n}
         if 'sharc' not in doc:
             self.sharc = None
@@ -218,9 +279,20 @@ class Mod2:
             self._reloc_ok(sec, off, typ, tgt)
             self.relocs.append((sec, off, typ, tgt, _int(add, name)))
         self.sites = parse_sites(doc, name, self.dev, self.rel, relocs=True)
-        self.collections, self.dsp_tables = {}, {}
+        self.collections, self.dsp_tables, self.spare, self.render = {}, {}, {}, set()
+        self.cap = {}                           # a table's most entries, flashed and spare ("max")
         for c, d in doc.get('collections', {}).items():
             e = _int(d.get('entry'), name)
+            if 'spare' in d:                    # for a build descriptor: room for more entries
+                self.spare[c] = _int(d['spare'], name)
+                if not 0 <= self.spare[c] <= MAX_SPARE:
+                    raise ModError('%s: table %s spare %d (0 to %d)' % (name, c, self.spare[c], MAX_SPARE))
+            if 'max' in d:                      # the spare entries stop at this many in all
+                self.cap[c] = _int(d['max'], name)
+                if not 1 <= self.cap[c] <= MAX_SPARE:
+                    raise ModError('%s: table %s max %d (1 to %d)' % (name, c, self.cap[c], MAX_SPARE))
+            if d.get('render'):
+                self.render.add(c)
             space = d.get('space')
             if space is None:
                 if e <= 0 or e % 4:
@@ -235,6 +307,17 @@ class Mod2:
                     raise ModError('%s: DSP table %s is not whole 24-bit words' % (name, c))
                 self.dsp_tables[c] = (tag, head, end)
             self.collections[c] = e
+        self.events = doc.get('events')         # "std1": its subscriptions are standard events
+        if self.events is not None and self.events not in STD_SETS:
+            raise ModError('%s: "events" is %r; the standard event set is %s'
+                           % (name, self.events, ' or '.join('"%s"' % x for x in STD_SETS)))
+        std = doc.get('std', {})                # a core's map: standard event -> its own table
+        if not isinstance(std, dict) or not all(isinstance(k, str) and isinstance(v, str)
+                                                for k, v in std.items()):
+            raise ModError('%s: "std" maps each standard event\'s name to a table of the core' % name)
+        if std and '.boot' not in self.sections:
+            raise ModError('%s: a "std" map is a core\'s (the mod with .boot)' % name)
+        self.std = dict(std)
         self.contribute = []
         for i, c in enumerate(doc.get('contribute', [])):
             what = '%s contribution %d' % (name, i)
@@ -246,9 +329,14 @@ class Mod2:
                 if typ not in RTYPES or off < 0 or off + RSIZE[typ] > len(data):
                     raise ModError('%s: bad relocation %r' % (what, r))
                 rel.append((off, typ, tgt, _int(add, what)))
-            claims = [(_int(a, what), _int(b, what)) for a, b in c.get('claims', [])]
+            claims = [(_int(a, what), _int(b, what)) for a, b in c.get('claims') or []]
             self.contribute.append({'to': str(c['to']), 'order': _int(c.get('order', 50), what),
                                     'data': data, 'relocs': rel, 'claims': claims, 'i': i})
+            if c.get('std') is not None:        # a subscription to a standard event: the core's
+                if c['std'] is not True or self.events is None:   # map gives its table (std_tables)
+                    raise ModError('%s: a standard event\'s subscription ("std": true) needs the '
+                                   'mod\'s "events"' % what)
+                self.contribute[-1]['event'] = str(c['to'])
         try:
             self.storage = store.parse_decls(doc)
             self.locks = store.parse_locks(doc)
@@ -515,8 +603,40 @@ def pool_refs(m):
     return out
 
 
+def std_tables(mods):
+    """Each standard event a std mod subscribes to, to the table the core's "std" map names for it
+    (in place: the contribution's "to"; its "event" keeps the name). -> [problems]."""
+    cores = [m for m in mods if '.boot' in m.sections]
+    core = cores[0] if len(cores) == 1 else None
+    bad = []
+    if core:
+        declared = {c for m in mods for c in m.collections}
+        for ev, t in sorted(core.std.items()):
+            if t not in declared:
+                bad.append('%s: its std map sends %s to %s, which no given mod declares'
+                           % (core.label(), ev, t))
+    for m in mods:
+        missing = []
+        for c in m.contribute:
+            ev = c.get('event')
+            if ev is None:
+                continue
+            c['unmapped'] = not (core and ev in core.std)
+            c['to'] = ev if c['unmapped'] else core.std[ev]
+            if c['unmapped'] and ev not in missing:
+                missing.append(ev)
+        if missing and core and not core.std:
+            bad.append('%s subscribes to %s events, and %s maps none'
+                       % (m.label(), m.events, core.label()))
+        elif missing and core:
+            bad.append('%s subscribes to %s, which %s does not map' % (m.label(), ', '.join(missing),
+                                                                        core.label()))
+    return bad
+
+
 def check(mods, image):
     """Static checks that need no layout. -> [problems]."""
+    std_bad = std_tables(mods)
     spans = []
     for m in mods:
         for s in m.sites:
@@ -538,7 +658,20 @@ def check(mods, image):
     bad = common_checks(mods, image, spans)
     if bad and bad[0].startswith('the mods are for different firmware'):
         return bad
+    bad += std_bad
     dev = mods[0].dev
+    for m in mods:
+        refs = [('symbol ' + nm, v) for nm, (sec, v) in m.symbols.items() if sec == 'abs']
+        refs += [('a relocation in ' + sec, add) for sec, _o, _t, tgt, add in m.relocs if tgt == 'abs']
+        refs += [('site 0x%08x' % s['addr'], r[3]) for s in m.sites for r in s.get('relocs', ())
+                 if r[2] == 'abs']
+        refs += [('its %s entry' % c['to'], r[3]) for c in m.contribute for r in c['relocs']
+                 if r[2] == 'abs']
+        for what, v in refs:
+            for lo, hi, why in dev.no_link:
+                if lo <= v < hi:
+                    bad.append('%s: %s links to 0x%08x, inside 0x%08x-0x%08x, %s: no mod may link to '
+                               'it on the %s' % (m.label(), what, v, lo, hi, why, dev.name))
     if not dev.linkable():
         return ['the %s has no linkable (format-2) mods yet: only whole builds (format 1) '
                 'can be used on it' % dev.name]
@@ -609,6 +742,9 @@ def check(mods, image):
             if x in owner:
                 bad.append('%s and %s both export %s' % (owner[x].label(), m.label(), x))
             owner[x] = m
+    if desc.SYM in owner:
+        bad.append('%s exports %s, the name of the build descriptor the linker writes'
+                   % (owner[desc.SYM].label(), desc.SYM))
     tables = {}
     for m in mods:
         for c, e in m.collections.items():
@@ -680,6 +816,8 @@ def check(mods, image):
                 continue
             bad.append('%s imports %s, which no given mod exports' % (m.label(), x))
         for c in m.contribute:
+            if c.get('unmapped'):               # refused above (std_tables)
+                continue
             if c['to'] not in tables:
                 bad.append('%s adds to table %s, which no given mod declares' % (m.label(), c['to']))
             elif len(c['data']) % tables[c['to']][1]:
@@ -724,6 +862,7 @@ def id_problems(mods, image, knobs=None):
     whose ids are mods' own below them, and no id from there up taken twice. knobs: {mod id: its
     first knob id} (link), to count the entries relocated to __knobs too. -> [problems]."""
     own, (lo, hi, what), kinds = mods[0].dev.param_ids
+    dk = mods[0].dev.drive_knobs
     own_only = {t for t, o in kinds if o}
     taken, bad = [], []
     for m in mods:
@@ -731,6 +870,9 @@ def id_problems(mods, image, knobs=None):
             if a <= hi and lo <= b:
                 bad.append('%s: its %s entry takes ids %d..%d, and %d..%d are %s; a mod\'s own '
                            'ids start at %d' % (m.label(), table, a, b, lo, hi, what, own))
+            elif dk and a <= dk[1] and dk[0] <= b:
+                bad.append('%s: its %s entry takes ids %d..%d, and %d..%d are the +Drive mods\' knob '
+                           'ids' % (m.label(), table, a, b, dk[0], dk[1]))
             elif table in own_only and a < own:
                 bad.append('%s: its %s entry takes ids %d..%d; that table\'s ids start at %d'
                            % (m.label(), table, a, b, own))
@@ -833,15 +975,16 @@ class Linked:
     pass
 
 
-def link(mods, image, lock=None, *, sharc_stream=None):
+def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
     """-> Linked: .image (the patched main OS), .map ({name: address}),
     .layout, .tables ({name: (address, count, entry)}), .order, and for a core
     with mod storage .store (the new lockfile) and .store_notes; .knobs ({mod id:
     [first id, count]}) and .knob_notes for the mods' "knobs"; .machines ({mod id: [slot,
     ...]}) and .machine_notes for their "machine_knobs"; .pool_ids ({pool: {mod id: [id, ...]}})
     and .pool_notes for their "pool_ids"; .pages ({mod id: [first id, count]}). lock: the
-    build's lockfile, or None for a new one (elekloader/store.py). Raises
-    ModError."""
+    build's lockfile, or None for a new one (elekloader/store.py); drive: what
+    the unit's +Drive keeps (drive_store.reserve), as store.allocate takes it.
+    Raises ModError."""
     if not mods:
         raise ModError('no mods')
     dev, rel = mods[0].dev, mods[0].rel
@@ -854,7 +997,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     core = [m for m in mods if '.boot' in m.sections][0]
     ddr_base, ddr_end = dev.ddr_for(core.version)
     fast_base, fast_end = dev.sram_code
-    order = [core] + sorted((m for m in mods if m is not core), key=lambda m: m.id)
+    order = [core] + by_id(m for m in mods if m is not core)
     kernel_mods, sharc_mods = sharc_split(order)
     dsp_stream = dsp_stored = None
     if kernel_mods or sharc_mods:
@@ -975,7 +1118,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             users = sorted({k[0] for k in handles})
             raise ModError('%s mark%s storage fields as handles, which %s does not keep (no table %s)'
                            % (', '.join(users), 's' if len(users) == 1 else '', core.label(), store.HANDLES_TABLE))
-        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs)
+        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs, drive)
         store_syms, ids = store.symbols(new_lock, dev.key)
         store_syms.setdefault(store.LOCK_DST, 0)    # not placed: no LFO field
         store_syms.setdefault(store.FX_LOCK_DST, 0)
@@ -984,13 +1127,13 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                             (store.HANDLES_TABLE, lambda l: store.handle_entries(l, handles))):
             if table in tables:
                 for i, data in enumerate(made(new_lock)):
-                    entries[table].append((-1, '', i, core, {'data': data, 'relocs': []}))
+                    entries[table].append((-1, '', i, core, {'data': data, 'relocs': [], 'linker': True}))
         taken = {nm for m in order for nm in m.exports}
         for nm in store_syms:
             if nm in taken or nm in LINKER_SYMS:
                 raise ModError('the storage field %s has the name of a symbol a mod exports' % nm)
         for i, data in enumerate(ids):
-            entries[store.IDS_TABLE].append((-1, '', i, core, {'data': data, 'relocs': []}))
+            entries[store.IDS_TABLE].append((-1, '', i, core, {'data': data, 'relocs': [], 'linker': True}))
     # knob ids: each "knobs" mod's run, past the ids mods' entries name themselves
     knob_base, knob_notes = {}, []
     if dev.param_ids and (any(m.knobs for m in order) or (new_lock or {}).get('knobs')
@@ -998,7 +1141,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         fixed = [(a, b) for m in order for _t, a, b in m.id_ranges(image)]
         held = new_lock if new_lock is not None else {}
         knob_base, knob_notes = store.knobs(held, {m.id: m.knobs for m in order if m.knobs},
-                                            dev.param_ids[0], fixed)
+                                            dev.param_ids[0], fixed,
+                                            dev.drive_knobs[0] - 1 if dev.drive_knobs else store.KNOB_TOP)
         bad = id_problems(order, image, knob_base)
         if bad:                                # store.knobs keeps clear of them: a self-check
             raise ModError('the linked mods break a rule:\n  ' + '\n  '.join(bad))
@@ -1052,9 +1196,28 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             ids[i] = m.id
             entries[PAYLOADS].append((-1, m.id, 0, m, {
                 'data': struct.pack('>III', i, 0, m.size('.payload')),
-                'relocs': [(4, 'abs32', 'sec:.payload', 0)]}))
+                'relocs': [(4, 'abs32', 'sec:.payload', 0)], 'linker': True}))
     for c in entries:
-        entries[c].sort(key=lambda e: e[:3])
+        entries[c].sort(key=lambda e: entry_key(*e[:3]))
+    dsp_tables = {c: t for m in order for c, t in m.dsp_tables.items()}
+
+    # a build descriptor, for a mod that imports it: spare entries in the tables more mods may join
+    with_desc = any(desc.SYM in m.imports for m in order)
+    spare, fixed = {}, set(NO_SPARE) | {dev.fast_table} | set(dsp_tables)
+    if with_desc:
+        for m in order:
+            for c in m.contribute:
+                if not desc.ORDER_MIN <= c['order'] < desc.LINKER_ORDER:
+                    raise ModError('%s: its entry for %s has the order %d; with a build descriptor an '
+                                   'order is %d to %d' % (m.label(), c['to'], c['order'], desc.ORDER_MIN,
+                                                          desc.LINKER_ORDER - 1))
+        spare = {c: 0 if c in fixed else tables[c][0].spare.get(c, DRIVE_SPARE.get(c, desc.SPARE))
+                 for c in tables}
+        for c in tables:                        # a "max": the flashed entries and the spare ones fit it
+            cap = tables[c][0].cap.get(c, DRIVE_MAX.get(c))
+            if cap is not None and c in entries:
+                n = sum(len(e[4]['data']) for e in entries[c]) // tables[c][1]
+                spare[c] = max(0, min(spare[c], cap - n))
 
     def table_len(c):
         n = sum(len(e[4]['data']) for e in entries[c])
@@ -1062,24 +1225,17 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             return len(dsp_tables[c][1]) + n + len(dsp_tables[c][2])
         if c == dev.fast_table:
             n += FAST_ENTRY * len(fast_mods)
-        return n + tables[c][1]                # the zero entry
+        return n + tables[c][1] * (1 + spare.get(c, 0))   # the zero entry, and any spare ones
 
     def table_count(c):
         n = sum(len(e[4]['data']) for e in entries[c])
-        return n // tables[c][1] if c in dsp_tables else table_len(c) // tables[c][1] - 1
-
-    dsp_tables = {c: t for m in order for c, t in m.dsp_tables.items()}
+        return n // tables[c][1] if c in dsp_tables else table_len(c) // tables[c][1] - 1 - spare.get(c, 0)
 
     # layout
     base = {}                                  # (mod id, section) -> address
     boot_len = core.size('.boot')
     base[(core.id, '.boot')] = image_end
-    at = ddr_base
-    for m in order:
-        if m.size('.run'):
-            at = _align(at, max(4, m.sections['.run']['align']))
-            base[(m.id, '.run')] = at
-            at += m.size('.run')
+    at = lay_out(order, '.run', ddr_base, base)
     tab_at = {}
     for c in sorted(tables):
         if c in dsp_tables:
@@ -1087,6 +1243,126 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         at = _align(at, 4)
         tab_at[c] = at
         at += table_len(c)
+    index = {m.id: i for i, m in enumerate(order)}
+    trailer_len = len(store.trailer(new_lock)) if new_lock is not None else 0
+
+    def drive_area(ram_end):
+        """The +Drive mods' area a descriptor names: what the flashed build leaves of the core's
+        linker area, from its RAM end rounded up to the device's drive_align (docs/FORMAT.md,
+        "+Drive mods"); (0, 0) on a device without one."""
+        if not dev.drive_align:
+            return (0, 0)
+        lo = _align(ram_end, dev.drive_align)
+        return (min(lo, ddr_end), ddr_end)
+
+    std_map = any(desc.STD_MAP in m.exports for m in order)   # the loader maps std1 at boot
+    claims_map = any(desc.CLAIMS in m.exports for m in order)  # the boot linker takes claims
+    # the loader copies +Drive mods' stock parts through the shadow (A4: dlink.c stock_part); an export,
+    # not its value, so the sizing pass carries the shadow too
+    stock_shadow = any(desc.STOCK_SHADOW in m.exports for m in order)
+    # the loader gives +Drive mods knob ids (F_KNOBS): the flashed ids go into claims of kind 4
+    drive_knobs = bool(dev.drive_knobs and dev.param_ids and any(desc.KNOBS in m.exports for m in order))
+
+    def desc_fields(where):
+        """The descriptor's fields; `where` (a function of the layout) gives the addresses, or None:
+        all 0, to size the block."""
+        w = where or (lambda kind, *a: (0, 0) if kind == 'run_image' else 0)
+        mods = [{'name': m.id, 'version': m.version, 'flags': 1 if m.sites else 0,
+                 'kind': desc.KIND_CORE if m is core else desc.KIND_LOADER if desc.SYM in m.imports
+                 else desc.KIND_FLASHED,
+                 'exports': sorted((nm, w('sym', m, nm)) for nm in m.exports)} for m in order]
+        tabs = []
+        for c in sorted(tables):
+            keys = []
+            for o, _id, _i, m, e in entries[c]:
+                k = (desc.LINKER_ORDER if e.get('linker') else o, index[m.id])
+                keys += [k] * (len(e['data']) // tables[c][1])
+            if c == dev.fast_table:
+                keys += [(desc.LINKER_ORDER, index[m.id]) for m in fast_mods]
+            n = table_count(c)
+            tabs.append({'name': c, 'address': w('table', c), 'entry': tables[c][1], 'count': n,
+                         'capacity': n + spare[c], 'entries': keys,
+                         'flags': (0 if c in fixed else desc.F_LOADER if c in LOADER_ONLY else desc.F_MORE)
+                         | (desc.F_RENDER if c in tables[c][0].render else 0)
+                         | (desc.F_DSP if c in dsp_tables else 0)})
+        scopes = []
+        if new_lock is not None:
+            room = store.capacity(dev.key, new_lock['split'], core.version)
+            scopes = [(s, room[s], new_lock['next'][s], new_lock['generation'][s]) for s in store.SCOPES]
+        # A loader that keeps its own area (TELOS on the Octatrack) exports it as drive_area and
+        # drive_area_size; the descriptor then names it, and carries the stock shadow: the stock
+        # bytes of every range the flashed build writes, for the stock parts a mod linked on the
+        # unit copies (desc.py, "shadow").
+        own_area = any(desc.AREA_SYMS[0] in m.exports for m in order)
+        if own_area and dev.reserve:
+            # the reserve's public names (arena_base) are the linker's, defined for the core:
+            # a mod linked on the unit imports them as it would here
+            extra = sorted((nm, w('glob', nm)) for nm in dev.reserve[1] if not nm.startswith('__'))
+            mods[0]['exports'] = sorted(mods[0]['exports'] + [x for x in extra if x[0] not in core.exports])
+        if own_area:
+            lo = w('glob', desc.AREA_SYMS[0])
+            area = (lo, lo + w('glob', desc.AREA_SYMS[1]))
+        else:
+            area = drive_area(w('bss_end'))
+        return {'family': dev.data_family, 'device': dev.data_device, 'release': rel.data_release,
+                'device_key': dev.key,
+                'os': rel.version, 'modules': mods, 'tables': tabs,
+                'claims': [(desc.CLAIM_NAME, index[m.id], nm) for m in order for nm in m.names]
+                + [(desc.CLAIM_REGION, index[m.id], '%#x %#x %s' % (g['lo'], g['hi'], g['name']))
+                   for m in order for g in m.regions]
+                + [(desc.CLAIM_STD, index[core.id], '%s %s' % x) for x in sorted(core.std.items())
+                   if std_map]
+                + ([(desc.CLAIM_KNOBS, index[m.id], '%#x %#x' % ab) for m in order
+                    for ab in sorted({(a, b) for _t, a, b in m.id_ranges(image, knob_base.get(m.id))}
+                                     | ({(knob_base[m.id], knob_base[m.id] + m.knobs - 1)}
+                                        if m.id in knob_base else set()))]
+                   if drive_knobs else []),
+                'area': (w('bss_end'),) + area
+                         + (w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])),
+                'storage': {'trailer': (w('trailer'), trailer_len), 'scopes': scopes},
+                'flags': (desc.F_STAGE_TOP if w('glob', desc.STAGE_TOP) else 0)
+                         | (desc.F_PAYLOAD_SKIP if w('glob', desc.PAYLOAD_SKIP) else 0)
+                         | (desc.F_ABS16 if w('glob', desc.ABS16) else 0)
+                         | (desc.F_STD_MAP if std_map else 0)
+                         | (desc.F_COLLECTIONS if w('glob', desc.COLLECTIONS) else 0)
+                         | (desc.F_CLAIMS if claims_map else 0)
+                         | (desc.F_STOCK_SHADOW if stock_shadow else 0)
+                         | (desc.F_KNOBS if drive_knobs else 0),
+                'sites': site_map(w), 'prelink': [(lo, hi, k) for lo, hi, k, _what in rel.prelink],
+                # the stock bytes of every range the flashed build writes, where the profile asks for
+                # them (drive_shadow) or the loader does (drive_stock_shadow): a loader on the unit
+                # copies a mod's stock parts from the running OS, and lays these over it
+                'shadow': sorted((s['addr'], bytes(image[s['addr'] - dev.main_load:
+                                                         s['addr'] - dev.main_load + s['len']]))
+                                 for m in order for s in m.sites
+                                 if dev.main_load <= s['addr']
+                                 and s['addr'] + s['len'] <= dev.main_load + len(image))
+                if dev.drive_shadow or stock_shadow or own_area else []}
+
+    def site_map(w):
+        """The flashed main OS's taken byte ranges, for the loader's conflict checks (ABI 1.2): each
+        site and copied block (by its module), the device's protected and kept ranges, and the
+        appended code: the boot copier, the RAM image and the lockfile's trailer; with F_CLAIMS,
+        each contribution's claims (by its module)."""
+        out = [(s['addr'], s['addr'] + s['len'], desc.SITE_SITE, index[m.id])
+               for m in order for s in m.sites if not sharc_site(rel, s['addr'])]
+        out += [(lo, hi, desc.SITE_COPIED, index[m.id]) for m in order for lo, hi, _to in m.copied]
+        out += [(lo, hi, desc.SITE_DEVICE, desc.NO_MODULE) for lo, hi, _why in tuple(dev.protected) + tuple(dev.keep)]
+        if claims_map:
+            out += [(a, b, desc.SITE_CLAIM, index[m.id]) for m in order for c in m.contribute for a, b in c['claims']]
+        boot = w('boot')
+        out.append((boot, boot + boot_len, desc.SITE_BOOT, index[core.id]))
+        run, run_len = w('run_image')
+        out.append((run, run + run_len, desc.SITE_RUN, desc.NO_MODULE))
+        if trailer_len:
+            t = w('trailer')
+            out.append((t, t + trailer_len, desc.SITE_TRAILER, desc.NO_MODULE))
+        return sorted(out)
+    desc_at = desc_len = None
+    if with_desc:
+        desc_len = len(desc.encode(desc_fields(None)))
+        desc_at = at = _align(at, 4)
+        at += desc_len
     fast_at, fload = fast_base, {}
     for m in fast_mods:
         fast_at = _align(fast_at, max(4, m.sections['.fast']['align']))
@@ -1103,13 +1379,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         at += m.size('.payload')
     pay_end = at
     run_end = _align(at, 4)
-    at = run_end
-    for m in order:
-        if m.size('.bss'):
-            at = _align(at, max(4, m.sections['.bss']['align']))
-            base[(m.id, '.bss')] = at
-            at += m.size('.bss')
-    bss_end = _align(at, 4)
+    bss_end = _align(lay_out(order, '.bss', run_end, base), 4)
     if pay_mods and bss_end > ddr_end:
         raise ModError('the payloads (%d bytes) and the mods need RAM to 0x%08x, past 0x%08x (%d bytes over): '
                        'the area has room for %d bytes of payload'
@@ -1165,6 +1435,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         if c in dsp_tables:
             dspsym.add((None, c))
     glob.update(store_syms)
+    if with_desc:
+        glob[desc.SYM] = desc_at
     glob.update({'__run_load': run_load, '__run_start': ddr_base,
                  '__run_words': (run_end - ddr_base) // 4, '__bss_start': run_end,
                  '__bss_end': bss_end, '__bss_words': (bss_end - run_end) // 4})
@@ -1216,31 +1488,12 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                 m.label(), where, 'DSP' if typ == 'dsp24' else 'ColdFire',
                 'DSP' if d else 'ColdFire'))
         if tgt == 'sym:' + MACHINES and m.id in machine_slots:    # the add-th machine's slot, not a sum
-            put(buf, off, typ, machine_slots[m.id][add], p, where)
+            put_reloc(buf, off, typ, machine_slots[m.id][add], p, where)
             return
         if tgt.startswith('sym:' + POOL) and m.id in pool_map.get(tgt[4 + len(POOL):], {}):
-            put(buf, off, typ, pool_map[tgt[4 + len(POOL):]][m.id][add], p, where)   # the add-th id
+            put_reloc(buf, off, typ, pool_map[tgt[4 + len(POOL):]][m.id][add], p, where)   # the add-th id
             return
-        put(buf, off, typ, resolve(m, tgt, where) + add, p, where)
-
-    def put(buf, off, typ, value, p, where):
-        if typ == 'dsp24':                     # a DSP word, little-endian, as the payloads hold it
-            if not 0 <= value <= 0xFFFFFF:
-                raise ModError('%s: a DSP address out of range (0x%x)' % (where, value))
-            buf[off:off + 3] = bytes((value & 0xFF, (value >> 8) & 0xFF, value >> 16))
-        elif typ == 'abs32':
-            struct.pack_into('>I', buf, off, value & 0xFFFFFFFF)
-        elif typ == 'abs16':
-            if not -0x8000 <= value <= 0xFFFF:
-                raise ModError('%s: a 16-bit value out of range (%d)' % (where, value))
-            struct.pack_into('>H', buf, off, value & 0xFFFF)
-        elif typ == 'pc32':
-            struct.pack_into('>i', buf, off, value - p)
-        else:
-            d = value - p
-            if not -0x8000 <= d < 0x8000:
-                raise ModError('%s: a 16-bit PC-relative reference spans %d bytes' % (where, d))
-            struct.pack_into('>h', buf, off, d)
+        put_reloc(buf, off, typ, resolve(m, tgt, where) + add, p, where)
 
     content, boot_relocs = {}, []
     for m in order:
@@ -1286,6 +1539,24 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             continue
         o = tab_at[c] - ddr_base
         ddr[o:o + len(tab[c])] = tab[c]
+    if with_desc:
+        def where(kind, *a):
+            if kind == 'sym':
+                return addr[(a[0].id, a[1])]
+            if kind == 'table':
+                return tab_at[a[0]]
+            if kind == 'glob':
+                return glob.get(a[0], 0)
+            if kind == 'bss_end':
+                return bss_end
+            if kind == 'boot':
+                return image_end
+            if kind == 'run_image':                # the RAM image's copy in the flashed image
+                return (run_load, len(ddr))
+            return dev.main_load + len(image) + run_load - image_end + len(ddr)   # the trailer
+        block = desc.encode(desc_fields(where))
+        assert len(block) == desc_len
+        ddr[desc_at - ddr_base:desc_at - ddr_base + desc_len] = block
     glob['__run_hash'] = run_hash(ddr)
     for m, off, typ, tgt, add in boot_relocs:
         place(m, content[(m.id, '.boot')], off, typ, tgt, add, base[(m.id, '.boot')] + off,
@@ -1387,6 +1658,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             if payload['entries'] is not None:
                 info.update(core=list(core.sharc['owner']), hook=rel.sharc['hook'][0])
     out.store, out.store_notes = new_lock, store_notes
+    if with_desc:
+        out.layout['desc'] = [desc_at, desc_at + desc_len]
     out.knobs = {mid: [b, next(m.knobs for m in order if m.id == mid)] for mid, b in sorted(knob_base.items())}
     out.knob_notes = knob_notes
     for mid, b in knob_base.items():

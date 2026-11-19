@@ -42,7 +42,8 @@ export function members(raw: Uint8Array): ZipMember[] {
 }
 
 let CRC_TABLE: Uint32Array | null = null
-function crc32(d: Uint8Array): number {
+/** zlib's CRC-32: zlib.crc32(d, start). */
+export function crc32(d: Uint8Array, start = 0): number {
   if (!CRC_TABLE) {
     CRC_TABLE = new Uint32Array(256)
     for (let n = 0; n < 256; n++) {
@@ -51,7 +52,7 @@ function crc32(d: Uint8Array): number {
       CRC_TABLE[n] = c >>> 0
     }
   }
-  let c = 0xffffffff
+  let c = (start ^ 0xffffffff) >>> 0
   for (let i = 0; i < d.length; i++) c = CRC_TABLE[(c ^ d[i]) & 0xff] ^ (c >>> 8)
   return (c ^ 0xffffffff) >>> 0
 }

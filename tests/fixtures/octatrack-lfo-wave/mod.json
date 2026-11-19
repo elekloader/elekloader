@@ -1,0 +1,14 @@
+{
+ "id": "lfo-wave-probe", "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "LFO wave probe", "category": "Test", "author": "irpina",
+ "description": "A probe of core-ot 0.28's ot_lfo_waves: two waves, PLS (a 25 % pulse) and HALF (a constant half up), counting their calls with their last record, phase and restart.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["probe.c"],
+ "contribute": [
+  {"to": "ot_lfo_waves", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:lw_pls", 0]]},
+  {"to": "ot_lfo_waves", "order": 60, "data": "00000000", "relocs": [[0, "abs32", "sym:lw_half", 0]]}
+ ],
+ "requires": ["core"],
+ "resources": {"core": "0.28"}
+}

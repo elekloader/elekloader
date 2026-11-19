@@ -178,6 +178,7 @@ class DispatchTests(unittest.TestCase):
         cls.docs = {
             'sdk-9': kernel_artifact([PROBE], work, [('sdk', 9, 'probe_sdk.', KNOBS)]),
             'sdk-40': kernel_artifact([PROBE], work, [('sdk', 40, 'probe_sdk.', [])]),
+            'sdk-2': kernel_artifact([PROBE], work, [('sdk', 12, 'probe_sdk.', [(5, 6), (-12, 12)])]),
             'sdk-15': kernel_artifact([PROBE], work, [('sdk', 15, 'probe_sdk.', KNOBS + [(-50, 50), (0, 1), (1000, 1001),
                                                                                   (-2147483648, -2147483647),
                                                                                   (0, 2147483647), (7, 100)])]),
@@ -200,6 +201,10 @@ class DispatchTests(unittest.TestCase):
     def params_at(self, m):
         return m.placed['machines-dn2']['data'][0] + 4 * 1208
 
+    def knobs_at(self, m, slot):
+        """The slot's SDK knob values: dispatch.s's knobs, 32 words a slot, the values its second half."""
+        return m.placed['machines-dn2']['data'][0] + 4 * (3548 + 32 * slot + 16)
+
     def state(self, m, mod, slot, each):
         mid = self.docs[mod]['kernels'][0]['id']
         table = 'filter' if self.docs[mod]['kernels'][0]['kind'] == 'mk2-filter' else 'voice'
@@ -219,7 +224,7 @@ class DispatchTests(unittest.TestCase):
             m.halfword(PARAMS + PARAM_STEP * slot + k, raw)
         state = self.state(m, 'sdk-9', slot, 256)
         self.assertEqual(m.block('voice', slot)[:2], [1.0, 0.25])
-        self.assertEqual(m.probe('sdk-9', 0, 6), [self.params_at(m), 5, 0, 0x3c8000, 100, state])
+        self.assertEqual(m.probe('sdk-9', 0, 6), [self.knobs_at(m, slot), 5, 0, 0x3c8000, 100, state])
         self.assertEqual(m.probe('sdk-9', 7, 3), [BUFFERS + 128 * slot, 0, 1])   # R8, the zeroed state, one call
         self.assertEqual([v - 2 ** 32 if v >= 2 ** 31 else v for v in m.probe('sdk-9', 16, 9)],
                          [sdk_alpha_map(lo, hi, raw) for (lo, hi), raw in zip(KNOBS, raws)])
@@ -299,7 +304,7 @@ class DispatchTests(unittest.TestCase):
         rng = random.Random(7)
         knobs = KNOBS + [(-50, 50), (0, 1), (1000, 1001), (-2147483648, -2147483647), (0, 2147483647), (100, 7)]
         knobs[-1] = (7, 100)
-        m = self.machine('sdk-15')
+        m = self.machine('sdk-15', 'sdk-2')
         m.halfword(TYPE['voice'] + 0, 15)
         for block in range(12):
             raws = [rng.choice((0, 1, 16255, 16256, 32511, 32512, 32513, 65535)) if block < 4 else rng.randrange(65536)
@@ -309,6 +314,15 @@ class DispatchTests(unittest.TestCase):
             m.block('voice', 0)
             self.assertEqual([v - 2 ** 32 if v >= 2 ** 31 else v for v in m.probe('sdk-15', 16, 15)],
                              [sdk_alpha_map(lo, hi, raw) for (lo, hi), raw in zip(knobs, raws)])
+            if block % 4 == 3:                      # the same halfwords again: every knob keeps its value
+                m.block('voice', 0)
+                self.assertEqual([v - 2 ** 32 if v >= 2 ** 31 else v for v in m.probe('sdk-15', 16, 15)],
+                                 [sdk_alpha_map(lo, hi, raw) for (lo, hi), raw in zip(knobs, raws)])
+        # Another machine on the slot, the halfwords as they were: its own bounds map them.
+        m.halfword(TYPE['voice'] + 0, 12)
+        m.block('voice', 0)
+        self.assertEqual([v - 2 ** 32 if v >= 2 ** 31 else v for v in m.probe('sdk-2', 16, 2)],
+                         [sdk_alpha_map(5, 6, raws[0]), sdk_alpha_map(-12, 12, raws[1])])
 
     def test_the_sdk_sine_example_plays_through_the_dispatcher(self):
         from elekloader.sdk.sharc import kernel_artifact

@@ -448,7 +448,7 @@ queued, then calls 0x40001bce as stock does, with interrupts masked. It runs
 only when a build on this core is the OS being replaced, so it protects the
 upgrade away from a custom build (to stock, or to another build), not one
 away from stock. The addresses come from `mod.json` (`FINISH_PANEL`,
-`FINISH_UART`, `FINISH_DRAIN`); core-a4 0.4 uses the same file with the
+`FINISH_UART`, `FINISH_DRAIN`); core-a4mk2 0.4 uses the same file with the
 A4's.
 
 Checked in analog-emu (25 Oct 2026; each flash a fresh headless emulator
@@ -461,7 +461,7 @@ divider (the unit's 158.7 kbaud, where it had run about 6 times faster), none
 of 30 hung, from the fixed, the unfixed and the stock source alike, so on a
 unit the race is likely rare. On a unit (25 Oct 2026), the flashes away
 from builds on this core (to other builds and to stock, five flashes)
-restarted in 15 s, and on an Analog Four MKII a flash from core-a4 0.4
+restarted in 15 s, and on an Analog Four MKII a flash from core 0.4
 back to stock 1.56 restarted in 21 s; with a race this rare that is no
 proof the hang is gone, only that the routine does no harm.
 
@@ -1118,7 +1118,7 @@ from the +Drive at boot) each table gets spare entries the loader fills at
 boot. A linker without +Drive support reads only each table's `entry` and
 leaves the rest, so without the loader the tables are the same as 0.11's. Core's events (every `ev_*`
 table) declare 256, as many as the loader links, so each +Drive mod can add
-a handler to any event; `core_machines` declares 10, its hidden slots
+a handler to any event; `core_machines` caps at 10, its hidden slots
 34..43. The other tables declare what each can hold:
 
 | table | spare | its limit |

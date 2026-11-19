@@ -9,7 +9,8 @@
 | in that loop:
 |
 |   0x4008485e  the switch: type OTS_JOB is core's own (ot_engine_post, store.c),
-|               any other is noted as the job now running and goes on to stock
+|               any other is noted as the job now running and goes on to stock;
+|               a stock job (0..45) first goes to ev_engine_job (0.40)
 |   0x4008484e  the receive: the job noted has ended (every job goes back here),
 |               so ev_project fires for the ones that load or make a project
 |
@@ -81,7 +82,18 @@ core_job_switch:
         REST4
         jmp     JOB_LOOP                | the next message
 1:      move.l  %d0, ots_last_job       | the job about to run
-        moveq   #45, %d1                | the instructions this replaced: their flags
+        moveq   #45, %d1
+        cmp.l   %d0, %d1
+        bcs.s   2f                      | not a stock job: no event
+        tst.l   ev_engine_job
+        beq.s   2f
+        SAVE4
+        move.l  %a2, -(%sp)             | the message
+        move.l  %d0, -(%sp)             | its type
+        jsr     ots_job_start           | store.c
+        addq.l  #8, %sp
+        REST4
+2:      moveq   #45, %d1                | the instructions this replaced: their flags
         cmp.l   %d0, %d1                | for stock's bcs
         jmp     JOB_SWITCH_NEXT
 

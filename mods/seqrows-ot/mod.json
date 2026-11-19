@@ -1,0 +1,122 @@
+{
+ "id": "seqrows",
+ "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "SEQUENCER rows",
+ "category": "Framework",
+ "author": "irpina",
+ "description": "Rows mods add to PROJECT > CONTROL > SEQUENCER: its three arrays as tables (ot_seq_label, ot_seq_get, ot_seq_set), the list's count and a draw loop that scrolls. Not beside octabam's SCALE QUANTIZER v1.0, which patches the same places.",
+ "device": "octatrack",
+ "os": "1.40C",
+ "sources": [
+  "seqrows.s"
+ ],
+ "sites": [
+  {
+   "addr": "0x40065bd8",
+   "stock": "400b27d0",
+   "op": "ptr",
+   "target": "ot_seq_label"
+  },
+  {
+   "addr": "0x40065bde",
+   "stock": "400b27dc",
+   "op": "ptr",
+   "target": "ot_seq_get"
+  },
+  {
+   "addr": "0x40065cc4",
+   "stock": "400b282c",
+   "op": "ptr",
+   "target": "ot_seq_set"
+  },
+  {
+   "addr": "0x40065d3e",
+   "stock": "400b282c",
+   "op": "ptr",
+   "target": "ot_seq_set"
+  },
+  {
+   "addr": "0x40065d58",
+   "stock": "400b282c",
+   "op": "ptr",
+   "target": "ot_seq_set"
+  },
+  {
+   "addr": "0x40065d72",
+   "stock": "400b282c",
+   "op": "ptr",
+   "target": "ot_seq_set"
+  },
+  {
+   "addr": "0x40065c7c",
+   "stock": "4878000348780003",
+   "op": "jmp",
+   "target": "seqrows_count"
+  },
+  {
+   "addr": "0x40065bca",
+   "stock": "42824fef0020",
+   "op": "jmp",
+   "target": "seqrows_draw"
+  }
+ ],
+ "collections": {
+  "ot_seq_label": 4,
+  "ot_seq_get": 4,
+  "ot_seq_set": 4
+ },
+ "contribute": [
+  {
+   "to": "ot_seq_label",
+   "order": -1000000,
+   "data": "400b5f37"
+  },
+  {
+   "to": "ot_seq_label",
+   "order": -1000000,
+   "data": "400b5f43"
+  },
+  {
+   "to": "ot_seq_label",
+   "order": -1000000,
+   "data": "400b5f52"
+  },
+  {
+   "to": "ot_seq_get",
+   "order": -1000000,
+   "data": "40065a40"
+  },
+  {
+   "to": "ot_seq_get",
+   "order": -1000000,
+   "data": "40065aa4"
+  },
+  {
+   "to": "ot_seq_get",
+   "order": -1000000,
+   "data": "40065afc"
+  },
+  {
+   "to": "ot_seq_set",
+   "order": -1000000,
+   "data": "400659ec"
+  },
+  {
+   "to": "ot_seq_set",
+   "order": -1000000,
+   "data": "40065a64"
+  },
+  {
+   "to": "ot_seq_set",
+   "order": -1000000,
+   "data": "40065abc"
+  }
+ ],
+ "requires": [
+  "core"
+ ],
+ "resources": {
+  "core": "0.6"
+ }
+}

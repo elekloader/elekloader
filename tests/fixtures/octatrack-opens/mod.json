@@ -1,0 +1,12 @@
+{
+ "id": "opens-probe", "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "opens probe", "category": "Test", "author": "irpina",
+ "description": "A probe of core-ot 0.35's ev_track_double and ev_setup_open: counts them with their last argument, and takes them when a poked control word says.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["probe.c"],
+ "subscribe": [{"event": "ev_track_double", "fn": "op_double", "order": 50},
+               {"event": "ev_setup_open", "fn": "op_setup", "order": 50}],
+ "requires": ["core"],
+ "resources": {"core": "0.35"}
+}

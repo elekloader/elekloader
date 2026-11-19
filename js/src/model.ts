@@ -56,12 +56,29 @@ function candidates(descs: Map<string, Desc>, id: string): string[] {
 }
 
 /** `enabled` plus `path`, plus the mods it requires (and theirs) that are listed and made for the stock firmware,
- * when none enabled already provides them. Of several files with the id, the last (by file name) is taken, and for
- * core the one withCore takes. */
+ * when none enabled already provides them. Of several files with the id (the versions of a mod other mods build on,
+ * machine-pages say), the newest that takes the selection is taken, the newest when none does, and for core the one
+ * withCore takes. A file takes the selection when it patches no byte another mod of it patches (describe's sites): a
+ * mod made for an older version of what it requires, which patches a place the newer version has since taken, builds
+ * with the version it was made for. A required mod that is enabled and does not take the selection gives way to a
+ * version that does. gui.with_requirements. */
 export function withRequirements(descs: Map<string, Desc>, enabled: Iterable<string>, path: string): Set<string> {
-  const out = new Set([...enabled, path])
+  let out = new Set([...enabled, path])
   const todo = [path]
   let core = false
+  const spans = (p: string): number[][] => {
+    const x = descs.get(p) ?? {}
+    return x.format === 1 ? [] : ((x.sites ?? []) as number[][]).map(s => [s[0], s[0] + s[1]])
+  }
+  /** The listed files with the id, made for the stock firmware, oldest first. */
+  const versions = (rid: string) => [...descs].filter(([, x]) => x.id === rid && x.fits && !('error' in x)).map(([p]) => p)
+    .sort((a, b) => cmpVersions(descs.get(a)!.version ?? '', descs.get(b)!.version ?? '') || (basename(a) < basename(b) ? -1 : basename(a) > basename(b) ? 1 : 0))
+  /** `p` patches no byte a mod of the selection patches (its other versions and the core apart). */
+  const takes = (p: string, rid: string) => {
+    const mine = spans(p)
+    return ![...out].some(q => q !== p && descs.get(q)?.id !== rid && descs.get(q)?.id !== 'core'
+      && spans(q).some(([l, h]) => mine.some(([lo, hi]) => lo < h && l < hi)))
+  }
   while (todo.length) {
     const d = descs.get(todo.pop()!) ?? {}
     for (const rid of d.requires ?? []) {
@@ -70,11 +87,23 @@ export function withRequirements(descs: Map<string, Desc>, enabled: Iterable<str
         continue
       }
       if ([...out].some(p => descs.get(p)?.id === rid)) continue
-      const cands = candidates(descs, rid)
+      const cands = versions(rid)
       if (cands.length) {
-        out.add(cands[cands.length - 1])
-        todo.push(cands[cands.length - 1])
+        const ok = cands.filter(p => takes(p, rid))
+        const pick = (ok.length ? ok : cands).at(-1)!
+        out.add(pick)
+        todo.push(pick)
       }
+    }
+  }
+  // a required mod that is enabled and patches a place another mod of the selection patches: a version that does
+  // not, in its place (the one enabled stays when none does, for the check to say why)
+  const required = [...new Set([...out].flatMap(p => (descs.get(p)?.requires ?? []) as string[]).filter(r => r !== 'core'))].sort()
+  for (const rid of required) {
+    const on = [...out].filter(p => descs.get(p)?.id === rid)
+    if (on.length === 1 && !takes(on[0], rid)) {
+      const ok = versions(rid).filter(p => takes(p, rid))
+      if (ok.length) out = new Set([...[...out].filter(p => p !== on[0]), ok.at(-1)!])
     }
   }
   return core ? withCore(descs, out) : out

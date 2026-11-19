@@ -20,11 +20,18 @@ mod.json:
      "cflags": [...],                                 extra compiler flags, optional
      "name_string": "my-mod",                         optional: str_name = "<it> <version>"
      "sites": [{"addr", "stock", "op", "target" | "new", "addend"}],
+                                                     ("len" and "stock_sha256" in place of
+                                                     "stock": the stock bytes by length and hash)
      "subscribe": [{"event": "ev_draw", "fn": "my_draw", "order": 60}],
+     "events": "std1",                                optional: "subscribe" then names standard
+                                                     events (std1.h), not the core's own
+     "std": {"ev_key": "std_key"},                    a core only: each standard event's table
      "machines": [{"id": 6, "descriptor": "my_machine"}],   SRC machines (Digitakt mk1)
      "collections": {"my_table": 8},                  tables you declare (entry size)
      "contribute": [{"to", "order", "data", "relocs", "claims"}],
      "dsp": [{"source": "my.asm", "payload": "A"}],   optional: DSP56300 code (see below)
+     "dsp_load": [{"source": "my.asm", "entry": "my", "name": "my_dsp"}],   optional: DSP code
+                                                     sent at run time (the Octatrack's dspload)
      "sharc_raw": "raw.json",                         optional: the Digitakt II's raw SHARC payload
                                                      (docs/FORMAT.md), a file in the mod folder
      "subscribe_dsp": [{"event", "fn", "addend", "order"}],   jsr >fn in a DSP table
@@ -77,6 +84,15 @@ as {"entry": 6, "space": "dsp.A", "head": hex, "end": hex}: its words are the
 head, the entries in order, then the end. The linker places DSP code and
 tables in the P words a mod frees (`dsp_areas`), so a mod with either needs
 the mod that frees them.
+
+"dsp_load" is DSP code a mod sends to the DSP at run time instead (the
+Octatrack's dspload-ot, `octatrack/dspload.h`; a TELOS mod from the card can
+have it). Each source is assembled as above into a `struct ot_dsp_blob` named
+`name` (its words, the label `entry` as the handler, the words that hold an
+address in the code) in the mod's data, with an entry in dspload's
+`ot_dsp_blobs` table; dspload sends each blob there once, from a task, and
+from the next audio frames on it runs on DSP core 0 as an `ev_dsp_rx`
+handler. The mod needs dspload (`"requires": [..., "dspload"]`).
 
 A `machines` entry adds an SRC machine (core 2.1's core_machines, Digitakt
 mk1): it contributes a pointer to the descriptor `descriptor` names and
@@ -345,6 +361,30 @@ def build(mdir, stock_path, out_dir=None, extra=None):
     os.makedirs(work, exist_ok=True)
 
     srcs = [os.path.join(mdir, s) for s in mod.get('sources', [])] + list(extra.get('sources', []))
+    load_contrib = []
+    for k, ds in enumerate(mod.get('dsp_load', [])):     # DSP code sent at run time (dspload-ot)
+        if not isinstance(ds, dict) or not all(isinstance(ds.get(x), str) for x in ('source', 'entry', 'name')) \
+                or not re.fullmatch(r'[A-Za-z_]\w*', ds['name']):
+            raise BuildError('mod.json: a dsp_load entry is {"source", "entry", "name"} (a C name)')
+        words, labels, rels = dsp_assemble(os.path.join(mdir, ds['source']), work)
+        if ds['entry'] not in labels:
+            raise BuildError('dsp_load: %s has no label %s' % (ds['source'], ds['entry']))
+        for i, off in rels:
+            words[i] = off                      # the address as an offset: ot_dsp_load adds the home
+        nm = ds['name']
+        p = os.path.join(work, 'dsp-load-%d.c' % k)
+        with open(p, 'w') as fh:
+            fh.write('/* %s, assembled for dspload (mod.json dsp_load): generated */\n'
+                     '#include "octatrack/dspload.h"\n'
+                     'static const uint32_t %s_w[] = {%s};\n'
+                     'static const uint16_t %s_r[] = {%s};\n'
+                     'const struct ot_dsp_blob %s = {%s_w, %d, %d, %s_r, %d};\n' % (
+                         ds['source'], nm, ', '.join('0x%06x' % w for w in words), nm,
+                         ', '.join(str(i) for i, _ in rels) or '0', nm, nm, len(words),
+                         labels[ds['entry']], nm, len(rels)))
+        srcs.append(p)
+        load_contrib.append({'to': 'ot_dsp_blobs', 'order': 50, 'data': '00000000',
+                             'relocs': [[0, 'abs32', 'sym:' + nm, 0]]})
     if mod.get('name_string'):
         p = os.path.join(work, 'name.s')
         with open(p, 'w') as fh:
@@ -402,8 +442,10 @@ def build(mdir, stock_path, out_dir=None, extra=None):
             sec_of[s.idx] = s.name
             if s.name == '.bss':
                 secs['.bss'] = {'align': max(4, s.align), 'size': s.size}
-            elif s.name == '.payload':          # data the mod ships: kept whole, never stock runs
-                secs[s.name] = {'align': max(4, s.align), 'len': s.size, 'parts': [['hex', s.data.hex()]]}
+            elif s.name == '.payload':          # data the mod ships: kept whole, never stock runs; one
+                secs[s.name] = {'align': max(4, s.align), 'len': s.size,   # hex part after its len and
+                                'sha256': hashlib.sha256(s.data).hexdigest(),   # sha256, so a +Drive
+                                'parts': [['hex', s.data.hex()]]}        # loader can skip it (DRIVE.md)
             else:
                 parts = stock_parts(s.data, image, STOCK_MIN, dev.main_load)
                 secs[s.name] = {'align': max(4, s.align), 'len': s.size,
@@ -515,18 +557,27 @@ def build(mdir, stock_path, out_dir=None, extra=None):
                       'new': s.data.hex(), 'kind': 'data', 'relocs': frel.get(idx, [])})
     for s in mod.get('sites', []) + list(extra.get('sites', [])):
         addr = int(s['addr'], 16) if isinstance(s['addr'], str) else s['addr']
-        stockb = bytes.fromhex(s['stock'])
+        if 'stock' in s:
+            n = len(bytes.fromhex(s['stock']))
+        elif 'len' in s and 'stock_sha256' in s:   # the stock bytes by length and hash only
+            n = int(s['len'])
+        else:
+            raise BuildError('site 0x%08x: give "stock" (hex) or "len" and "stock_sha256"' % addr)
         o = addr - dev.main_load
-        actual = image[o:o + len(stockb)]
+        actual = image[o:o + n]
         if elemod.sharc_site(rel, addr):
             from .. import sharc
-            actual = next((r.raw[16 + addr - r.target:16 + addr - r.target + len(stockb)]
+            actual = next((r.raw[16 + addr - r.target:16 + addr - r.target + n]
                            for r in sharc.parse(stock.section(rel.sharc['section']), rel.sharc)
                            if r.flags == sharc.LOAD and r.target <= addr
-                           and addr + len(stockb) <= r.target + r.count), b'')
-        if actual != stockb:
+                           and addr + n <= r.target + r.count), b'')
+        if 'stock' in s and actual != bytes.fromhex(s['stock']):
             raise BuildError('site 0x%08x: the stock bytes are %s, not %s'
                              % (addr, actual.hex(), s['stock']))
+        if 'stock' not in s and (len(actual) != n or sha(actual) != s['stock_sha256'].lower()):
+            raise BuildError('site 0x%08x: the %d stock bytes there do not have the SHA-256 the '
+                             'site gives' % (addr, n))
+        stockb = actual
         op, rel_ = s['op'], []
         add = int(s.get('addend', 0))
         if add and op not in OPS and op not in ('keep2', 'ptr', 'dsp_jsr'):
@@ -580,9 +631,11 @@ def build(mdir, stock_path, out_dir=None, extra=None):
                       'new': new.hex(), 'kind': kind, 'relocs': rel_})
 
     contrib = []
-    for sub in mod.get('subscribe', []):
+    for sub in mod.get('subscribe', []):    # with "events": "std1", standard events (std1.h)
         contrib.append({'to': sub['event'], 'order': sub.get('order', 50), 'data': '00000000',
                         'relocs': [[0, 'abs32', 'sym:' + sub['fn'], 0]], 'claims': []})
+        if mod.get('events') is not None:
+            contrib[-1]['std'] = True
     for sub in mod.get('subscribe_dsp', []):    # an entry of a DSP table: jsr >fn (+addend words)
         contrib.append({'to': sub['event'], 'order': sub.get('order', 50),
                         'data': (DSP_JSR + bytes(3)).hex(),
@@ -599,7 +652,7 @@ def build(mdir, stock_path, out_dir=None, extra=None):
         names = list(resources.get('names', []))
         if 'machine:%d' % n not in names:
             resources['names'] = names + ['machine:%d' % n]
-    for c in mod.get('contribute', []) + list(extra.get('contribute', [])):
+    for c in mod.get('contribute', []) + list(extra.get('contribute', [])) + load_contrib:
         contrib.append({'to': c['to'], 'order': c.get('order', 50), 'data': c['data'],
                         'relocs': c.get('relocs', []), 'claims': c.get('claims', [])})
     for c in contrib:
@@ -648,6 +701,10 @@ def build(mdir, stock_path, out_dir=None, extra=None):
     for k in ('id_pools', 'pool_ids'):      # id pools: a mod's to hand out, a mod's ids from one (link.py)
         if mod.get(k):
             doc[k] = mod[k]
+    if mod.get('events') is not None:       # the standard event set its subscriptions name
+        doc['events'] = mod['events']
+    if mod.get('std'):                      # a core's map: standard event -> its table
+        doc['std'] = mod['std']
     raw = (json.dumps(doc, indent=1) + '\n').encode()
     try:
         m = link.Mod2(json.loads(raw), mid)                # the loader's own validation

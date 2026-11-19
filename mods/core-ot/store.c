@@ -4,7 +4,7 @@
  * (docs/ADAPTING.md, "Project data on the Octatrack"; the declarations are in
  * elekloader/sdk/include/octatrack/core.h, the sites in store.s).
  *
- * - ev_project(how, dropped), as core-ar2's and core-a4's: after a job that loads a whole project
+ * - ev_project(how, dropped), as core-ar2's and core-a4mk2's: after a job that loads a whole project
  *   (LOAD PROJECT, the power-up's load, RELOAD) or makes a new one.
  * - ot_engine_post: a mod's function run by the engine task, where the firmware does its own card
  *   I/O; the file calls are for there.
@@ -437,11 +437,22 @@ void core_carddata_dirty(uint32_t tag)
 
 /* ==== the lifecycle ============================================================================== */
 
+/* store.s, the engine task's switch: stock job `type` (0..45) is about to run, msg its message (0.40). */
+extern void (*const ev_engine_job[])(unsigned, const void *);
+void ots_job_start(unsigned type, const void *msg)
+{
+    for (void (*const *f)(unsigned, const void *) = ev_engine_job; *f; ++f)
+        (*f)(type, msg);
+}
+
 /* store.s, the engine task, back at its receive: the job noted has ended. */
 void ots_job_end(void)
 {
     int32_t job = ots_last_job;
     ots_last_job = -1;
+    if (job >= 0 && job <= 45)
+        for (void (*const *f)(unsigned, const void *) = ev_engine_job; *f; ++f)
+            (*f)((unsigned)job, 0);
     int32_t how;
     switch (job) {
     case 3: case 4: case 5: case 19:        /* every bank loaded, LOAD PROJECT, the power-up, RELOAD */

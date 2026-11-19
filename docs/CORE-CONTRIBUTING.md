@@ -232,4 +232,8 @@ page reads every list in `web/upstream/`.
       says which is missing.
 - [ ] The core keeps everything it had, and the superset tests say what
       the new version adds.
+- [ ] If the new version patches a place a published mod patches itself,
+      the pull request names that mod: it builds with the version before,
+      which stays released and listed
+      ([CORES.md](CORES.md), "A mod and newer cores").
 - [ ] ADAPTING.md, CORES.md and an example are in the pull request.

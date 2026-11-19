@@ -1,0 +1,91 @@
+{
+ "id": "drive-loader",
+ "version": "0.1",
+ "title": "Drive Loader",
+ "category": "Framework",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "The +Drive mods loader's flashed part for the Analog Four MKII (core-a4mk2 0.9 and newer, OS 1.56). The A4's +Drive has no file system, so the loader keeps its own store in sectors stock never addresses (0x3000..0x7a000): a directory in two copies and each file one run of sectors, with folders, mkdir and move. The boot linker, run in core's ev_boot_drive, links the mods chosen in /mods/active into the +Drive mods' area at boot (skip with [NO] held; a crash guard skips once after a start that didn't get 10 s in). The /mods route is a top-level /mods in the unit's Data root listing, whose uploads go straight to sectors and reads straight from them; /mods/.build is the build descriptor (core_desc), /mods/.status the loader's status in plain text. FORMAT +DRIVE empties the store. A mod's .payload stays on the +Drive: the boot stages each file without its hex and keeps a table of the loaded mods' payloads (drive_payloads, dl_payload_read) for sidecar-core. The MODS page comes in a later version.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "sources": [
+  "store.c",
+  "route.c",
+  "route.s",
+  "flush.s",
+  "boot.c",
+  "skip.c",
+  "payload.c",
+  "dlink.c",
+  "json.c",
+  "sha256.c",
+  "dstore.c",
+  "park.c",
+  "page.c",
+  "page.s"
+ ],
+ "sites": [
+  {
+   "addr": "0x40095ec8",
+   "len": 8,
+   "stock_sha256": "c0076371d1b7c405fb88b81ca115c36ff69a17862593f24dcc443b06411bb905",
+   "op": "jsr",
+   "target": "dl_route_site"
+  },
+  {
+   "addr": "0x4001da16",
+   "len": 2,
+   "stock_sha256": "16119cec0c9bd0ee527bc127cab359c8d63963f92fd98acf348e652a91233dc2",
+   "op": "bytes",
+   "new": "6006",
+   "kind": "code"
+  }
+ ],
+ "subscribe": [
+  {
+   "event": "ev_boot_drive",
+   "fn": "dl_boot",
+   "order": 0
+  },
+  {
+   "event": "ev_drive_format",
+   "fn": "dl_format",
+   "order": 0
+  },
+  {
+   "event": "ev_tick",
+   "fn": "dl_tick",
+   "order": 99
+  },
+  {
+   "event": "ev_settings",
+   "fn": "dl_settings",
+   "order": 90
+  },
+  {
+   "event": "ev_key",
+   "fn": "dl_key",
+   "order": 1
+  },
+  {
+   "event": "ev_enc",
+   "fn": "dl_enc",
+   "order": 1
+  },
+  {
+   "event": "ev_draw",
+   "fn": "dl_draw",
+   "order": 95
+  }
+ ],
+ "resources": {
+  "core": "0.9",
+  "names": [
+   "data-route:mods",
+   "settings:MODS"
+  ]
+ },
+ "requires": [
+  "core"
+ ]
+}

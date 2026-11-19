@@ -32,6 +32,7 @@
 #define VALUE           8
 
 extern const struct ot_setting *const ot_settings[];
+extern const struct ot_mod_rows *const ot_mod_rows[];   /* 0.2: rows that aren't settings (TELOS) */
 
 struct row { const char *label; const void *window; void (*action)(int); void *getter; void *child; uint32_t page; };
 struct desc { uint32_t count, scroll, cursor, sel, visible, count2; struct row *rows; };
@@ -43,11 +44,17 @@ struct desc ots_list = { 0, 0, 0, 0, 7, 0, rows };
 static char labels[MAXROW][LABEL];
 static char vals[MAXROW][VALUE];
 static const struct ot_setting *row_set[MAXROW];    /* the setting a row edits, or 0: a heading */
+static const struct ot_mod_rows *row_prov[MAXROW];  /* 0.2: the provider a row is, and its index */
+static int16_t row_idx[MAXROW];
 
 /* The menu draws a row's value from its getter, called with nothing, at the pane's right edge:
- * one getter per row, each returning its row's string (as an integer: the firmware reads d0). */
-#define G(n)            static uint32_t g##n(void) { return (uint32_t)(uintptr_t)vals[n]; }
-#define G8(n)           G(n##0) G(n##1) G(n##2) G(n##3) G(n##4) G(n##5) G(n##6) G(n##7)
+ * one getter per row, each returning its row's string (as an integer: the firmware reads d0). A
+ * provider's row (0.2) asks its provider again at each draw, so a dialog's answer shows at once. */
+static void prov_label(unsigned r);
+/* g<a><b> is row 8a+b: its index is computed, not pasted (0.1 pasted "10" as row 10 into row 8's
+ * getter, so from row 8 on each row showed another's value). */
+#define G(a, b)         static uint32_t g##a##b(void) { if (row_prov[8 * a + b]) prov_label(8 * a + b);                                                         return (uint32_t)(uintptr_t)vals[8 * a + b]; }
+#define G8(a)           G(a, 0) G(a, 1) G(a, 2) G(a, 3) G(a, 4) G(a, 5) G(a, 6) G(a, 7)
 G8(0) G8(1) G8(2) G8(3) G8(4) G8(5) G8(6) G8(7)
 #define P8(n)           g##n##0, g##n##1, g##n##2, g##n##3, g##n##4, g##n##5, g##n##6, g##n##7
 static uint32_t (*const getters[MAXROW])(void) = { P8(0), P8(1), P8(2), P8(3), P8(4), P8(5), P8(6), P8(7) };
@@ -162,6 +169,40 @@ static void set_value(const struct ot_setting *s, int32_t v, int store)
         s->changed(s);
 }
 
+/* A heading row's text: the stock menu's rule character around the name. */
+static void heading(unsigned n, const char *name)
+{
+    char *d = labels[n];
+    unsigned i = 0;
+    d[i++] = 0x17, d[i++] = 0x17;
+    for (unsigned j = 0; name[j] && i < LABEL - 3; ++j)
+        d[i++] = name[j];
+    while (i < LABEL - 1)
+        d[i++] = 0x17;
+    d[i] = 0;
+}
+
+/* 0.2: a provider's row, asked again. */
+static void prov_label(unsigned r)
+{
+    labels[r][0] = vals[r][0] = 0;
+    row_prov[r]->label(row_idx[r], labels[r], LABEL);
+    row_prov[r]->value(row_idx[r], vals[r], VALUE);
+}
+
+static void prov_action(int unused)
+{
+    (void)unused;
+    unsigned r = ots_list.sel;
+    if (r >= ots_list.count || !row_prov[r])
+        return;
+    row_prov[r]->action(row_idx[r]);
+    for (unsigned k = 0; k < ots_list.count; ++k)    /* an action may change other rows too */
+        if (row_prov[k])
+            prov_label(k);
+    MENU_REDRAW();
+}
+
 /* A row's YES: the selected row's value one step on (wrapping). */
 static void row_action(int unused)
 {
@@ -211,33 +252,61 @@ static void apply(struct ent *e, unsigned n, unsigned scope, int found)
 static void card_loaded(int32_t found) { apply(card_ents, NENT, OT_SET_CARD, found); }
 static void proj_loaded(int32_t found) { apply(proj_ents, NENT, OT_SET_PROJECT, found); }
 
-/* ev_boot_done: the rows, the root, and the early values (core has given the CS1 claim by now). */
-void ots_settings_boot(void)
+/* The rows: each provider's heading and rows (0.2), then each mod's heading and settings. */
+static unsigned build_rows(int boot)
 {
     unsigned n = 0;
     const char *last = 0;
+    for (const struct ot_mod_rows *const *q = ot_mod_rows; *q && n + 2 <= MAXROW; ++q) {
+        const struct ot_mod_rows *pr = *q;
+        int c;
+        if (pr->abi != OT_MOD_ROWS_ABI || !pr->count || (c = pr->count()) <= 0)
+            continue;
+        heading(n, pr->heading ? pr->heading : "MODS");
+        rows[n] = (struct row){ labels[n], 0, 0, 0, 0, 0 };
+        row_set[n] = 0, row_prov[n++] = 0;
+        for (int i = 0; i < c && n + 1 <= MAXROW; ++i) {
+            rows[n] = (struct row){ labels[n], 0, prov_action, (void *)getters[n], 0, 0 };
+            row_set[n] = 0, row_prov[n] = pr, row_idx[n] = (int16_t)i;
+            prov_label(n++);
+        }
+    }
     for (const struct ot_setting *const *p = ot_settings; *p && n + 2 <= MAXROW; ++p) {
         const struct ot_setting *s = *p;
         if (!valid(s))
             continue;
-        *s->value = s->def;
+        if (boot)
+            *s->value = s->def;
         if (s->group && (!last || last != s->group)) {
-            char *d = labels[n];
-            unsigned i = 0;
-            d[i++] = 0x17, d[i++] = 0x17;
-            for (unsigned j = 0; s->group[j] && i < LABEL - 3; ++j)
-                d[i++] = s->group[j];
-            while (i < LABEL - 1)
-                d[i++] = 0x17;
-            d[i] = 0;
+            heading(n, s->group);
             rows[n] = (struct row){ labels[n], 0, 0, 0, 0, 0 };    /* a heading: no action */
-            row_set[n++] = 0;
+            row_set[n] = 0, row_prov[n++] = 0;
             last = s->group;
         }
         rows[n] = (struct row){ labels[n], 0, row_action, (void *)getters[n], 0, 0 };
-        row_set[n] = s;
+        row_set[n] = s, row_prov[n] = 0;
         label_for(n++);
     }
+    return n;
+}
+
+/* ev_card (0.2): the card is mounted and the providers (TELOS) have read it: the rows again. */
+void ots_settings_card(unsigned state, int result, unsigned mode)
+{
+    (void)result, (void)mode;
+    if (state != 1)
+        return;
+    unsigned n = build_rows(0);
+    if (n) {
+        ots_list.count = ots_list.count2 = n;
+        ots_list.scroll = ots_list.cursor = ots_list.sel = 0;
+    }
+}
+
+/* ev_boot_done: the rows, the root, and the early values (core has given the CS1 claim by now). */
+void ots_settings_boot(void)
+{
+    unsigned n = build_rows(1);
     if (early_ents)
         for (const struct ot_setting *const *p = ot_settings; *p; ++p)
             if (valid(*p) && ((*p)->scope & OT_SET_EARLY)) {
@@ -247,7 +316,7 @@ void ots_settings_boot(void)
             }
     if (!n) {                               /* no setting in the build: one row that does nothing */
         rows[0] = (struct row){ "NO SETTINGS", 0, (void (*)(int))STOCK_RTS, 0, 0, 0 };
-        row_set[0] = 0;
+        row_set[0] = 0, row_prov[0] = 0;
         n = 1;
     }
     ots_list.count = ots_list.count2 = n;

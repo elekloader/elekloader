@@ -30,6 +30,8 @@
 #define S_REL       69
 #define UREC        84
 #define PREC        60
+/* flags, sdk_alpha.c's machines: the block is Q31 full scale, which the envelope's pass brings to DNM_PEAK */
+#define DNM_SDK_Q31 0x80000000u
 
 extern const struct dnm_machine *const dn_machines[];      /* this mod's table, ending in 0 */
 #ifdef SDK_ALPHA_DN1                                       /* the 1.44 port's (mod.json) */
@@ -180,7 +182,7 @@ static int32_t amp(int32_t voice, int32_t slot)
 }
 
 /* The block times the envelope (ramped from the last block's level) and the velocity. */
-static void envelope(int32_t voice, int32_t *block)
+static void envelope(int32_t voice, int32_t *block, uint32_t q31)
 {
     int32_t l0 = vs[voice].level, l1 = l0, sus = amp(voice, S_SUS) * 258, g0, step, i;
     switch (vs[voice].stage) {
@@ -216,10 +218,16 @@ static void envelope(int32_t voice, int32_t *block)
     vs[voice].level = l1;
     g0 = l0 * vs[voice].v.velocity / 127;
     step = (l1 * vs[voice].v.velocity / 127 - g0) / 32;
-    for (i = 0; i < 32; i++) {
-        block[i] = ((block[i] >> 16) * g0) << 1;
-        g0 += step;
-    }
+    if (q31)                                /* an SDK block: from Q31 full scale to DNM_PEAK in the same pass */
+        for (i = 0; i < 32; i++) {
+            block[i] = ((block[i] >> 16) * g0) >> 3;
+            g0 += step;
+        }
+    else
+        for (i = 0; i < 32; i++) {
+            block[i] = ((block[i] >> 16) * g0) << 1;
+            g0 += step;
+        }
 }
 
 void dnm_render(int32_t *voices)
@@ -248,7 +256,7 @@ void dnm_render(int32_t *voices)
         vs[v].v.fresh = 0;
         vs[v].v.idle = 0;
         if (!(m->flags & DNM_OWN_ENV))
-            envelope(v, block);
+            envelope(v, block, m->flags & DNM_SDK_Q31);
     }
 }
 

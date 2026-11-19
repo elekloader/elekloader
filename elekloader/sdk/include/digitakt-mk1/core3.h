@@ -21,7 +21,10 @@ extern volatile int16_t fw_voice_params[];      /* [53 * t + k]: the machine's p
 extern volatile int32_t fw_voice_note[];        /* [t]: the trig's note, 16.16 (60 << 16 with none) */
 extern volatile int16_t fw_voice_vel[];         /* [t]: its velocity, 8.8 */
 extern volatile uint32_t fw_voice_start;        /* bit t: track t starts a voice this block */
-extern volatile int32_t fw_amp_env[];           /* [3 * t]: the AMP envelope's phase, [3 * t + 1] its level */
+/* The FILTER envelope, despite its name (kept so mods built with it link): [3 * t] its phase, [3 * t + 1]
+ * its level. It follows the gate, not the sound: do not read its level as the track's loudness. */
+extern volatile int32_t fw_amp_env[];
+extern volatile int32_t fw_filter_env[];        /* core 4.4: the same, by its right name */
 extern const uint32_t fw_pitch_tab[];           /* 2^((i - 10752) / 2048), Q29, i = 0-14848 */
 
 /* ---- the UI task --------------------------------------------------------------------------------- */
@@ -193,6 +196,15 @@ typedef int32_t (*ev_live_note_fn)(int32_t track, int32_t note, int32_t vel, int
 extern void fw_note_on(int32_t track, int32_t note, int32_t vel, int32_t source, int32_t skip, int32_t sound,
                        int32_t flag);
 extern void fw_note_off(int32_t track, int32_t note, int32_t source);
+
+/* ---- core 4.4: the AMP envelope ------------------------------------------------------------------- */
+/* [2 * t]: the phase, [2 * t + 1] the value. Phase 2 attack (the value rises, negated Q31, to 0x80000000),
+ * 1 hold (the value counts time, at full level), 0 decay (the value is the level, negated Q31, falling
+ * towards 0). Phase 0 with a value near 0 is a silent track; all 0 when idle. Interrupt level. */
+#define FW_AMP_ATTACK  2
+#define FW_AMP_HOLD    1
+#define FW_AMP_DECAY   0
+extern volatile int32_t fw_amp_level[];
 
 /* ---- core 4.3: ev_midi_cc --------------------------------------------------------------------------- */
 /* Each MIDI CC the unit receives, before the stock applies it: track 0-7 the audio tracks, 8-15 the MIDI

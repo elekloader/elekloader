@@ -1,0 +1,110 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""Writes js/test/desc-vectors.json: what elekloader's linker gives for builds with and without the
+build descriptor (core_desc, elekloader/desc.py), on a made-up release of the Analog Rytm MKII (an
+image of nops, as tests/test_link_refusals.py's Bench makes it), so test/desc.test.ts can check
+link.ts writes the same bytes and refuses the same things. Run from the repository root:
+
+    python js/tools/desc_vectors.py
+"""
+import copy
+import hashlib
+import json
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, 'tests'))
+
+from elekloader import desc, link                               # noqa: E402
+from elekloader.elemod import ModError                          # noqa: E402
+import test_link_refusals as T                                  # noqa: E402
+
+
+def cases(B):
+    out = {'with the descriptor': T.descriptor_mods(B),
+           'without it': T.descriptor_mods(B, False)}
+    d = T.descriptor_mods(B)
+    d[0]['collections']['ev_x']['spare'] = 0
+    d[2]['contribute'][1]['order'] = 0
+    out['no spare in ev_x, an order of 0'] = d
+    d = T.descriptor_mods(B)
+    d[2]['contribute'][0]['order'] = -1000000
+    d[2]['contribute'][1]['order'] = 1000000
+    out['whole orders, -1000000 and 1000000'] = d
+    d = T.descriptor_mods(B)
+    d[2]['contribute'][0]['order'] = 2147483647
+    out['the linker\'s own order'] = d
+    d = T.descriptor_mods(B)
+    d[0]['version'] = '0.11'
+    d[1]['sections']['.bss']['size'] = 0x200000
+    out['past the +Drive area'] = d
+    d = T.descriptor_mods(B)
+    d[0]['collections']['ev_x']['spare'] = -1
+    out['a negative spare'] = d
+    d = T.descriptor_mods(B)
+    d[0]['collections']['ev_x'].update(spare=40, max=3)
+    out['a max under the spare'] = d
+    d = T.descriptor_mods(B)
+    d[0]['collections']['ev_x']['max'] = 0
+    out['a max of 0'] = d
+    d = T.descriptor_mods(B)
+    d[2]['symbols']['core_desc'] = ['.run', 0]
+    d[2]['exports'] = ['core_desc']
+    out['a mod exports core_desc'] = d
+    d = T.descriptor_mods(B)                   # ABI 1.2: the lock tables open to the loader, a copied block
+    d[0]['collections'].update({'core_lock_codes': {'entry': 8}, 'core_lock_ccs': {'entry': 8},
+                                'core_field_inits': {'entry': 4}, 'core_lock_params': {'entry': 4}})
+    d[1]['storage'] = [{'sym': 'st_a', 'scope': 'kit', 'bits': 5},
+                       {'sym': 'st_b', 'scope': 'sound', 'bits': 4, 'lock': True, 'cc': True, 'init': 3}]
+    d[2]['copied'] = [{'lo': hex(B.at(0x2000)), 'hi': hex(B.at(0x2010)), 'to': hex(B.at(0x2000))}]
+    out['the lock tables for the loader, a copied block'] = d
+    d = copy.deepcopy(d)
+    d[0]['collections']['core_field_inits']['max'] = 2
+    d[0]['collections']['core_lock_codes']['spare'] = 4
+    out['the lock tables with a spare and a max'] = d
+    d = T.descriptor_mods(B)                   # F_STD_MAP: the core's std map as claims of kind 3
+    d[0]['std'] = {'ev_tick': 'ev_x', 'ev_boot': 'ev_render_x'}
+    d[1]['symbols']['drive_std_map'] = ['abs', 1]
+    d[1]['exports'] = d[1]['exports'] + ['drive_std_map']
+    out['a loader that maps std1'] = d
+    d = copy.deepcopy(d)
+    d[1]['exports'].remove('drive_std_map')
+    out['a std map, a loader that does not map it'] = d
+    d = T.descriptor_mods(B)                   # F_CLAIMS: the flashed contributions' claims in the site map (kind 7)
+    d[2]['contribute'][0]['claims'] = [[B.at(0x2800), B.at(0x2810)], [B.at(0x2900), B.at(0x2904)]]
+    d[1]['symbols']['drive_claims'] = ['abs', 1]
+    d[1]['exports'] = d[1]['exports'] + ['drive_claims']
+    out['a loader that takes claims'] = d
+    d = copy.deepcopy(d)
+    d[1]['exports'].remove('drive_claims')
+    out['claims, a loader that does not take them'] = d
+    return out
+
+
+def main():
+    rows = []
+    with T.Bench('analog-rytm-mk2') as B:
+        for name, docs in cases(B).items():
+            row = {'name': name, 'docs': copy.deepcopy(docs)}
+            try:
+                out = link.link([link.Mod2(d, d['id']) for d in docs], B.img)
+            except ModError as e:
+                row['error'] = str(e)
+            else:
+                at = desc.find(out.image)
+                row.update(image_sha256=hashlib.sha256(out.image).hexdigest(), layout=out.layout,
+                           map={k: v for k, v in out.map.items()},
+                           desc=out.image[at[0]:at[0] + desc.decode(out.image, at[0])['size']].hex() if at else None)
+            rows.append(row)
+        release = {'version': B.rel.version, 'syxSha256': B.rel.syx_sha256, 'mainSha256': B.rel.main_sha256,
+                   'mainLen': B.rel.main_len}
+    path = os.path.join(ROOT, 'js', 'test', 'desc-vectors.json')
+    with open(path, 'w') as fh:
+        json.dump({'release': release, 'cases': rows}, fh, indent=1, sort_keys=False)
+        fh.write('\n')
+    print('wrote %s: %d cases' % (path, len(rows)))
+
+
+if __name__ == '__main__':
+    main()

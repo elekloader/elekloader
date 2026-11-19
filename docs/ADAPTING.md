@@ -102,7 +102,9 @@ what you see when it is broken (section 5 has the fixes).
     inside ... copied block"*.
 11. **Say what you need.** `requires` names the mods yours depends on (always
     `core` for format 2); `conflicts` names the ones it cannot live with.
-    *"X requires Y"*.
+    *"X requires Y"*. `resources.core` names the core you built for: the
+    file keeps building as newer cores come
+    ([CORES.md](CORES.md), "A mod and newer cores").
 12. **One file, one release.** A mod targets one stock release by hash.
     Porting to another OS version means finding every address again.
 
@@ -148,6 +150,21 @@ The Digitone II's core (mods/core-dn2, from 0.1) has the same six UI events as t
 Digitakt II's, at the Digitone II's sites, and no render events (its audio
 renders on the DSP). It has no `.fast`: SRAM is not qualified there, so a
 mod with `.fast` code is refused. Its tick rate has not been measured.
+
+### Standard events (std1)
+
+A mod that writes `"events": "std1"` in its mod.json subscribes to the
+standard events instead of the core's own: one prototype each on every core
+that serves it, in `elekloader/sdk/include/std1.h` (`#include <std1.h>`),
+with its return kind and context. The `subscribe` entries name them as
+usual. A core serves them through its `std` map, from each standard name to
+one of its tables: the native table when the prototype is the same or its
+first part, or a table of its own that it calls with converted arguments.
+std and native mods go in one build. A subscription to an event the core's
+map lacks is refused at link time, and by the Drive Loader at boot for a
++Drive mod (`std`); each core's README lists what it maps.
+The core's own events never change, so a mod without the flag builds as
+before.
 
 ### Remote panel input and SysEx (core-dn2 0.1, Digitone II)
 
@@ -224,16 +241,16 @@ Analog Rytm MKII)"). What differs there:
 - core-ar2 exports no firmware locations (`fw_*`): a mod names each
   firmware address itself, for each OS (3.10).
 
-The Analog Four MKII's core (mods/core-a4 0.1, OS 1.56) is core-ar2 0.3 at
+The Analog Four MKII's core (mods/core-a4mk2 0.1, OS 1.56) is core-ar2 0.3 at
 the A4's sites: the same events, `ev_project` and mod storage ("Mod storage
-(core-a4 0.1, Analog Four MKII)"), with the same differences from the
+(core-a4mk2 0.1, Analog Four MKII)"), with the same differences from the
 Digitakt mk1. On the A4, the SETTINGS menu is the GLOBAL key's, and its rows
 come after SYSTEM; the render events cover the audio interrupt's digital
-path (the effects and the inputs), since the voices are analog. core-a4
+path (the effects and the inputs), since the voices are analog. core-a4mk2
 exports no firmware locations either. From 0.2 it has core-ar2 0.4's
-parameter routines and `core_audio_load` ("Parameter pages (core-a4 0.2,
-Analog Four MKII)"), and from 0.3 core-ar2 0.6's `core_page_fns`. `examples/hello-marker-a4`, `hooks-check-a4`,
-`store-check-a4`, `ddr-canary-a4` and `pages-check-a4` are mods for it.
+parameter routines and `core_audio_load` ("Parameter pages (core-a4mk2 0.2,
+Analog Four MKII)"), and from 0.3 core-ar2 0.6's `core_page_fns`. `examples/hello-marker-a4`, `hooks-check-a4mk2`,
+`store-check-a4mk2`, `ddr-canary-a4mk2` and `pages-check-a4mk2` are mods for it.
 
 The sites core owns (do not patch them):
 - Digitakt mk1 1.53 and 1.54: 0x40000538, 0x4000a770, 0x4000a7d6,
@@ -261,7 +278,7 @@ The sites core owns (do not patch them):
   more (32 in all; listed under "Mod storage");
 - Analog Four MKII 1.56: 0x40001180, 0x40098898, 0x40098900, 0x400999f8,
   0x40099a40, 0x400d05d2, 0x401013c6, 0x401040f6, and 28 more for mod
-  storage (mods/core-a4/README.md lists them); from core-a4 0.2, 0x400f6212,
+  storage (mods/core-a4mk2/README.md lists them); from core-a4mk2 0.2, 0x400f6212,
   0x40023d54, 0x400232e2 and 0x4009ea68 (the page routines), 0x400c2370
   and 0x400c4202 (the views), and the bytes at 0x400add22, 0x400add28,
   0x4000a758, 0x4000a774 and 0x4000a790 (the current view's range).
@@ -367,7 +384,7 @@ declares"*).
 | `ev_boot_done` (0.5) | once, when main has made its last init call | `void f(void)` | the OS's tasks exist, no project is loaded yet. In the main task |
 | `ev_idle` (0.5) | main's idle loop, over and over | `void f(void)` | the lowest priority: runs when nothing else does. It must not wait for anything: if main blocks, nothing is left to run. A build with an `ev_idle` handler runs main's idle loop in the core; without one main parks in the stock `bras .` |
 | `ev_tick120` (0.5) | the key-repeat task, 120 times a second | `void f(void)` | after the key-repeat step; that task has 2 KB of stack. Core's paced MIDI drains first |
-| `ev_project` (0.6) | a whole project was loaded (LOAD PROJECT, the power-up's load, RELOAD) or made (CREATE EMPTY PROJECT), when the firmware's job has ended | `void f(int how, unsigned dropped)` | as core-ar2's and core-a4's: `how` is `CORE_PROJECT_NEW` (0) or `CORE_PROJECT_LOADED` (1); `dropped` has `OT_DROPPED_PROJECT` when the project's blocks hold zeros, `OT_DROPPED_CARD` (the first event only) when the card's do. In the engine task, which may use the file calls. One load can bring it more than once |
+| `ev_project` (0.6) | a whole project was loaded (LOAD PROJECT, the power-up's load, RELOAD) or made (CREATE EMPTY PROJECT), when the firmware's job has ended | `void f(int how, unsigned dropped)` | as core-ar2's and core-a4mk2's: `how` is `CORE_PROJECT_NEW` (0) or `CORE_PROJECT_LOADED` (1); `dropped` has `OT_DROPPED_PROJECT` when the project's blocks hold zeros, `OT_DROPPED_CARD` (the first event only) when the card's do. In the engine task, which may use the file calls. One load can bring it more than once |
 | `ev_banks_load` (0.6) | a load of banks | `void f(unsigned pre, unsigned mask)` | 1 before, 0 after; `mask` bit n is bank n. Engine task |
 | `ev_banks_write` (0.6) | the bank writer (background saves, SAVE PROJECT, SAVE AS, a new project) | `void f(unsigned pre, unsigned mask)` | 1 before the first bank file, after the project folder is made; 0 after. Engine task |
 | `ev_project_store` (0.6) | SAVE PROJECT's copy of each `.work` file to `.strd` | `void f(unsigned pre, unsigned unused)` | 1 before, 0 after. Engine task |
@@ -392,6 +409,7 @@ declares"*).
 | `ev_boot_early` (0.8) | once, at boot, before the OS | `void f(void)` | core's code and data are in place and the on-chip SRAM has its stock values; no task, interrupt or OS call yet |
 | `ev_track_icon` (0.8) | an audio track's box on the screen | `unsigned f(unsigned trk, unsigned state)` | returns the state the box shows (chained). Stock's: bit 0 the track plays, bits 1-2 its recorder |
 | `ev_track_icon_draw` (0.8) | a box in a state stock has no glyph for (above 3) | `int f(unsigned trk, unsigned state, int x, int y)` | draw it (`ot_blit`) and return nonzero; 0 leaves the box empty |
+| `ev_track_tab_draw` (0.17) | a track tab, right after stock drew its machine letter | `void f(unsigned trk, int x, int y)` | draw beside the letter (`ot_blit`); the UI task |
 | `ev_setup_dial` (0.8) | a page-2 knob of AMP, FX1 or FX2 SETUP is about to be drawn | `void f(struct ot_dial *d)` | change the value, the widget's flags or the widget (chained) |
 
 The sites core-ot owns (Octatrack 1.40C): the boot site 0x4000050c, the 28
@@ -712,7 +730,7 @@ Which octabam module needs what:
 | BRAIN, BUFFER SAVER, STORE | the Part initialiser's end; LOAD PROJECT's call of the empty project's RAM; the routine itself | `ev_part_init`, `ev_project_init` |
 | MUTE MODES | the voice reset's entry | `ev_voice_reset` |
 | BOOT TRACE | the boot after core's | `ev_boot_early` |
-| REC THRESHOLD, REC TRIG MUTE | the track icons | `ev_track_icon`, `ev_track_icon_draw` |
+| REC THRESHOLD, REC TRIG MUTE | the track icons and tabs | `ev_track_icon`, `ev_track_icon_draw`, `ev_track_tab_draw` |
 | SCENES P2 | the FX SETUP knobs' Part byte | `ev_setup_dial` |
 
 **Not in 0.8.** The ATTRIBUTES page and the playback rate (REPITCH in
@@ -722,6 +740,292 @@ v1.0) are places where a shop file holds the bytes, so core leaves them. The
 OS's entry (REMIX SWITCH's chainloader), the scheduler (BRAIN), MIDI injected
 as input (MIDI LOOPBACK) and the bank pointer's stores (MIDI SCENES v1.0) are
 one module's each.
+
+#### Track mutes on the Octatrack (core-ot 0.9)
+
+`ev_mute` fires each time a track's mute word changes, from the panel, MIDI,
+the mixer or a project job, in the task that changed it. The handler gets
+the word just stored live and returns the word the Part keeps, which a SAVE
+writes; what plays stays stock's. The words and their Part copies are in
+`octatrack/core.h` (`OT_MUTES_AUDIO`, `OT_PART_MUTES_AUDIO`, ...). A mod
+that keeps mutes per pattern returns the Part's old word:
+
+```c
+#include "octatrack/core.h"
+
+unsigned my_mute(unsigned kind, unsigned word)
+{
+    remember(kind, word);                   /* yours: per pattern, say */
+    return kind == OT_MUTE_MIDI ? OT_PART_MUTES_MIDI : OT_PART_MUTES_AUDIO;
+}
+```
+
+`"subscribe": [{"event": "ev_mute", "fn": "my_mute", "order": 50}]`, and
+`"resources": {"core": "0.9"}`. `tests/fixtures/octatrack-mute` is a probe.
+
+#### The sequencer's moments on the Octatrack (core-ot 0.10)
+
+Observers, each before the stock routine runs; handlers return nothing.
+
+| event | when | handler | runs in |
+|---|---|---|---|
+| `ev_part_apply` | a pattern's Part is applied to the engine: a pattern change, the transport's start, a load, the power-up and a Part change (the heavy apply, 0.21) | `void f(bank, part)` | the sys task and the frame interrupt: keep it short |
+| `ev_chain_add` | [PTN] adds a pattern to the chain; stock may still leave it out (full at 16, or already in it) | `void f(pattern)` | the sys task |
+| `ev_seq_reset` | the sequencer's stop and reset: STOP while stopped, and every menu that stops it first | `void f(void)` | the caller's task |
+| `ev_midi_panic` | the stop and reset is about to send CC 123 on each channel the MIDI tracks use | `void f(void)` | the caller's task |
+| `ev_ui_tick` (0.15) | each tick of the UI task, the task that draws the screen (60 a second), before its own timers | `void f(void)` | the UI task |
+
+Two more (core-ot 0.12) run in the sequencer's tick, a timer interrupt: keep them to a few dozen instructions.
+
+| event | when | handler |
+|---|---|---|
+| `ev_track_length` | each track's advance: its step counter has moved on and is compared with the length it wraps at | `int f(trk, len)`: the length (chained); `trk` 0-7 the audio tracks, 8-15 the MIDI tracks |
+| `ev_pattern_wrap` | the master pattern wrapped and goes on (a queued pattern is now playing) | `void f(bank, pattern, old_bank, old_pattern)` |
+
+`ev_rec_length` (core-ot 0.13) runs in the recorder (from the frame interrupt and the sys task): every way a take's
+length is worked out (RLEN 1-64, MAX, free and sequencer-armed takes) ends with `int f(trk, len)`,
+the length in samples, which the handler returns (chained). The Part's RLEN byte says which way it
+came. A mod that gives RLEN a new value (a PLEN, say) sets the length here.
+
+`ev_track_pattern` (core-ot 0.14) picks the pattern each track plays: `int f(trk, pattern, step,
+peek)` returns it (chained), at the four places stock passes the playing pattern to a track's step
+routine: the tick's audio and MIDI passes (the sequencer's interrupt, `peek` 0) and the rebuild after
+an edit (the sys task, `peek` 1: answer the same, change nothing). With `ev_track_length` it gives
+each track a pattern of its own, as octabam's TRACK PATTERNS does.
+
+System observers (core-ot 0.16, 0.18):
+
+| event | when | handler | runs in |
+|---|---|---|---|
+| `ev_card_cmd` | the CF card's dispatcher has issued a command (the 22-byte record, the ATA command byte at +5); `result` -1 means it is done, another value that the card's interrupt finishes it | `void f(const void *cmd, int result)` | a task or the card's interrupt |
+| `ev_task_switch` | at every RTOS switch, the outgoing task's registers saved in its block | `void f(void *task)` | that task's stack, every interrupt masked: a counter or a time stamp, nothing more |
+| `ev_card_done` (0.18) | a command left in flight has finished, in the card's interrupt, before the next one starts (the record still holds it) | `void f(const void *cmd)` | the card's interrupt |
+| `ev_settings_load` (0.18) | stock has just copied the battery-RAM settings record (0x100fff00, 100 bytes) to the live settings (0x80000070): at boot and two panel actions; `fresh` 1 when it wrote its defaults first | `void f(unsigned fresh)` | the caller's task |
+
+`tests/fixtures/octatrack-seq` is a probe of these and of `ev_track_tab_draw`; `"resources": {"core": "0.19"}`.
+
+`ev_lfo_step` (core-ot 0.19) runs in the frame interrupt for each of the three LFOs of every track,
+audio and MIDI (24 calls a frame): `int f(void *rec, unsigned lfo, int inc)` returns the phase
+increment this frame (chained): divide it for slower LFOs, as octabam's SLOW LFO does (its larger
+MULT range is a data site on the page table). The EMAC's accumulator is live there: handlers must
+not use it, and must be short.
+
+The audio inputs need no event of their own: each frame interrupt advances `OT_INPUT_INDEX` (0-7) and
+points the input DMA at that 256-byte page, `OT_INPUT_PAGE(i)` (`octatrack/core.h`); read them from
+`ev_frame_begin` or `ev_frame_end`, as a level meter or a record threshold would.
+
+#### Held edits, copies and MIDI notes on the Octatrack (core-ot 0.11)
+
+The places octabam's EVENTS module holds for PLOCKS P2 and MIDI FOLLOW (MIT).
+
+| event | when | handler | runs in |
+|---|---|---|---|
+| `ev_edit_held` | an encoder turned while a trig is held (the held-step editor) | `int f(enc, delta)`: nonzero = taken; the first taker wins and stock's editor does not run | the sys task |
+| `ev_scene_knob` (0.20) | an encoder turned while a scene is held (the scene-lock knob handler) | `int f(enc, delta)`: as `ev_edit_held` | the sys task |
+| `ev_arp_knob` (0.21) | an encoder turned on ARP SETUP | `int f(enc, delta)`: as `ev_edit_held` | the sys task |
+| `ev_tempo_open` (0.21) | the TEMPO key is about to open the TEMPO window | `int f(void)`: nonzero = taken, the window does not open (open your own) | the sys task |
+| `ev_copy` | before one of the pattern data's copies (the clipboard, the undo buffer, the bank: 22 memcpy places, not every copy) | `void f(dst, src, len)` | the sys task |
+| `ev_midi_note_sent` | a MIDI track's note has gone out | `void f(trk, note, vel, pool)`; pool 1 is the arpeggiator's | the sequencer's task |
+
+`tests/fixtures/octatrack-held` is a probe of these, `ev_knob_draw`, `ev_leds` and `ev_trig_box_draw`; `"resources": {"core": "0.27"}`.
+
+`ev_setup_dial` covers every SETUP window that draws its knobs with the stock widget: AMP, FX1 and
+FX2 SETUP, SRC / NOTE SETUP (`page` `OT_P2_PLAYBACK`) and MIDI ARP SETUP (`page` `OT_SETUP_ARP`; both
+core-ot 0.22), and the MIDI tracks' CTRL pages (`page` `OT_PAGE_CTRL`, core-ot 0.26).
+
+`ev_knob_draw` (core-ot 0.23) is the other knob widget's entry (0x400467a4): the pages whose parameter
+descriptors name it, RECORDING SETUP and two more drawers. `void f(struct ot_knob *k)` gets the widget's
+own arguments (x, y, mode, value, flags, formatter, canvas; `octatrack/core.h`) and may change the value,
+the flags or the formatter before it draws: RLEN PLEN's and REC THRESHOLD's formatters, say.
+
+`ev_leds` (core-ot 0.24) runs at the LED flush, just before the LED map (`OT_LED_MAP`, 17 bytes, a bit an
+LED) goes out to the panel: `void f(uint8_t *map)` sets or clears bits (`OT_LED_ON`, `OT_LED_OFF`). Stock
+rewrites its own bits on its next pass, so a handler sets its LEDs at every flush. The UI task, the
+key-repeat task and the redraws flush.
+
+`ev_trig_box_draw` (core-ot 0.25) runs as the trig mode box's drawer leaves (the keyboard of CHROMATIC,
+the slots, the arp): `void f(unsigned mode)` draws over the box (`ot_blit`); `mode` is `OT_TRIG_MODE`.
+
+`ev_bank_copied` (core-ot 0.27) runs on the engine task right after a per-bank SAVE (`.work` to `.strd`) or
+RELOAD (`.strd` to `.work`) copies the bank's file: `void f(const char *dst, const char *src, int result)`.
+`ev_project_store` and `ev_project_reload` see the whole-set copies; a mod that keeps a file per bank copies
+it here.
+
+### LFO waves on the Octatrack (core-ot 0.28)
+
+A mod adds a waveform to every audio and MIDI LFO's WAVE list by contributing a pointer to a
+`struct ot_lfo_wave {name, fn}` to `ot_lfo_waves` (`octatrack/core.h`):
+
+```c
+static void pulse(struct ot_lfo *l, int32_t restart)
+{
+    l->out = l->phase < 0x200000u ? 0x7fffff : -0x800000;    /* a 25 % pulse */
+}
+const struct ot_lfo_wave my_wave = {"PLS", pulse};
+```
+
+```json
+"contribute": [{"to": "ot_lfo_waves", "order": 50, "data": "00000000",
+                "relocs": [[0, "abs32", "sym:my_wave", 0]]}],
+"resources": {"core": "0.28"}
+```
+
+- **Where it shows.** After stock's 19 waves (TRI to RND, T1-T8), in the table's order: the first mod
+  wave is value 19. The WAVE cell shows its name (up to 4 characters) as text; stock's waves keep their
+  icons. Up to 13 waves; a project that names a wave whose mod is gone plays SAW there.
+- **The handler** runs every frame in the frame interrupt for each LFO set to it. `lfo->phase` runs
+  0 to 0x7fffff over one cycle; write `lfo->out`, where -0x800000 to 0x7fffff is full depth. `restart`
+  is nonzero when the LFO restarts. `state[]` is the LFO's own, shared with RND. Keep it short and leave
+  the EMAC alone.
+- `tests/fixtures/octatrack-lfo-wave` adds two (PLS and HALF).
+
+### Popup rows on the Octatrack (core-ot 0.29)
+
+Every popup list opens through one routine: the sample editor's SLICE, TRIM and EDIT menus, the file
+browser's, LFO DESIGN's, and every titled list dialog. `ev_popup` runs as one is about to open, with core's
+copies of its rows (`struct ot_popup`, `octatrack/core.h`). A handler changes them or adds rows:
+
+```c
+static void my_action(void) { /* the row was chosen: the list has closed */ }
+void my_popup(struct ot_popup *p)
+{
+    if (p->menu == OT_POPUP_SLICE)                   /* the SLICE menu, on a slice */
+        ot_popup_add(p, "MY ACTION", my_action);
+}
+```
+
+```json
+"subscribe": [{"event": "ev_popup", "fn": "my_popup", "order": 50}],
+"resources": {"core": "0.29"}
+```
+
+- **Which list.** `menu` is the caller's own labels array (`OT_POPUP_SLICE`, `OT_POPUP_SLICE_ADD`,
+  `OT_POPUP_VIEW`, or any other list's address) and `ret` the caller's return address.
+- **Rows.** Up to `OT_POPUP_MAX` (32); the list scrolls past four. On YES the list closes, stores the row
+  in `*out` when `out` is not 0, and calls the row's callback, `void f(void)`, in the UI task. A list no
+  handler changed opens exactly as stock opens it.
+- `tests/fixtures/octatrack-popup` adds PROBE ROW to the SLICE, CHANGE VIEW and LFO DESIGN lists.
+
+### The playback increment on the Octatrack (core-ot 0.30)
+
+`ev_play_increment` runs for each STATIC, FLEX and PICKUP track every frame, in the frame interrupt:
+`int32_t f(unsigned trk, int32_t inc)` gets stock's playback increment (Q26: 0x04000000 plays at the
+sample's own speed; PTCH and RATE applied) and returns the one the track plays. Handlers chain. core keeps
+stock's value per track, so a frame where stock reuses the stored increment hands handlers stock's again,
+not what they returned. Keep it short and leave the EMAC alone. The sites sit beside octabam REPITCH's
+(0x40004100), which keeps working beside it; `tests/fixtures/octatrack-rate` is a probe.
+
+### PATTERN SETTINGS rows on the Octatrack (core-ot 0.31)
+
+PATTERN SETTINGS (FUNC+PTN) lists 24-byte rows (`struct ot_menu_row`, `octatrack/core.h`): a label, an
+`edit(delta)` that runs on an encoder turn (delta +-) and on YES (0), and a `text()` that returns the value
+shown at the right; a row with neither is a heading. Each pane is a table: `ot_ptn_rows` (PAT),
+`ot_track_rows` (every audio track's), `ot_midi_rows` (every MIDI track's). core puts stock's six rows first;
+a mod's rows follow in contribution order, and the pane scrolls past six. `ot_pset_track()` says which track
+the pane shows (-1 on PAT). `tests/fixtures/octatrack-pset` adds a row to the audio tracks' panes.
+
+### PERSONALIZE rows on the Octatrack (core-ot 0.32)
+
+PROJECT > SYSTEM > PERSONALIZE keeps three parallel arrays, so a row is one entry in each of `ot_pers_label`
+(`const char *`), `ot_pers_get` (`const char *get(void)`, the value text) and `ot_pers_set`
+(`void set(int32_t delta, int32_t press)`; stock saves the settings after it). Contribute one entry to each,
+with the same order; core puts stock's 16 first. On an MKI, whose list stops before LED BRIGHTNESS, a mod's
+rows bring that row into view too. `tests/fixtures/octatrack-pers` adds one.
+
+### The time-stretch helper on the Octatrack (core-ot 0.33)
+
+The time-stretch helper is a task of its own; each pass it works out the stretch of every track whose
+machine stretches. `ev_tstretch` runs before each such track: `int f(unsigned trk)` returns nonzero to skip
+it this pass (the first taker wins), for a mod that plays the track itself or saves the work.
+`tests/fixtures/octatrack-tstretch` is a probe.
+
+### The card file calls on the Octatrack (core-ot 0.34)
+
+`ev_file` sees each call of stock's card file layer before it runs, from every task:
+`void f(unsigned op, void *f, const void *a, uintptr_t b)`, op 0 open (a = path, b = mode), 1 read and
+2 write (a = buffer, b = length), 3 close. A handler's own file calls do not come back to it; keep it short,
+as a card write may be waiting. `tests/fixtures/octatrack-file` counts them.
+
+### What a double tap and a SETUP key open on the Octatrack (core-ot 0.35)
+
+Both run in the UI task; a handler returns nonzero to take the gesture (the first taker wins), and stock
+then opens nothing, so the mod opens its own window. `int ev_track_double(unsigned trk)`: the current
+track's TRACK key tapped twice (stock opens the machine pool on an audio track, nothing in MIDI mode).
+`int ev_setup_open(unsigned kind)`: a page's SETUP window is about to open from FUNC + the page key, a
+double tap or a page change; kind 0 SRC/NOTE, 1 LFO, 2 AMP/ARP, 3 FX1/CTRL1, 4 FX2/CTRL2.
+`tests/fixtures/octatrack-opens` takes both.
+
+### A pattern's check and an effect's choice on the Octatrack (core-ot 0.36)
+
+`void ev_pattern_check(void *pattern)` runs just before stock's pattern validator checks a pattern: at
+boot's restore (all 16, before any mod's project data is back) and at every bank load. Stock clamps what it
+does not know, so a mod that keeps values in pattern bytes puts them right here. `int ev_fx_choose(unsigned
+slot, unsigned trk, unsigned id)` runs when YES in the FX1 (slot 0) or FX2 (slot 1) chooser is about to put
+effect `id` on track `trk`; nonzero refuses it (the first taker wins) and the chooser stays open.
+`tests/fixtures/octatrack-guard` is a probe of both.
+
+### The start-up art on the Octatrack (core-ot 0.37)
+
+`int ev_boot_frame(unsigned frame, void *plane)` runs at the start of each frame of the start-up
+animation, before any project loads: return nonzero after drawing the frame on `plane` yourself
+(`ot_blit`), and stock draws none of its logo; the screen flush and the LED sweep go on either way.
+`tests/fixtures/octatrack-bootart` draws a bar instead of the logo. A SETUP page that needs a knob with more
+labels than stock's widget shows (Modwerk's "wide dial") swaps the widget in `ev_setup_dial`; no site of its
+own.
+
+### A trig's START and the renderers' time on the Octatrack (core-ot 0.38)
+
+`ev_track_start(unsigned trk, unsigned type, stock)` runs in the frame interrupt as a track's trig is about
+to call its machine type's START: return a START to call instead (`start(trk, arg, flags)`, as stock's) or 0
+for the next handler; declare it returning `uint32_t`, since the bus reads d0. `ot_render_meter` (core.h)
+holds each track's renderer time, both of the frame builder's calls, on the frame meter's counter: last,
+worst, calls and total per track. `tests/fixtures/octatrack-start` and `octatrack-rmeter` use them.
+
+### A block to DSP core 1 on the Octatrack (core-ot 0.39)
+
+`ev_dsp_feed1` runs once a frame in the frame transfer's interrupt, after stock's push to DSP core 1, as
+usb-ot's `ev_dsp_feed` does for core 0. A handler may call `ot_dsp_feed1(block, words, at)` once to send
+core 1 one more block; core.h gives the limits and where the words land (the frame's bank, as stock's own
+block). Core 1 has no event bus of its own, so the mod owns the DSP memory it writes and the DSP code that
+reads it. `tests/fixtures/octatrack-dsp1` sends 32 words to $6320, just past stock's block.
+
+### The engine task's jobs on the Octatrack (core-ot 0.40)
+
+`ev_engine_job(type, msg)` runs in the engine task as each stock job (0..45) starts, with its message, and
+again with msg 0 when it has ended; core.h names job 16, the sample editor's render/commit. It only
+watches: card work of a mod's own goes through `ot_engine_post`. `tests/fixtures/octatrack-job` counts them.
+
+### Tempo, scenes, the card, previews and the recorders on the Octatrack (core-ot 0.41)
+
+Six events from the routine map, signatures in core.h: `ev_tempo` sees a tempo commit and may change it,
+`ev_scene_load` a scene loaded into A or B, `ev_card` the card's state after a mount, removal or remount,
+`ev_usb_disk` the start and end of USB DISK MODE (stop using the card between 1 and 0), `ev_preview` an
+audio preview's start and stop, `ev_rec_cmd` a recorder command from a REC key or MIDI note. All but
+`ev_tempo` only watch. Probes: `tests/fixtures/octatrack-tempo`, `-scene`, `-card`, `-preview`.
+
+### Pages, tracks, windows, patterns and the arrangement on the Octatrack (core-ot 0.42)
+
+Ten events from the firmware sweep (signatures in core.h): `ev_page`, `ev_track_select` (refusable),
+`ev_window` (open and close, named by the caller's return address), `ev_crossfader` (may change the
+value), `ev_tempo_set` (the tempo knob, TAP and the rest `ev_tempo` leaves out), `ev_pattern_select`
+(refusable for user picks), `ev_pattern_edited`, `ev_arr_mode`, `ev_arr_row` and `ev_track_play`
+(refusable). `ev_scene_knob` now covers SCENE B too. Probe: `tests/fixtures/octatrack-ui42`.
+
+### SEQUENCER rows on the Octatrack (seqrows 0.1)
+
+PROJECT > CONTROL > SEQUENCER works as PERSONALIZE does, with `ot_seq_label`, `ot_seq_get` and `ot_seq_set`
+(stock's three first), but they come from `mods/seqrows-ot`, a companion: octabam's SCALE QUANTIZER v1.0
+patches the same places for its own rows, and the two refuse each other. A mod with rows there requires
+`"seqrows"`; the list scrolls past three. `tests/fixtures/octatrack-seqrows` adds one.
+
+### Timers and interrupt vectors on the Octatrack
+
+Two firmware services are calls in `octatrack/core.h`, no core site. `ot_timer_start(ticks, fn)` runs
+`fn` every `ticks` UI ticks (60 a second) in the UI task until `ot_timer_cancel(slot)`; it returns the slot,
+or -1 when stock's 32 are taken. `ot_vector_get(n)` and `ot_vector_set(n, handler)` read and write the
+interrupt vector table by the number stock installs with (0x41 the frame interrupt). `ot_vector_get`
+returns a `uint32_t`: the routine answers in d0, and GCC takes a returned pointer from a0.
+`tests/fixtures/octatrack-timer` uses both.
 
 ### The DSP bus on the Octatrack (dspbus 0.1)
 
@@ -1011,7 +1315,8 @@ use the names as they are.
 | `fw_voice_params` | 0x80002794 | the machine's 8 parameters A-H, 8.8, 106 bytes a track |
 | `fw_voice_note`, `fw_voice_vel` | 0x80001f28, 0x80001f18 | the trig's note (16.16) and velocity (8.8) |
 | `fw_voice_start` | 0x80001228 | bit t: track t starts a voice this block |
-| `fw_amp_env` | 0x4199df54 | the AMP envelope: phase +0, level +4, 12 bytes a track |
+| `fw_amp_env`, `fw_filter_env` (4.4) | 0x4199df54 | the FILTER envelope, despite the first name: phase +0, level +4, 12 bytes a track. Its level follows the filter page, not the sound |
+| `fw_amp_level` (4.4) | 0x4199dd64 | the AMP envelope: phase +0 (2 attack, 1 hold, 0 decay), value +4 (negated Q31; in decay the level), 8 bytes a track; all 0 when idle |
 | `fw_pitch_tab` | 0x4019b1c0 | 2^((i - 10752) / 2048) in Q29 |
 | `fw_active_track` | 0x4197b6b4 | the active track, 0-7 |
 | `fw_kit` | 0x4199dc44 | -> the UI kit: track t's sound at +0x20 + 0xa2 t, its machine at +0x7e |
@@ -1496,7 +1801,7 @@ works on the value. A lockable field's `min..max` should include its init.
 The init is part of the layout: a field whose `init` changes is a new field
 (new bits, a new code, its old data dropped), as one whose width changed.
 A build has at most 63 fields with an init, and a core without the table
-`core_field_inits` (core-ar2 before 0.10, core-a4) refuses them. Core exports
+`core_field_inits` (core-ar2 before 0.10, core-a4mk2) refuses them. Core exports
 no firmware locations, so a mod names the live objects it passes as `item`
 itself, for each OS. While an item is live its fields sit inside the stock
 object, so copy, paste, undo and pattern changes carry them with no extra
@@ -1566,7 +1871,9 @@ as when it was first made. Copies go in the build's manifest (`store`) and in th
 itself, after the mods' image (`ELKSTORE`, its length, then the lockfile's
 text; about 1-2 KB, never copied into RAM), so a lost lockfile comes back
 from the last .syx: `elekloader.patch --lockfile-from OLD.syx`. The unit
-itself can't give it back: it never sends its OS out.
+itself can't give it back: it never sends its OS out. On a unit with the
+Drive Loader, `--drive-store` keeps the lock codes and CCs its +Drive mods
+hold free (docs/DRIVE.md, "+Drive storage").
 
 **What is checked.** Sounds and kits carry the layout ID and their
 generation in their own spare bytes and are checked on every load. Pattern
@@ -1581,8 +1888,8 @@ sets things up per project, subscribes to `ev_project`:
 
 | event | when | C prototype | notes |
 |---|---|---|---|
-| `ev_project` | Analog Rytm MKII (core-ar2 from 0.2) and Analog Four MKII (core-a4 0.1): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
-| `ev_project_save` | Analog Rytm MKII (core-ar2 0.10): before (`pre` 1) and after (`pre` 0) every whole save of the live project to a +Drive slot: SAVE PROJECT, SAVE PROJECT AS, the project manager's saves, SAVE ... BEFORE LOADING, and LOAD of an empty slot, which writes a new project there | `void f(unsigned pre, unsigned how)` | `CORE_SAVE_KIND(how)`: `CORE_SAVE_SAME` (the active slot), `CORE_SAVE_OTHER` (another slot, or a project with none yet), `CORE_SAVE_NEW` (the empty slot's LOAD, after `ev_project`'s `CORE_PROJECT_NEW`); `CORE_SAVE_SLOT(how)` 0..127, the screen's number less one (255: none); `CORE_SAVE_FAILED` in the call after when the slot was not written. A field set in the call before is in the saved copy. From the save's job, not a UI tick: keep it short, start no load or save, leave MIDI and USB to `ev_tick`, and don't call `core_project_edited` (mods/core-ar2/README.md, "The project save") |
+| `ev_project` | Analog Rytm MKII (core-ar2 from 0.2) and Analog Four MKII (core-a4mk2 0.1): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
+| `ev_project_save` | Analog Rytm MKII (core-ar2 0.10) and Analog Four MKII (core-a4mk2 0.6, `analog-four-mk2/store.h`; mods/core-a4mk2/README.md, "The project save (0.6)"): before (`pre` 1) and after (`pre` 0) every whole save of the live project to a +Drive slot: SAVE PROJECT, SAVE PROJECT AS, the project manager's saves, SAVE ... BEFORE LOADING, and LOAD of an empty slot, which writes a new project there | `void f(unsigned pre, unsigned how)` | `CORE_SAVE_KIND(how)`: `CORE_SAVE_SAME` (the active slot), `CORE_SAVE_OTHER` (another slot, or a project with none yet), `CORE_SAVE_NEW` (the empty slot's LOAD, after `ev_project`'s `CORE_PROJECT_NEW`); `CORE_SAVE_SLOT(how)` 0..127, the screen's number less one (255: none); `CORE_SAVE_FAILED` in the call after when the slot was not written. A field set in the call before is in the saved copy. From the save's job, not a UI tick: keep it short, start no load or save, leave MIDI and USB to `ev_tick`, and don't call `core_project_edited` (mods/core-ar2/README.md, "The project save") |
 
 Core-ar2 0.2 owns 22 more sites, the same on 1.73 and 1.74 except the file
 save (0x400b0804 on 1.73, 0x400b0870 on 1.74) and the SysEx copies: 0x4000937c and 0x40009146
@@ -1606,9 +1913,9 @@ the aftertouch menu's setRoute (0x4003391e).
 `examples/store-check-ar2` uses a field in each
 scope and shows which no longer read back.
 
-### Mod storage (core-a4 0.1, Analog Four MKII)
+### Mod storage (core-a4mk2 0.1, Analog Four MKII)
 
-core-a4 has the Rytm's mod storage, above, with the A4's own objects: the
+core-a4mk2 has the Rytm's mod storage, above, with the A4's own objects: the
 same six scopes, `storage` declarations, lockfile, tagged store, checks and
 `ev_project`. A mod includes `elekloader/sdk/include/analog-four-mk2/store.h`
 instead, and its lockfile defaults to `analog-four-mk2.lock.json`. What
@@ -1630,13 +1937,16 @@ differs:
   survives a power cycle straight after SAVE PROJECT AS: core copies what
   the save wrote of its own bytes back into the stored project.
 - No velocity routes: the sound's room needs no extra sites.
-- core-a4 owns 28 storage sites (mods/core-a4/README.md lists them), among
+- Field defaults (core-a4mk2 0.6): a field's `init` works as on the
+  Rytm (above), with no new sites: p-locks, destinations, MIDI and
+  `core_param_values` work on the value.
+- core-a4mk2 owns 28 storage sites (mods/core-a4mk2/README.md lists them), among
   them a kit init the Rytm's core does not need.
-- Checked in rytm-emu's A4 build and on a unit (store-check-a4). The spare sound and
+- Checked in rytm-emu's A4 build and on a unit (store-check-a4mk2). The spare sound and
   effects words reach an engine slot the stock OS appears not to use; on
   a unit, a pattern sounded the same by ear with every field set.
 
-`examples/store-check-a4` is store-check-ar2 for the A4.
+`examples/store-check-a4mk2` is store-check-ar2 for the A4.
 
 ### Parameter pages (core-ar2 0.4, Analog Rytm MKII)
 
@@ -2174,6 +2484,16 @@ sites, with `analog-rytm-mk2/moments.h`:
   handle a project uses. A core without the table `core_handles` refuses
   the mark at link time.
 
+### Moments (core-a4mk2 0.9, Analog Four MKII)
+
+The Rytm's moments, above, with `analog-four-mk2/moments.h`: `core_midi_try_send` and `core_usb_midi_up`,
+`core_project_name()`, `"handle": true` fields with
+`core_handle_fields` (4 sounds a kit, 6 tracks a pattern, no sound pool),
+the current kit, track (0..5: 4 FX, 5 CV) and pattern with their items, and
+`ev_kit`. The SysEx handler is std1's
+`ev_sysex_in` (core-a4mk2 0.7). What differs is in
+mods/core-a4mk2/README.md, "Moments".
+
 ### The sequencer (core-ar2 0.11, Analog Rytm MKII)
 
 The sequencer clock's steps and ticks as events, with
@@ -2269,6 +2589,15 @@ my_blob:
   overtakes its own input. The patcher refuses either and says by how much.
   A 1 MB payload that packs to about 80 % fits beside core and a check mod
   (sidecar-check-ar2 part 6).
+
+### Payloads (core-a4mk2 0.6, Analog Four MKII)
+
+The Rytm's payloads, above, with `analog-four-mk2/payload.h`. From
+core-a4mk2 0.6 the mods' area is 0x45650000-0x47C00000, 37.7 MB for code,
+tables, payloads and `.bss` (docs/DEVICES.md, the Analog Four MKII); a
+build with core-a4mk2 0.5 or older keeps the 128 KB at 0x47BE0000. As on
+the Rytm, the flash budget is the tighter limit for a payload, and the
+patcher says by how much a build is over.
 
 ### Screen calls (core-ar2 0.13, Analog Rytm MKII)
 
@@ -2528,9 +2857,9 @@ The NRPN follows the code, so it is a build's own (Lockable parameters,
 above): a controller mapped to it needs remapping after a build whose
 lockfile gave the parameter another code. Checked in the emulator only.
 
-### Parameter pages (core-a4 0.2, Analog Four MKII)
+### Parameter pages (core-a4mk2 0.2, Analog Four MKII)
 
-core-a4 0.2 has core-ar2 0.4's `core_pages` and `core_params` at the A4's
+core-a4mk2 0.2 has core-ar2 0.4's `core_pages` and `core_params` at the A4's
 four routines, with the same calls and answers as above, and core-ar2's
 `core_audio_load`. With `elekloader/sdk/include/analog-four-mk2/pages.h`
 (and `load.h`):
@@ -2571,7 +2900,7 @@ What differs from the Rytm:
   and shows each view's own title, so there is nothing to fix there.
 - A stock page's entry can be answered too (a `core_pages` entry with a
   stock id), to retitle a page a mod's view follows.
-- From core-a4 0.3, `core_page_fns` works as core-ar2 0.6's ("A page whose
+- From core-a4mk2 0.3, `core_page_fns` works as core-ar2 0.6's ("A page whose
   knobs follow the sound", above): `struct core_page_fn` is `{page, info}`,
   and `info(page)` returns the `core_pages` entry to answer, or 0 to pass.
   The knobs' draw, a knob's touch and a turn each look the knob up through
@@ -2579,17 +2908,43 @@ What differs from the Rytm:
   reads the name once, when core makes it at boot, so every entry `info`
   returns should carry the same name.
 
-`examples/pages-check-a4` is the smallest mod on it: AMP PAN's value as two
+`examples/pages-check-a4mk2` is the smallest mod on it: AMP PAN's value as two
 hex digits through `core_params`, and a CHECK page behind the AMP key. Its
-0.1, for core-a4 0.2, was checked in rytm-emu's A4 build and on a unit (23
-Oct 2026). From 0.2 (for core-a4 0.3) CHECK comes from `core_page_fns`, and
+0.1, for core-a4mk2 0.2, was checked in rytm-emu's A4 build and on a unit (23
+Oct 2026). From 0.2 (for core-a4mk2 0.3) CHECK comes from `core_page_fns`, and
 its knob B, AMP PAN again, is shown while the count of PAN's turn updates
 (the bar) is odd and empty while it is even. Checked in rytm-emu's A4 build
 and on a unit (24 Oct 2026).
 
-### Lockable parameters (core-a4 0.5, Analog Four MKII)
+### Knob looks (core-a4mk2 0.6, Analog Four MKII)
 
-core-a4 0.5 has the first part of the lock service, core-ar2's design
+The Rytm's knob looks (above) with `analog-four-mk2/pages.h`: an entry in
+`core_knob_looks` covers a mod's own knob ids, which on the A4 are above
+0x126, and `look` is a stock id, 1..0x126.
+
+### Knob ids by count (Analog Four MKII)
+
+The Rytm's knob ids by count (above) with `analog-four-mk2/pages.h`:
+declare `"knobs": n` and use `CORE_KNOB(k)`. The A4's ids: stock's are 1..0x126, core-a4mk2 keeps 0x127..0x1ff (its lock
+pseudo ids and room for more), a mod's own start at 0x200. Flashed mods'
+runs stay below 0x4000; 0x4000..0x7fff are the +Drive mods' (docs/DRIVE.md,
+"Knob ids on the +Drive"), so a reflash never moves them. A mod that picks
+its ids itself still may, from 0x200 to 0x3fff: the linker refuses a
+`core_params` or `core_knob_looks` entry in 0x127..0x1ff or in the +Drive
+range, a `core_knob_looks` entry below 0x200, and two mods sharing an id.
+
+### Screen calls (core-a4mk2 0.6, Analog Four MKII)
+
+The Rytm's screen calls (above) with `analog-four-mk2/screen.h` and
+`"core": "0.6"`. What differs: the Rytm's `core_stock_key` is
+`core_key_native` here, std1's name for it, and returns 0 once stock had
+the event (the A4's Brain::key doesn't pass on whether a view took it), the
+progress box is SAVE PROJECT's, and TOTAL RECALL counts as an overlay
+(mods/core-a4mk2/README.md, "Screen calls (0.6)").
+
+### Lockable parameters (core-a4mk2 0.5, Analog Four MKII)
+
+core-a4mk2 0.5 has the first part of the lock service, core-ar2's design
 ("Lockable parameters" and "Mod p-locks", above) with the A4's track
 kinds, from part 2 its destinations, from part 3 the value read and from
 part 4 MIDI.
@@ -2688,7 +3043,7 @@ int one = core_param_value(track, STORE(my_depth));
 A track's read is the voice its last trig went to. `CORE_PARAM_ENGINE`
 gives the engine's 0..0x7fff instead. A handle is a build's own number: look
 it up at boot or on the first read, and never keep one in a project. In the
-emulator the values match stock's own parameter block for block (core-a4's
+emulator the values match stock's own parameter block for block (core-a4mk2's
 README, "Checked so far").
 
 **MIDI (part 4).** Every lockable parameter is NRPN MSB 0, LSB its lock
@@ -2703,12 +3058,12 @@ live recording runs; a mod knob's turn sends its NRPN, or its CC, as
 PARAM OUTPUT says, on the channel stock's own knobs use. On a channel shared
 with PERF, an NRPN reaches the active track, as stock's do.
 
-`examples/lock-check-a4` is the smallest mod on it: one lockable parameter
+`examples/lock-check-a4mk2` is the smallest mod on it: one lockable parameter
 of each kind and a fine one, on a LOCK CHECK page per kind, with what it
 reads each audio block in `lk_seen` for the emulator, from 1.1 its value
 read beside a stock parameter's (`lk_ring`) and the read's cost, and from
 1.2 CCs on A and V and the stored values each tick (`lk_midi`).
-`examples/sound-check-a4` makes one heard: a test tone whose level (LVL)
+`examples/sound-check-a4mk2` makes one heard: a test tone whose level (LVL)
 and pitch (PIT) are lockable mod parameters, read on each synth voice every
 block with `core_param_values_voice` and added to the effects' return (the
 DAC words 4 and 5 of the TX block at `ev_render_out`).
@@ -3960,10 +4315,11 @@ core has.
 | `license` | an SPDX identifier. The example uses `GPL-2.0-or-later`, the loader's own licence. Put the same `SPDX-License-Identifier` line at the top of each source |
 | `sources` | `.c` and `.s` files, compiled/assembled with the device's flags |
 | `subscribe` | `{"event", "fn", "order"}`: `fn` is one of your global functions |
-| `sites` | patches to the stock image: `{"addr", "stock", "op", "target" or "new"}` (below) |
-| `collections`, `contribute` | tables you declare, and entries you add to others' ([FORMAT.md](FORMAT.md)) |
+| `sites` | patches to the stock image: `{"addr", "stock", "op", "target" or "new"}` (below); `"len"` and `"stock_sha256"` may stand in for `"stock"`, so the manifest holds no stock bytes |
+| `collections`, `contribute` | tables you declare (`{"entry": 4}`, or just the entry size; a core may add `"spare"`, `"max"` and `"render"`, DRIVE.md, "The build descriptor"), and entries you add to others' ([FORMAT.md](FORMAT.md)) |
 | `weak` | names you import that may be missing; they then read as zero |
 | `dsp`, `subscribe_dsp` | DSP code, on a device whose OS runs some (below, "DSP code") |
+| `dsp_load` | DSP code sent at run time on the Octatrack, by dspload-ot 0.2 (its README): `{"source", "entry", "name"}`; a TELOS mod from the card can have it |
 | `resources`, `requires`, `conflicts` | rules 9 and 11 |
 | `ports` | the same mod for other OS versions of the device: per OS, the keys that differ there (3.10) |
 
@@ -4522,6 +4878,8 @@ Some differences from an octabam build, by design:
 | `CM_KNOB: draw= needs flags=CM_DRAW` or `CM_KNOB: with CM_DRAW, +36 is draw` (assembly, `core3.inc`) | a knob's `draw=` without `flags=CM_DRAW`, or its `gfx=` with it | give the knob `flags=CM_DRAW` with `draw=`, or `draw=` in place of `gfx=`; the page's `CM_UI` needs `abi=cm_ui_v31` |
 | `imports N, which no given mod exports` | a missing dependency, or a typo | add the mod that exports N, fix the name, or list N under `weak` |
 | `adds to table T, which no given mod declares` | the table's owner is missing, or the event name is wrong | add core (or the owner); check the event name |
+| `m subscribes to ev_x, which core does not map` | a std1 mod (`"events": "std1"`) names an event this core does not serve under std1 | use an event the core's `std` map has (its README), or drop `"events"` and use the core's own event |
+| `m subscribes to std1 events, and core maps none` | this core has no `std` map | build with a core that serves std1, or use the core's own events |
 | `T holds at most N entries on <device> <OS>; A and B add M` | the mods together add more to T than the OS uses (the device profile's `table_limits`; for `sdk_alpha_machines`, the SDK machines it lists) | build with fewer of those mods, or fewer machines in them |
 | `both export S` | two mods define the same global | prefix your globals with your mod id; make internals `static` |
 | `relocation type N` | a reference the linker cannot relocate (e.g. 8-bit) | use 32-bit addressing for your own symbols; build with the SDK's flags |

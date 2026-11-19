@@ -4,6 +4,7 @@
     python -m elekloader.patch --stock Digitakt_OS1.53.syx \
         --mod core-2.1.elemod --mod sysinfo-2.0a.elemod ... --out CUSTOM.syx \
         [--version 2.0a] [--check] [--lockfile FILE] [--lockfile-from OLD.syx]
+        [--drive-store FILE|none]
 
 In this order, stopping at the first failure:
   1. the stock file must be a release elekloader knows (by its sha256), and
@@ -32,6 +33,13 @@ loads every project's mod data at defaults. It is written back after each
 build, and copies go in the manifest and in the build itself: --lockfile-from
 OLD.syx takes it out of an earlier build when the lockfile is lost.
 
+A unit with the Drive Loader keeps its +Drive mods' storage in /mods/.store
+(docs/DRIVE.md, "+Drive storage"). --drive-store FILE reads that file
+(`elekloader mods get .store`), and the build keeps the lock codes and CCs
+it holds free and says which scopes the loader repacks at the next boot. The
+lockfile keeps it for later builds, until another .store replaces it, or
+--drive-store none drops it.
+
 --check stops after step 4 and writes nothing. Nothing here talks to a
 device: you flash the file yourself, as with any OS update, and the stock
 file recovers the unit because the bootloader is never changed.
@@ -42,7 +50,7 @@ import os
 import sys
 import time
 
-from . import devices, elemod, formats, link, store
+from . import container, devices, drive_store, elemod, formats, link, store
 from .elemod import sha
 
 
@@ -50,10 +58,12 @@ class PatchError(Exception):
     pass
 
 
-def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock=None):
+def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock=None, drive=None):
     """-> (outputs {'syx': bytes[, 'bin': bytes]} or None, manifest dict).
     lock: the mod-storage lockfile (a dict), or None for a new one; the new
-    one is the manifest's 'store'. Raises PatchError."""
+    one is the manifest's 'store'. drive: what the unit's +Drive keeps
+    (read_drive_store), None to keep the lockfile's, False to drop it.
+    Raises PatchError."""
     try:
         stock, dev, rel = formats.load(stock_path)
     except OSError as e:
@@ -87,7 +97,7 @@ def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock
                 raise elemod.ModError('a whole-build bundle (format 1) cannot be combined '
                                       'with separate mods (format 2)')
             dsp = stock.section(rel.sharc['section']) if any(m.sharc or m.sharc_raw for m in v2) else None
-            linked = link.link(mods, img0, lock, sharc_stream=dsp)
+            linked = link.link(mods, img0, lock, sharc_stream=dsp, drive=drive)
             img = linked.image
         else:
             img = elemod.apply(mods, img0)
@@ -151,7 +161,8 @@ def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock
             vs = {stock.version}
         if len(vs) != 1:
             raise PatchError('give --version (%s): the mods name %s'
-                             % ('%d characters' % dev.version_len if dev.container == 'ele3'
+                             % ('%d characters' % dev.version_len
+                                if dev.container in devices.SYX_FAMILIES
                                 else 'up to %d characters' % dev.version_len,
                                 sorted(vs) or 'no version'))
         version = vs.pop()
@@ -226,6 +237,26 @@ def lock_from_build(path):
     return None
 
 
+def read_drive_store(path):
+    """The unit's /mods/.store (as `elekloader mods get .store` writes it, or in its data container) ->
+    what the +Drive keeps (drive_store.reserve). Raises PatchError."""
+    try:
+        with open(path, 'rb') as fh:
+            raw = fh.read()
+    except OSError as e:
+        raise PatchError('cannot read %s: %s' % (path, e))
+    if raw[:4] == container.MAGIC.to_bytes(4, 'big'):
+        try:
+            raw = container.parse(raw)[1]
+        except elemod.ModError as e:
+            raise PatchError('%s: %s' % (path, e))
+    st = drive_store.decode(raw)
+    if st is None:
+        raise PatchError('%s is not a .store the Drive Loader wrote (its magic, format, size or CRC); '
+                         'the loader places afresh from such a file: give --drive-store none' % path)
+    return drive_store.reserve(st)
+
+
 def default_lockfile(stock_path, out):
     """The lockfile a build keeps when --lockfile is not given: DEVICE.lock.json
     in the output's folder; None when the stock file can't be read (the build
@@ -251,6 +282,9 @@ def main(argv=None):
                                        '(default: DEVICE.lock.json in the output\'s folder)')
     ap.add_argument('--lockfile-from', metavar='OLD', help='when the lockfile does not exist: '
                     'take it from this earlier build (.syx)')
+    ap.add_argument('--drive-store', metavar='FILE', help='the unit\'s /mods/.store (elekloader mods get '
+                    '.store): keep the lock codes and CCs its +Drive mods hold free; "none" drops the '
+                    'lockfile\'s')
     a = ap.parse_args(argv)
     if not a.check and not a.out:
         ap.error('--out is required (or --check)')
@@ -286,8 +320,19 @@ def main(argv=None):
                   'elekloader kept one in the build)' % a.lockfile_from)
             return 1
         print('READ the lockfile (layout ID %s) from %s' % (lock['id'], a.lockfile_from))
+    drive = None
+    if a.drive_store == 'none':
+        drive = False
+    elif a.drive_store:
+        try:
+            drive = read_drive_store(a.drive_store)
+        except PatchError as e:
+            print('REFUSED: %s' % e)
+            return 1
+        print('READ the +Drive\'s .store (layout ID %s) from %s: %d lock codes, %d CCs'
+              % (drive['id'], a.drive_store, store.drive_codes(drive), len(drive['ccs'])))
     try:
-        outputs, man = build(a.stock, a.mod, a.version, a.check, lock=lock)
+        outputs, man = build(a.stock, a.mod, a.version, a.check, lock=lock, drive=drive)
     except PatchError as e:
         print('REFUSED: %s' % e)
         return 1

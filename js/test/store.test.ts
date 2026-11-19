@@ -78,7 +78,7 @@ test('CCs: the same CCs, notes and table entries', () => {
   }
 })
 
-test('codes per track kind (core-a4 0.5): the same lock codes, notes and table entries', () => {
+test('codes per track kind (core-a4mk2 0.5): the same lock codes, notes and table entries', () => {
   const A4 = 'analog-four-mk2'
   for (const [name, run] of Object.entries<any>(V.kind_runs)) {
     let lock: Lock | null = null

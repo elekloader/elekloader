@@ -24,24 +24,21 @@ older ones people still have:
 
 | device | OS | core | where |
 |---|---|---|---|
-| Digitakt mk1 | 1.53, 1.54 | `core-4.1.elemod`, `core-4.1-os1.54.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
-| Digitakt mk1 | 1.53, 1.54 | `core-4.2.elemod`, `core-4.2-os1.54.elemod` | on main, not released: build it ([below](#building-a-core)) |
+| Digitakt mk1 | 1.53, 1.54 | `core-4.4.elemod`, `core-4.4-os1.54.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page |
 | Digitakt mk1 | 1.53, 1.54 | `core-2.1.elemod`, `core-2.1-os1.54.elemod` | the v0.4.0 release, built into its apps |
-| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.2.1.elemod`, `core-dn1-5.2.1-os1.44.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
-| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.3.elemod`, `core-dn1-5.3-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
+| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.4.elemod`, `core-dn1-5.4-os1.44.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
-| Digitakt II | 1.17 | `core-dt2-1.0.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
-| Digitone II | 1.12 | `core-dn2-0.3.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page (experimental) |
-| Analog Rytm MKII | 1.74 | `core-ar2-0.12.elemod` | on main: build it ([below](#building-a-core)). The Drive Loader needs it: the +Drive mods' spare entries in its tables |
-| Analog Rytm MKII | 1.74 | `core-ar2-0.11.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
+| Digitakt II | 1.17 | `core-dt2-1.0.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page |
+| Digitone II | 1.12 | `core-dn2-0.4.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page (experimental) |
+| Analog Rytm MKII | 1.74 | `core-ar2-0.13.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page. The Drive Loader needs 0.12 or newer: the +Drive mods' spare entries in its tables. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | the [core-ar2-v0.3](https://github.com/elekloader/elekloader/releases/tag/core-ar2-v0.3) pre-release, and the shop |
-| Digitone II | 1.12 | `core-dn2-0.4.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
-| Analog Four MKII | 1.56 | `core-a4-0.5.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page (a proof of concept) |
-| Octatrack MKI, MKII | 1.40C | `core-ot-0.8.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
+| Analog Four MKII | 1.56 | `core-a4mk2-0.9.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page |
+| Analog Four MKII | 1.56 | `core-a4-0.5.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps (a proof of concept): [mods/core-a4mk2](../mods/core-a4mk2) 0.5 under its old name |
+| Octatrack MKI, MKII | 1.40C | `core-ot-0.42.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the v0.4.0 release: PURGE SAMPLES freezes the unit with it, so use 0.3.1 or newer |
-| Model:Cycles | 1.13 | `core-mc-0.3.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
-| Model:Samples | 1.13 | `core-ms-0.1.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
+| Model:Cycles | 1.13 | `core-mc-0.3.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page |
+| Model:Samples | 1.13 | `core-ms-0.1.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page |
 
 Each core keeps all of the one before it, on each OS both support: the same sites with the same
 bytes, the same events and tables, and every symbol where the older core
@@ -51,15 +48,36 @@ older core links with the newest as it did with its own, and a build takes
 the newest. The older files stay on their releases (core-v3.0,
 core-dn1-v2.3, core-dn1-v3.2 and core-dn1-v4.0).
 
-One kind of mod does not link with a newer core: a mod that patches a
-place itself which a later core took for every mod. The Digitakt mk1's
-core 4.1 patches the master output's places, and Digi EQ 1.0c and
-Tone+FX's Digitakt files (3.2a3 and 4.0c) patch them too: they link
-with core 4.0 and are refused with 4.1 (*"core 4.1 site ... and tonefx
-4.0c site ... overlap"*). Such a mod builds with the newest core that
-leaves its places alone ([below](#how-a-build-picks-one)), and not beside
-a mod that needs a newer core, until its author builds it on the core's
-event.
+## A mod and newer cores
+
+A mod names the core it was built for (`resources.core`) and keeps
+building, with no new file from its author, whatever cores come after it:
+
+- **A newer core keeps the older one's interface** (above), so the mod
+  links with it as it did with its own.
+- **A core that does not take the mod leaves it the one before.** One kind
+  of mod does not link with a newer core: a mod that patches a place itself
+  which a later core took for every mod. The Digitakt mk1's core 4.1
+  patches the master output's places, and Digi EQ 1.0c and Tone+FX's
+  Digitakt files (3.2a3 and 4.0c) patch them too: they link with core 4.0
+  and are refused with 4.1 (*"core 4.1 site ... and tonefx 4.0c site ...
+  overlap"*). A build with such a mod takes the newest core that leaves its
+  places alone ([below](#how-a-build-picks-one)).
+- **A released file stays.** A core stays on its release, and in the shop's
+  list, for as long as a listed mod builds with nothing newer.
+
+The same holds for a mod other mods build on (machine-pages, machines):
+its older versions stay beside the newest, and a mod made for an older one
+builds with that one. machine-pages 1.3 and newer patch the MIDI CC range
+lookup, which OB-1 0.6 patches itself, so a build with OB-1 takes
+machine-pages 1.2.
+
+So an author follows a newer core for two reasons only: to use what it
+adds, or so that the mod shares a build with mods that need it. A mod that
+patches a place a newer core took builds alone and with mods as old as it,
+not beside one that needs the newer core, until it is built on the core's
+event. A mod that only subscribes to events, adds to tables and calls
+exports is never in that case.
 
 ## How a build picks one
 
@@ -79,6 +97,12 @@ core takes the mods when:
 When no core does all three, the build takes the newest that is new
 enough, and the check says what is wrong.
 
+A mod that other mods require is picked the same way. Of the versions a
+builder has of it, a build takes the newest that patches no place a
+selected mod patches, and a version that is ticked gives way to one that
+does. The web page brings every version the shop lists of a required mod,
+lists the one the build takes, and changes it as the core, without a word.
+
 Cores 4.0 and newer give the mods' code, tables and variables more RAM:
 1.25 MB on the Digitone, 256 KB on the Digitakt mk1, where older cores give
 them 128 KB ([ADAPTING.md](ADAPTING.md), "The mods' RAM"). How
@@ -92,8 +116,9 @@ check says how many bytes are over.
 
 The web page lists one core of each device and OS: the one the build
 takes. That is the newest, or an older one of the site's while a ticked
-mod cannot link with the newest; the row then names that mod, and the
-newest comes back when the mod is unticked. The web page, the kit and the
+mod cannot link with the newest; the newest comes back when the mod is
+unticked. The page changes the core without a word, and speaks of a core
+only when one stops a build. The web page, the kit and the
 window (from source, and the apps after 0.4.0) tick the core for you and
 keep one: a core you ticked yourself (your own file, added to the page or
 the window's library) stays while it takes the mods, and gives way to the
@@ -124,7 +149,8 @@ the one a mod that uses it names in `resources.core`.
   The notes played live on a track, before its voice, which a handler may
   take, and the stock routines past them (`ev_live_note`, `fw_note_on`,
   `fw_note_off`; core 4.2), so mono machines play one key at a time.
-  MIDI CCs before the stock applies them (`ev_midi_cc`, core 4.3).
+  MIDI CCs before the stock applies them (`ev_midi_cc`, core 4.3). The AMP
+  envelope (`fw_amp_level`, core 4.4; `fw_amp_env` is the filter envelope).
 - **Digitone mk1** ([mods/core-dn1](../mods/core-dn1)): the Digitakt mk1's
   events, and:
   - the voices' note-on, parameter slots, mod pages and project data
@@ -163,7 +189,9 @@ the one a mod that uses it names in `resources.core`.
     parameter ids, knobs on the stock pages' empty boxes and a second TRIG page, and each note the
     sequencer builds (5.1; ADAPTING.md, "Lane parameters, knobs on pages and TRIG's second page");
   - the notes played live on a track, as the Digitakt's core 4.2 has them (`ev_live_note`,
-    `fw_note_on`, `fw_note_off`; 5.3), so mono machines play one key at a time.
+    `fw_note_on`, `fw_note_off`; 5.3), so mono machines play one key at a time;
+  - what a +Drive loader needs (TELOS): `core_param_install`, `core_stock_info` and `core_tasks` (5.4;
+    the core's README).
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): SETTINGS and
   PERSONALIZE rows, and `.fast` code in SRAM. No render events: its audio
   renders on the DSP.
@@ -206,15 +234,17 @@ the one a mod that uses it names in `resources.core`.
   The USB input's gain, one of stock's USB TO MAIN steps a mod holds in
   place of the setting (0.15; ADAPTING.md, "USB input gain (core-ar2 0.15,
   Analog Rytm MKII)").
-- **Analog Four MKII** ([mods/core-a4](../mods/core-a4), a proof of
+- **Analog Four MKII** ([mods/core-a4mk2](../mods/core-a4mk2), a proof of
   concept): core-ar2's events and mod storage at the A4's addresses
-  (ADAPTING.md, "Mod storage (core-a4 0.1)"), and parameter pages, whose
-  knobs can follow the selected sound (core-a4 0.2 and 0.3; ADAPTING.md,
-  "Parameter pages (core-a4 0.2)"). Lockable parameters for each track
+  (ADAPTING.md, "Mod storage (core-a4mk2 0.1)"), and parameter pages, whose
+  knobs can follow the selected sound (core-a4mk2 0.2 and 0.3; ADAPTING.md,
+  "Parameter pages (core-a4mk2 0.2)"). Lockable parameters for each track
   kind, their p-locks, their destinations, their value as stock would
-  play it and their NRPNs and CCs (ADAPTING.md, "Lockable parameters (core-a4 0.5, Analog Four
-  MKII)"). Its render events cover the effects, not the analog
-  voices.
+  play it and their NRPNs and CCs (ADAPTING.md, "Lockable parameters (core-a4mk2 0.5, Analog Four
+  MKII)"). Core-ar2 0.10..0.13's foundations (0.6): field defaults, the
+  modified mark, `ev_project_save`, payloads in a 37.7 MB mods' area, knob
+  looks and the screen calls (the core's README). Its render events
+  cover the effects, not the analog voices.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   takes the mods' RAM from the sample and recorder memory, only what they
   use and at most 10 MB, and has a hook bus of the Octatrack's own: the UI,
@@ -275,7 +305,7 @@ device's addresses ([mods/core](../mods/core) for the Digitakt mk1,
 [mods/core-dn1](../mods/core-dn1) for the Digitone mk1,
 [mods/core-dt2](../mods/core-dt2) for the Digitakt II,
 [mods/core-dn2](../mods/core-dn2) for the Digitone II,
-[mods/core-ar2](../mods/core-ar2) for the Analog Rytm MKII, [mods/core-a4](../mods/core-a4)
+[mods/core-ar2](../mods/core-ar2) for the Analog Rytm MKII, [mods/core-a4mk2](../mods/core-a4mk2)
 for the Analog Four MKII, [mods/core-mc](../mods/core-mc)
 and [mods/core-ms](../mods/core-ms) for the Model:Cycles and the Model:Samples). Each `mod.json`
 gives the addresses of every OS it supports (its `os`, and its `ports`):
@@ -289,7 +319,7 @@ python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_
 python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx                      # the Digitakt II's
 python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx                      # the Digitone II's
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx                  # the Analog Rytm MKII's (1.74 only)
-python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx                   # the Analog Four MKII's
+python -m elekloader.sdk.build mods/core-a4mk2 --stock Analog-Four_MKII_OS1.56.syx                   # the Analog Four MKII's
 python -m elekloader.sdk.build mods/core-ot --stock OCTATRACK_OS1.40C.syx                    # the Octatrack's
 python -m elekloader.sdk.build mods/core-mc --stock Model_Cycles_OS1.13.syx                  # the Model:Cycles'
 python -m elekloader.sdk.build mods/core-ms --stock Model_Samples_OS1.13.syx                 # the Model:Samples'

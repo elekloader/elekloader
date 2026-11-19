@@ -1,9 +1,8 @@
 # elekloader docs
 
 This folder is elekloader's wiki: everything past the
-[front page](../README.md), sorted by who it is for. The pages are plain
-Markdown and change through pull requests with the code, so a release's
-docs match its code.
+[front page](../README.md), sorted by who it is for. The pages change in
+the same pull requests as the code.
 
 ## Using elekloader
 
@@ -13,8 +12,7 @@ docs match its code.
   app or on the command line, sending it to the unit, getting back to stock,
   and what every build is checked for.
 - **[Cores](CORES.md)**: the core mod each device needs, which file serves
-  which OS, how a build picks one, and what each core adds (the Digitone's
-  Mod Menu, say).
+  which OS, how a build picks one, and what each core adds.
 - **[The web page](WEB.md)**: elekloader in your browser, its mod shop, and
   how the shop's list is kept (in [elekloader/shop](https://github.com/elekloader/shop)).
 - **[The Splash screen maker](SPLASH.md)**: your own picture or GIF on the
@@ -43,8 +41,8 @@ docs match its code.
 - **[Contribute to elekloader!](CONTRIBUTE.md)**: the ways to help, and the
   community's to-do list for the core: each piece of stock code a mod still
   hooks for itself.
-- **[The file format](FORMAT.md)**: `.elemod`, whole builds (format 1) and
-  linkable mods (format 2).
+- **[The file format](FORMAT.md)**: `.elemod`, whole builds (format 1),
+  linkable mods (format 2) and [+Drive mods](DRIVE.md).
 - **[Adding a device](DEVICES.md)**: a device profile, and what was found
   for each device elekloader supports.
 - **octabam's modules (Octatrack):** `elekloader.sdk.octabam` converts
@@ -64,7 +62,7 @@ docs match its code.
   [mods/core-dt2](../mods/core-dt2) (Digitakt II),
   [mods/core-dn2](../mods/core-dn2) (Digitone II, experimental),
   [mods/core-ar2](../mods/core-ar2) (Analog Rytm MKII),
-  [mods/core-a4](../mods/core-a4) (Analog Four MKII), and
+  [mods/core-a4mk2](../mods/core-a4mk2) (Analog Four MKII), and
   [mods/core-ot](../mods/core-ot) with [mods/dspbus-ot](../mods/dspbus-ot),
   [mods/intercepts-ot](../mods/intercepts-ot),
   [mods/machines-ot](../mods/machines-ot) and [mods/usb-ot](../mods/usb-ot)
@@ -91,12 +89,14 @@ docs match its code.
     `hello-marker-a4` on the Analog Four MKII;
   - `hooks-check-ar2`, a test for the Analog Rytm MKII's core: it
     subscribes to every event core-ar2 has and shows what it counts
-    (`hooks-check-a4`: the same for core-a4 on the Analog Four MKII;
-    `store-check-a4` checks its mod storage and `ddr-canary-a4` the DDR
-    the profile calls unused; `pages-check-a4` core-a4's parameter
+    (`hooks-check-a4mk2`: the same on the Analog Four MKII;
+    `store-check-a4mk2` checks its mod storage and `ddr-canary-a4mk2` the DDR
+    the profile calls unused; `pages-check-a4mk2` its parameter
     routines; `hooks-check-dn2` for core-dn2 on the Digitone II, with rows in
     SETTINGS and PERSONALIZE, two key handlers in order and a key it takes
     once armed);
+  - `drive-hello-ar2` and `drive-hello-user-ar2`, two +Drive mods
+    for the Analog Rytm MKII, one using the other;
   - `perform-direct`, a real Digitakt II mod: [PRESET] toggles PERFORM
     without [FUNC];
   - `sine-machine`, an SRC machine for core 3.0 that names no firmware
@@ -126,9 +126,8 @@ docs match its code.
   pages, and elekloader's curated catalog of cores and mods, each pinned by
   sha256.
 - **[The engine in TypeScript](../js/README.md)**: the OS files, the mod
-  checks, the linker and the build, with no dependencies and no Python. For
-  the same stock file and mods it writes the same files as the Python, byte
-  for byte. It is GPL-3.0-or-later.
+  checks, the linker and the build, with no dependencies and no Python,
+  writing the Python's files byte for byte (GPL-3.0-or-later).
 
 ## Maintaining elekloader
 

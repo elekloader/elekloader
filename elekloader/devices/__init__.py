@@ -31,6 +31,10 @@ class Release:
     main_len: int                # ... and that section's length
     bin_sha256: str = ''         # the stock card file (.bin), where the device has one
     sharc: dict = field(default_factory=dict)  # section-7 identity/limits; no ownership implied
+    data_release: int = 0        # the OS release word of the data container's header (0: not known)
+    prelink: tuple = ()          # ((lo, hi, kind, what), ...): main OS code (kind 1) and data (2) the
+                                 # OS is done with before the +Drive boot link runs; a build descriptor
+                                 # lists them so no +Drive site goes there (desc.py, ABI 1.2)
 
 
 @dataclass
@@ -49,7 +53,7 @@ class Device:
     isa: str                     # 'coldfire'
     hmac_key_from: tuple = ()    # for 'hmac': (section id, seed string); the key is read from
                                  # the stock file's own section, never stored here (syx.seal_key)
-    container: str = 'ele3'      # the file family: 'ele3' (syx.py) or 'elek' (elek.py)
+    container: str = 'ele3'      # the file family: 'ele3', 'ele2' (syx.py) or 'elek' (elek.py)
     version_len: int = 4         # the characters of the version field the unit shows
     version_at: int = 0x14       # 'ele3': where that field is in the container header
     version_optional: bool = False   # True: a build given no version keeps stock's field
@@ -81,8 +85,22 @@ class Device:
                                  # offset its slot_claims gives
     page_ids: tuple = ()         # (first, ((table, at), ...)): a mod's "pages" are ids from `first` up,
                                  # past those a contribution to `table` names itself at +`at` (link.py)
+    drive_knobs: tuple = ()      # (lo, hi): with param_ids, the knob ids +Drive mods' "knobs" runs
+                                 # take (the boot linker's, desc.py's knob record); a flashed build's
+                                 # runs stay below lo and no flashed entry may name them (link.check)
     table_limits: dict = field(default_factory=dict)   # table -> the most entries all mods together
                                  # may add to it: the OS uses no more (link.check)
+    drive_align: int = 0         # a build descriptor's +Drive mods' area (desc.py): from the
+                                 # flashed build's RAM end rounded up to this, to the top of
+                                 # the core's linker area (ddr_for); 0: the device has none
+    drive_shadow: bool = False   # the build descriptor carries the stock bytes the flashed build
+                                 # writes (desc.py, "shadow"): its +Drive loader copies stock parts
+                                 # from the running OS
+    drive_early: tuple = ()      # ((lo, hi, why), ...): what the OS uses before a +Drive loader
+                                 # links and not again before it matters; a site there is refused
+                                 # (code 23, early): such a mod must be flashed
+    data_family: int = 0         # the family id of the data container's header (0: not known)
+    data_device: int = 0         # ... and its device id (0: not known)
     sram_code: tuple = (0, 0)    # the linker's area for .fast code
     fast_table: str = ''         # the table .fast sections are copied through
     image_free: tuple = ()       # ((lo, hi), ...): zero runs inside the main OS that
@@ -97,7 +115,9 @@ class Device:
     recovery: str = ''           # how to get back to stock, said to the user
     toolchain: dict = field(default_factory=dict)   # for the SDK: prefix, asflags, cflags
     notes: str = ''
-    update_max: int = None       # maximum decoded ELE3 update bytes (8-byte preamble + container)
+    update_max: int = None       # maximum decoded update bytes (8-byte preamble + container)
+    no_link: tuple = ()          # ((lo, hi, why), ...): firmware routines no mod may link to (a
+                                 # symbol or relocation inside one is refused); ordinary calls only
 
     def release_for(self, syx_sha256=None, main_sha256=None):
         for r in self.releases.values():
@@ -142,10 +162,10 @@ class Device:
 
 def _all():
     from . import (analog_four_mk2, analog_rytm_mk2, digitakt_mk1, digitakt_mk2, digitone_mk1, digitone_mk2,
-                   model_cycles, model_samples, octatrack)
+                   model_cycles, model_samples, octatrack, analog_rytm_mk1)
     return [digitakt_mk1.DEVICE, digitakt_mk2.DEVICE, digitone_mk1.DEVICE, octatrack.DEVICE,
             model_cycles.DEVICE, model_samples.DEVICE, analog_rytm_mk2.DEVICE, analog_four_mk2.DEVICE,
-            digitone_mk2.DEVICE]
+            digitone_mk2.DEVICE, analog_rytm_mk1.DEVICE]
 
 
 DEVICES = None
@@ -158,12 +178,15 @@ def devices():
     return DEVICES
 
 
-def version_at(sysex_id):
-    """-> where the version field of an 'ele3' file with this device byte is."""
+SYX_FAMILIES = ('ele3', 'ele2')   # the file families syx.py reads and writes
+
+
+def version_at(sysex_id, container='ele3'):
+    """-> where the version field of a syx.py file of this family with this device byte is."""
     for d in devices():
-        if d.container == 'ele3' and d.sysex_id == sysex_id:
+        if d.container == container and d.sysex_id == sysex_id:
             return d.version_at
-    return 0x14
+    return 0x10 if container == 'ele2' else 0x14
 
 
 def identify(syx_sha256):

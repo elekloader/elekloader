@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-a4 0.5: lockable mod parameters and their p-locks (docs/ADAPTING.md,
- * "Lockable parameters (core-a4 0.5, Analog Four MKII)"), core-ar2's design
+/* core-a4mk2 0.5: lockable mod parameters and their p-locks (docs/ADAPTING.md,
+ * "Lockable parameters (core-a4mk2 0.5, Analog Four MKII)"), core-ar2's design
  * with the A4's track kinds.
  *
  * A storage field declared "lock": true gets a lock code from the build's
@@ -34,7 +34,7 @@ struct core_lock_param {
     unsigned field;             /* STORE(sym): a lockable sound or kit field */
     int32_t id;                 /* its page knob's id (above 0x126), or 0 */
     int16_t min, max;           /* the values the field takes (locks: to 16383) */
-    const char *short_name;     /* up to 4 characters (destinations, from core-a4's part 2) */
+    const char *short_name;     /* up to 4 characters (destinations, from core-a4mk2's part 2) */
     const char *name;           /* up to 32 */
     const char *category;       /* up to 4, or 0 for MOD */
 };
@@ -70,7 +70,7 @@ int core_lock_value_voice(int voice, int code);
  * is in core_param_value (below). */
 int core_slide_delta_voice(int voice, int code);
 
-/* Destinations (core-a4 0.5, part 2). A lockable field also declared
+/* Destinations (core-a4mk2 0.5, part 2). A lockable field also declared
  * "mod": true is a destination of every modulation source of its track: the
  * five routes, the four Dest knobs, the performance macros and CONTROL IN.
  * Its lists end with the field (its short_name, name and category show
@@ -98,7 +98,7 @@ const struct core_dst *core_dst_macros(int *n);
 /* 1 when anything modulates one of the voice's mod parameters */
 int core_dst_any(int voice);
 
-/* The value read (core-a4 0.5, part 3): the value stock would play for a
+/* The value read (core-a4mk2 0.5, part 3): the value stock would play for a
  * lockable parameter now, in 8.8 steps of the field (one step is 256),
  * clamped to min..max, computed in stock's own stages and order (the audio
  * interrupt's), with a clamp after each, as stock computes a coarse
