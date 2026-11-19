@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* Parked +Drive storage in /mods/.store, as the MODS page reads it (PAGE.md, "Parked data"):
+/* Parked +Drive storage in /mods/.store, as the MODS page reads it (PAGE.md, "Saved data"):
  * which mods have parked fields, how many bits in each scope, and FORGET DATA's rewrite.
  * The file's layout is docs/DRIVE.md's, "+Drive storage" (format 2 on the A4: lock codes per track
  * kind); elekloader/drive_store.py is its twin (decode, forget, encode), and
