@@ -10,7 +10,7 @@
  "os": "1.74",
  "storage": [{"sym": "smpl_c", "scope": "sound", "bits": 7, "lock": true, "cc": true, "lfo": true, "mod": true}],
  "knobs": 1,
- "resources": {"core": "0.13"},
+ "resources": {"core": "0.14"},
  "requires": ["core", "smpl-machines"],
  "sources": ["knobc.c"],
  "exports": ["smpl_knob_c"],

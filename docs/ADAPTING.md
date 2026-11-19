@@ -3190,7 +3190,7 @@ const struct smpl_machine my_smpl = {
   the SRC machine, writes each ranged knob's `def`, except into SMP's word,
   which keeps the sample; a change to stock writes stock's SMPL defaults.
 
-The ids come from the build's lockfile (docs/FORMAT.md, "Id pools"), so a
+The ids come from the build's lockfile ("Id pools" above), so a
 saved sound finds its machine in the next build. Choosing a machine
 writes each `def` of a knob with `min < max` into the sound
 (`core_param_set`).

@@ -92,7 +92,7 @@ struct smpl_machine {
  * lists "smpl-knob-c" in its "requires". Without it knob C stays SMP's word. */
 #define SMPL_OWN_C 0x0001
 
-/* (smpl-machines 0.3, core-ar2 0.15) The SAMPLE view's second page, SMPL
+/* (smpl-machines 0.3, core-ar2 0.14) The SAMPLE view's second page, SMPL
  * WAVEFORM, draws stock's waveform of the sample SMP's word names. A machine
  * that plays that sample sets SMPL_WAVEFORM to keep the page (its knobs,
  * compact, over stock's waveform); without it the machine has one page:
