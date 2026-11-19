@@ -2289,8 +2289,8 @@ def test_core_a4mk2_0_7_voice_events():
 def test_core_ar2_0_17_std_map():
     """core-ar2 0.17 serves std1 at the sites it owns: each map entry is a std1.h event and one of
     core's tables, the native table for the same prototype or its first part, a std_ table of its
-    own for the thunks (std.c) that core's own handlers, .boot and pages.s call; ev_enc has its
-    prototype in std1.h (decided 2026-11-19)."""
+    own for the thunks (std.c) that core's own handlers, .boot and pages.s call, and for the UI and
+    system events at new sites (ui.c); ev_enc has its prototype in std1.h (decided 2026-11-19)."""
     import re
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     mdir = os.path.join(root, 'mods', 'core-ar2')
@@ -2303,6 +2303,9 @@ def test_core_ar2_0_17_std_map():
     std = doc['std']
     native = {'ev_tick', 'ev_draw', 'ev_settings', 'ev_project', 'ev_render_in', 'ev_seq_tick'}
     thunks = {'ev_boot', 'ev_key', 'ev_enc', 'ev_param_turn', 'ev_sysex_in'}
+    # the UI and system events at new sites (ui.c, ui.s)
+    thunks |= {'ev_boot_done', 'ev_idle', 'ev_crash', 'ev_usb', 'ev_key_leds', 'ev_mode', 'ev_param_set',
+               'ev_clip', 'ev_pattern', 'ev_mute', 'ev_view'}
     assert set(std) == native | thunks and set(std) <= events
     assert {e for e, t in std.items() if t == e} == native
     for e in native:

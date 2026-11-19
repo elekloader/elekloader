@@ -1241,8 +1241,8 @@ No new sites; the traces are in `machines.c` and `voiceio.c`.
 
 ## Standard events (0.17)
 
-std1: `std.c` (its first comment), `stdui.s`; `analog-rytm-mk2/keys.h`,
-`params.h`, `ports.h`; [std-check](../../examples/std-check-ar2).
+std1: `std.c` and `ui.c` (their first comments name the rest);
+[std-check](../../examples/std-check-ar2), [ui-check](../../examples/ui-check-ar2).
 
 ## Checked so far
 
