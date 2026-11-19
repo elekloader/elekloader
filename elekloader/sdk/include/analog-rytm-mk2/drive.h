@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* core-ar2 0.14: mod folders in the +Drive file browser (docs/ADAPTING.md, "Mod
- * folders in the +Drive browser (core-ar2, Analog Rytm MKII)"). A mod lists
+ * folders in the +Drive browser (core-ar2 0.14, Analog Rytm MKII)"). A mod lists
  * a folder of its own after the +Drive's root entries in SETTINGS > SAMPLES
  * and the sample slot browser, browsed with the browser's own keys:
  *

@@ -74,11 +74,10 @@ A format-2 mod is a relocatable object:
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}`; `"std": true` makes `to` a standard event |
 | `events`, `std` | a mod's `"std1"`; a core's map of standard events to its tables (ADAPTING.md, "Standard events (std1)") |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
-| `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII, core-ar2 0.13; "Knob ids" below) |
-| `machine_knobs` | the machines this mod adds by count: a list of up to 64, each the knobs it needs, 0..16; the linker gives each a machine slot (the Analog Rytm MKII; "Machine slots and page ids" below) |
-| `pages` | a count of page ids, 0..256, the linker gives this mod (the Analog Rytm MKII; "Machine slots and page ids" below) |
-| `id_pools` | ids this mod hands out to other mods: `{"name": [first, last]}`, 0..65535, at most 4096 a pool ("Id pools" below) |
-| `pool_ids` | ids this mod asks for from another mod's pool: `{"name": n}`, 1..4096 ("Id pools" below) |
+| `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII, core-ar2 0.13; ADAPTING.md, "Knob ids") |
+| `machine_knobs` | machines this mod adds by count, each the knobs it needs: up to 64, 0..16 each (ADAPTING.md, "Machine slots and page ids") |
+| `pages` | a count of page ids, 0..256 (ADAPTING.md, "Machine slots and page ids") |
+| `id_pools`, `pool_ids` | ids this mod hands out, `{"name": [first, last]}` (0..65535, at most 4096), and ids it asks for from another mod's pool, `{"name": n}` (ADAPTING.md, "Id pools") |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4mk2 0.1; "Mod storage" below) |
 | `sharc` | Digitone II 1.12 only: compiled code for the DSP ("Digitone II SHARC mod" below) |
 | `sharc_raw` | Digitakt II 1.17 only: raw additions to the DSP's boot stream ("Digitakt II raw SHARC payload" below) |
@@ -271,9 +270,8 @@ each program on its own.
    When a mod declares `storage`, the linker places the fields from the
    build's lockfile ("Mod storage" below) and defines each field's `sym`
    as an absolute symbol, its descriptor. When a mod declares `knobs`, the
-   linker gives it its run of ids ("Knob ids" below), and likewise for
-   `machine_knobs` and `pages` ("Machine slots and page ids" below), and
-   `pool_ids` ("Id pools" below).
+   linker gives it its run of ids, and likewise for `machine_knobs`, `pages`
+   and `pool_ids` (ADAPTING.md, "Knob ids" and after).
    When a mod imports `core_desc`, the linker also writes the build
    descriptor and gives tables spare entries (DRIVE.md, "The build descriptor").
 4. **Relocates** the sections, the table entries and the sites.
@@ -493,81 +491,6 @@ imports `core_fx_lfo_dst` gets that as a kit field (7 bits); in a build
 without one the symbol is 0 and the field is not placed. docs/ADAPTING.md ("Mod storage
 (core-ar2 0.2, Analog Rytm MKII)" and "Mod storage (core-a4mk2 0.1, Analog
 Four MKII)") has the rest.
-
-### Knob ids
-
-On a device whose profile gives mods knob ids (`param_ids`: the Analog Rytm
-MKII's start at 555, the Analog Four MKII's 0x200), a mod declares
-`"knobs": n` and the linker gives it n ids in a row, the first its own
-symbol `__knobs`. A relocation to `__knobs` is an `abs32` or an `abs16` with
-an addend of 0..n-1, else refused, as is `"knobs"` on a device without
-`param_ids` or a mod that defines `__knobs` itself.
-
-The linker (`store.knobs`) gives the runs from
-the first id up, by mod id, past every id a mod's `core_params` or
-`core_param_locks` entry names in its own bytes, and checks the linked
-entries again with their runs. The lockfile keeps them in `knobs` and
-`freed_knobs` (`mod`, `first`, `count`) and `next_knob`, none of them in
-the layout ID. A mod keeps its run while its count holds; one that leaves
-keeps it in `freed_knobs` and gets it back when it returns; one whose count
-changes keeps its first id when the new run has room there; any other takes
-never-used ids from `next_knob` up. Only when those run out (past 65535,
-which an `abs16` holds; the A4's 0x3fff) are freed runs
-given out again. A build whose core keeps no lockfile gets the same ids for
-the same mods. The build's manifest carries the runs as `knobs` (`{mod:
-[first, count]}`).
-
-### Machine slots and page ids
-
-On a device whose profile gives mods machine slots (`machine_slots`: the
-Analog Rytm MKII's hidden slots 34..52, those of the build's core), a mod declares `"machine_knobs": [k0, k1, ...]`, the knobs each of
-its machines needs, and the linker gives machine i a slot whose parameter
-records cover knobs 0..ki-1. A relocation to `__machines` with addend i
-(an `abs32` or `abs16`) is written as machine i's slot itself, not as a
-sum, so it fills a `core_machines` entry's slot field and nothing else.
-The linker (`store.machines`, the same in `js/src/store.ts`) never gives
-out a slot a mod claims by number (a `core_machines` entry that names its
-slot, or a `machine:<n>` resource), and picks for each new machine, by mod
-id, the free slot with the fewest knobs that has enough, then the lowest.
-A slot is stored data (sounds and kits save their machine's number), so
-the lockfile keeps each machine's slot in `machines` and `freed_machines`
-(`mod`, `index`, `slot`, `knobs`), outside the layout ID: a machine keeps
-its slot while the slot has its knobs; one that leaves keeps its slot in
-`freed_machines` and gets it back when it returns; freed slots are given
-out again only when no never-used slot fits. A claim by number on a slot
-the lockfile gives a machine of the same build is refused, not moved. The
-manifest carries them as `machines` (`{mod: [slot, ...]}`).
-
-On a device whose profile gives mods page ids (`page_ids`: the Analog
-Rytm MKII's start at 12, past stock's 0..11), a mod declares `"pages": n`
-and the linker gives it n ids in a row, by mod id, past every id a
-`core_pages`, `core_page_fns` or `core_view_pages` entry names in its own
-bytes. `__pages` is the first, as `__knobs`. Page ids are not saved, so
-the lockfile does not keep them: they can change from one build to the
-next. The manifest carries them as `pages` (`{mod: [first, count]}`).
-`"machine_knobs"` or `"pages"` on a device without them, or a mod that defines
-`__machines` or `__pages` itself, is refused.
-
-### Id pools
-
-A mod may hand out ids of its own to the other mods of a build: a framework
-mod's machines, say, whose number each sound saves. It declares the pool,
-`"id_pools": {"smpl_machines": [1, 30]}`, and a mod that adds to it asks
-for a count, `"pool_ids": {"smpl_machines": 2}`. A relocation to
-`__pool_<name>` with addend i (`abs32` or `abs16`) is written as that mod's
-i-th id, not as a sum. The linker (`store.pool_ids`, the same in
-`js/src/store.ts`) gives each new id, by mod id, the lowest of the pool's
-never-used ids. An id is stored data, so the lockfile keeps them in
-`pool_ids` and `freed_pool_ids` (`pool`, `mod`, `index`, `id`), outside the
-layout ID: an id stays with its mod while the mod asks for it; one whose mod
-leaves (or asks for fewer) moves to `freed_pool_ids` and comes back when it
-returns; freed ids are given out again, lowest first, only when no
-never-used id is left. Without a lockfile the ids are given out the same
-way. The manifest carries them as `pool_ids` (`{pool: {mod: [id, ...]}}`).
-Two mods declaring one pool, a mod asking for ids from a pool no given mod
-declares, a reference to a pool the mod asks nothing from, more ids asked
-for than a pool has, and a mod that defines a `__pool_` symbol itself are
-refused.
 
 ### DSP code
 

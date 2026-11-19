@@ -451,19 +451,17 @@ away from stock. The addresses come from `mod.json` (`FINISH_PANEL`,
 `FINISH_UART`, `FINISH_DRAIN`); core-a4mk2 0.4 uses the same file with the
 A4's.
 
-Checked in analog-emu (25 Oct 2026; each flash a fresh headless emulator
-booted on the source OS, then `elkflash upgrade --no-confirm --wait` of a
-custom 1.74 build). From stock with only this routine patched in, 0 of 15
+Checked in analog-emu (25 Oct 2026; each flash a fresh emulator on the
+source OS, then an upgrade to a 1.74 build). From stock with only this routine patched in, 0 of 15
 hung; from the same build without it, 5 of 15 (one-sided Fisher p = 0.02).
 A source built on core 0.4 hung 0 of 15, so the race is rarer from core
 builds than from stock. With the emulator's panel link paced from its baud
 divider (the unit's 158.7 kbaud, where it had run about 6 times faster), none
-of 30 hung, from the fixed, the unfixed and the stock source alike, so on a
-unit the race is likely rare. On a unit (25 Oct 2026), the flashes away
+of 30 hung from any source, so on a unit the race is likely rare. On a unit (25 Oct 2026), the flashes away
 from builds on this core (to other builds and to stock, five flashes)
 restarted in 15 s, and on an Analog Four MKII a flash from core 0.4
-back to stock 1.56 restarted in 21 s; with a race this rare that is no
-proof the hang is gone, only that the routine does no harm.
+back to stock 1.56 restarted in 21 s: no proof the hang is gone, only
+that the routine does no harm.
 
 ## Lockable parameters (0.8)
 
