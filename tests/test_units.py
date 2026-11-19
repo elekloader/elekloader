@@ -2286,6 +2286,47 @@ def test_core_a4mk2_0_7_voice_events():
     assert ln.index('jsr     core_voice_end') < ln.index('jsr     0x40105410') < ln.index('rts')
 
 
+def test_core_ar2_0_17_std_map():
+    """core-ar2 0.17 serves std1 at the sites it owns: each map entry is a std1.h event and one of
+    core's tables, the native table for the same prototype or its first part, a std_ table of its
+    own for the thunks (std.c) that core's own handlers, .boot and pages.s call; ev_enc has its
+    prototype in std1.h (decided 2026-11-19)."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-ar2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'std1.h'), encoding='utf-8') as fh:
+        events = set(re.findall(r'\(\*std1_(ev_\w+)_fn\)', fh.read()))
+    std = doc['std']
+    native = {'ev_tick', 'ev_draw', 'ev_settings', 'ev_project', 'ev_render_in', 'ev_seq_tick'}
+    thunks = {'ev_boot', 'ev_key', 'ev_enc', 'ev_param_turn', 'ev_sysex_in'}
+    assert set(std) == native | thunks and set(std) <= events
+    assert {e for e, t in std.items() if t == e} == native
+    for e in native:
+        assert e in doc['collections'], e
+    csrc = ''
+    for name in doc['sources']:
+        if name.endswith('.c') and not name.startswith('..'):
+            with open(os.path.join(mdir, name), encoding='utf-8') as fh:
+                csrc += fh.read()
+    for e in thunks:
+        assert std[e] == 'std_' + e[3:], e
+        assert doc['collections'][std[e]] == {'entry': 4, 'spare': 256}, e
+        assert re.search(r'^extern const \w+ %s\[\];' % std[e], csrc, re.M), e
+    subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
+    assert subs[('ev_key', 'core_std_key')] == 0
+    assert subs[('ev_enc', 'core_std_enc')] == 0
+    assert subs[('ev_sysex_in', 'core_std_sysex_in')] == 0
+    assert subs[('ev_tick', 'core_std_tick')] == -1000000
+    assert subs[('ev_tick', 'core_std_tick_end')] < subs[('ev_tick', 'core_leds_tick')]
+    assert 'core_std_boot();' in csrc and 'std.c' in doc['sources'] and 'stdui.s' in doc['sources']
+    with open(os.path.join(mdir, 'pages.s'), encoding='utf-8') as fh:
+        assert 'jsr     core_std_param_turn' in fh.read()
+
+
 def test_core_a4mk2_0_7_std_map():
     """core-a4mk2 0.7 serves std1 at the sites it owns: each map entry is a std1.h event and one
     of core's tables, the native table for the same prototype or its first part, a std_ table of

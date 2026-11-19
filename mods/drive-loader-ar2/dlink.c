@@ -432,6 +432,23 @@ static int find_table(const char *s, u32 n)
     return -1;
 }
 
+/* The table the core's std map sends standard event s (n bytes) to: the descriptor's claims of
+ * kind 3, "<event> <table>" (desc.py CLAIM_STD) -> the table's name, or 0 where it maps none */
+static const char *std_table(const char *s, u32 n)
+{
+    u32 i, q;
+    for (i = 0; i < n_claims(); i++) {
+        const char *p = pool(D32(o_claim(i) + 4));
+        if (D16(o_claim(i)) != 3)
+            continue;
+        for (q = 0; q < n && p[q] && p[q] == s[q]; q++)
+            ;
+        if (q == n && p[q] == ' ')
+            return p + q + 1;
+    }
+    return 0;
+}
+
 /* A contribution's entry size: its table's. */
 static u32 ctr_entry(const struct contrib *c)
 {
@@ -585,11 +602,11 @@ static int version_cmp(const char *a, const char *b)
 /* The top-level values pass 1 and pass 2 read, found once per file. */
 enum { K_ELEMOD, K_ID, K_VERSION, K_TARGET, K_SECTIONS, K_SYMBOLS, K_EXPORTS, K_IMPORTS, K_WEAK,
        K_RELOCS, K_SITES, K_COLLECTIONS, K_CONTRIBUTE, K_COPIED, K_STORAGE, K_SHARC,
-       K_RESOURCES, K_REQUIRES, K_CONFLICTS, K_KNOBS, K_N };
+       K_RESOURCES, K_REQUIRES, K_CONFLICTS, K_EVENTS, K_KNOBS, K_N };
 static const char *const KEYS[K_N] = {
     "elemod", "id", "version", "target", "sections", "symbols", "exports", "imports", "weak",
     "relocs", "sites", "collections", "contribute", "copied", "storage", "sharc",
-    "resources", "requires", "conflicts", "knobs",
+    "resources", "requires", "conflicts", "events", "knobs",
 };
 
 static int top(const u8 *buf, u32 len, const char **at)
@@ -1904,6 +1921,14 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
             return DL_R_FORMAT;
     }
 
+    /* "events": "std1" or none; a contribution with "std": true then names a standard event, whose
+     * table is the core's std map's */
+    if (k[K_EVENTS]) {
+        at(&j, k[K_EVENTS], buf, len);
+        if (js_peek(&j) != 'n' && (!js_str(&j, &s, &n) || !js_eq(s, n, "std1")))
+            return DL_R_FORMAT;
+    }
+
     /* contributions: to a table that takes more, whole entries, claims only with F_CLAIMS */
     m->ctr_first = (u16)L.nctr;
     m->ctr_n = 0;
@@ -1914,9 +1939,10 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
         if (!js_open(&j, '['))
             return DL_R_FORMAT;
         while (js_next(&j, ']', &first)) {
-            int f2 = 1, t = -1;
+            int f2 = 1, t = -1, std = 0;
             s32 order = 50;
-            u32 dlen = 0, had_data = 0;
+            u32 dlen = 0, had_data = 0, to_n = 0;
+            const char *to = 0;
             struct contrib *c;
 #ifdef DL_COLLECTIONS
             u16 tname = NONE;
@@ -1927,24 +1953,13 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
                 if (!js_key(&j, &s, &n))
                     return DL_R_FORMAT;
                 if (js_eq(s, n, "to")) {
-                    if (!js_str(&j, &s, &n))
+                    if (!js_str(&j, &to, &to_n))
                         return DL_R_FORMAT;
-                    t = find_table(s, n);
-#ifdef DL_COLLECTIONS
-                    if (t < 0) {         /* a +Drive table's: found in the check rounds */
-                        if ((tname = keep(s, n)) == NONE)
-                            return DL_R_LIMIT;
-                        t = (int)NONE;
-                    } else
-#endif
-                    if (t < 0 || !(table_flags(t) & F_MORE) || (table_flags(t) & F_DSP)) {
-                        static char tn[32];
-                        u32 q = n < 31 ? n : 31;
-                        dl_memcpy(tn, s, q);
-                        tn[q] = 0;
-                        *what = tn;
-                        return DL_R_TABLE;
-                    }
+                } else if (js_eq(s, n, "std")) {    /* true, or null for none */
+                    if (js_peek(&j) == 'n')
+                        js_skip(&j);
+                    else if (js_peek(&j) != 't' || !js_bool(&j, &std))
+                        return DL_R_FORMAT;
                 } else if (js_eq(s, n, "order")) {
                     if (!js_int32(&j, &order))
                         return DL_R_FORMAT;
@@ -1967,7 +1982,42 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
                     return DL_R_FORMAT;
                 }
             }
-            if (j.err || t < 0 || !had_data)
+            if (j.err)
+                return DL_R_FORMAT;
+            if (std && (!k[K_EVENTS] || empty(k[K_EVENTS], buf, len)))
+                return DL_R_FORMAT;          /* a standard event's subscription needs "events" */
+            if (std && to) {                 /* the core's std map (the descriptor's claims of kind 3) */
+                static char ev[32];
+                const char *tn = std_table(to, to_n);
+                if (!tn) {
+                    u32 q = to_n < 31 ? to_n : 31;
+                    dl_memcpy(ev, to, q);
+                    ev[q] = 0;
+                    *what = ev;
+                    return DL_R_STD;
+                }
+                to = tn;
+                to_n = dl_strlen(tn);
+            }
+            if (to) {
+                t = find_table(to, to_n);
+#ifdef DL_COLLECTIONS
+                if (t < 0) {             /* a +Drive table's: found in the check rounds */
+                    if ((tname = keep(to, to_n)) == NONE)
+                        return DL_R_LIMIT;
+                    t = (int)NONE;
+                } else
+#endif
+                if (t < 0 || !(table_flags(t) & F_MORE) || (table_flags(t) & F_DSP)) {
+                    static char tn[32];
+                    u32 q = to_n < 31 ? to_n : 31;
+                    dl_memcpy(tn, to, q);
+                    tn[q] = 0;
+                    *what = tn;
+                    return DL_R_TABLE;
+                }
+            }
+            if (t < 0 || !had_data)
                 return DL_R_FORMAT;
             if (order == 0x7FFFFFFF)     /* the linker's own entries' */
                 return DL_R_FORMAT;

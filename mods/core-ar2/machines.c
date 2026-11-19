@@ -281,6 +281,8 @@ static void file_records(void)
     }
 }
 
+void core_std_boot(void);           /* std.c (0.17): std1's ev_boot, last */
+
 void core_boot_init(void)
 {
     uint32_t done = 0;
@@ -333,4 +335,5 @@ void core_boot_init(void)
         }
     }
     file_records();
+    core_std_boot();
 }

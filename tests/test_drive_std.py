@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""std1 on the +Drive: the A4's boot linker (mods/drive-loader-a4mk2/dlink.c) sends a std1 mod's
+"""std1 on the +Drive: the A4's and the Rytm's boot linkers (mods/drive-loader-a4mk2/dlink.c,
+mods/drive-loader-ar2/dlink.c) each send a std1 mod's
 "std": true contribution to the table the flashed core's std map names, which the build descriptor
 carries as claims of kind 3 (desc.CLAIM_STD, with F_STD_MAP). Built for the computer and run against
 its twin (elekloader/drive.py) on tests/test_drive.py's made-up build with a std map: the same
@@ -25,13 +26,14 @@ from test_link_refusals import Bench                               # noqa: E402
 import test_drive as TD                                            # noqa: E402
 
 A4 = os.path.join(ROOT, 'mods', 'drive-loader-a4mk2')
+AR2 = os.path.join(ROOT, 'mods', 'drive-loader-ar2')
 
 
-def build_host(work):
-    exe = os.path.join(work, 'drive_link_host_a4')
+def build_host(work, src, name):
+    exe = os.path.join(work, name)
     subprocess.run(['cc', '-O1', '-Wall', '-DDL_HOST', '-o', exe, os.path.join(HERE, 'drive_link_host.c'),
-                    os.path.join(A4, 'dlink.c'), os.path.join(A4, 'json.c'), os.path.join(A4, 'dstore.c'),
-                    os.path.join(A4, 'sha256.c'), os.path.join(A4, 'skip.c')], check=True)
+                    os.path.join(src, 'dlink.c'), os.path.join(src, 'json.c'), os.path.join(src, 'dstore.c'),
+                    os.path.join(src, 'sha256.c'), os.path.join(A4, 'skip.c')], check=True)
     return exe
 
 
@@ -119,25 +121,26 @@ def sets(B):
 def main():
     ok = failed = 0
     with Bench('analog-rytm-mk2') as B, tempfile.TemporaryDirectory() as work:
-        exe = build_host(work)
         F = Std(B, 'std')
-        for name, mods, codes in sets(B):
-            sm, ram = boot(exe, F, mods, work)
-            r = drive.link(F.build, [(m['id'] + '.elemod', raw(m)) for m in mods])
-            bad = compare(F, sm, ram, r)
-            if [x['code'] for x in sm['status']] != codes:
-                bad.append('codes %s, want %s' % ([x['code'] for x in sm['status']], codes))
-            if bad:
-                failed += 1
-                print('FAIL   ', name, bad)
-            else:
-                ok += 1
-                print('ok     ', name)
+        for who, src in (('', A4), ('drive-loader-ar2: ', AR2)):
+            exe = build_host(work, src, 'drive_link_host_' + os.path.basename(src))
+            for name, mods, codes in sets(B):
+                sm, ram = boot(exe, F, mods, work)
+                r = drive.link(F.build, [(m['id'] + '.elemod', raw(m)) for m in mods])
+                bad = compare(F, sm, ram, r)
+                if [x['code'] for x in sm['status']] != codes:
+                    bad.append('codes %s, want %s' % ([x['code'] for x in sm['status']], codes))
+                if bad:
+                    failed += 1
+                    print('FAIL   ', who + name, bad)
+                else:
+                    ok += 1
+                    print('ok     ', who + name)
     print('%d passed, %d failed' % (ok, failed))
     return 1 if failed else 0
 
 
-def test_the_a4_boot_linker_maps_std1_as_its_twin():
+def test_the_a4_and_rytm_boot_linkers_map_std1_as_their_twin():
     assert main() == 0
 
 

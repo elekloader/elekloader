@@ -99,6 +99,10 @@ drive_staging:
 | host tools take them too
         .globl  drive_abs16
         .set    drive_abs16, 1
+| the build descriptor's flags bit 3: the boot maps a std1 mod's subscriptions through the core's
+| std map, which the descriptor then carries (dlink.c, std_table)
+        .globl  drive_std_map
+        .set    drive_std_map, 1
 | the build descriptor carries the shadow, stock's bytes of every range the flashed build wrote,
 | and flags bit 6: the boot linker (dlink.c shadow_over) lays it over a +Drive mod's stock parts,
 | which the running OS would give as the flashed build's bytes

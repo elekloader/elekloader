@@ -132,7 +132,7 @@ goes to the table the flashed core's `std` map names (core-a4mk2's `ev_boot` to 
 on). The build writes the map into the descriptor as claims of kind 3 when the loader exports
 `drive_std_map` (`route.s`, `F_STD_MAP`); `dlink.c` (`std_table`) reads them, and an event the map
 lacks is the refusal `std` (31, EVENT NOT MAPPED on the MODS page) as at build. drive-loader-ar2
-maps none (tests/test_drive_std.py).
+maps std1 the same way (tests/test_drive_std.py).
 
 ## Collections
 

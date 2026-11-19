@@ -22,8 +22,8 @@
  *
  * The typedefs are named std1_<event>_fn, apart from the cores' own headers' <event>_fn.
  *
- * Not here yet: ev_transport, ev_tempo, ev_store, step fire, ev_enc, ev_param_value, ev_render_out
- * and ev_live_note, whose prototypes are still being settled. No core maps them under std1. */
+ * Not here yet: ev_transport, ev_tempo, ev_store, step fire, ev_param_value, ev_render_out and
+ * ev_live_note, whose prototypes are still being settled. No core maps them under std1. */
 #ifndef ELEKLOADER_STD1_H
 #define ELEKLOADER_STD1_H
 
@@ -102,6 +102,9 @@ typedef void (*std1_ev_usb_fn)(unsigned configured);                     /* TASK
 typedef int  (*std1_ev_key_fn)(unsigned key, unsigned flags);            /* UI, may take */
 typedef void (*std1_ev_draw_fn)(void *fb);                               /* UI, observer */
 typedef void (*std1_ev_key_leds_fn)(void *mgr);                          /* UI, observer */
+/* ev_enc: enc counts 0 to ENC_COUNT - 1 (keys.h) from the left, as ev_param_turn's knob; delta the
+ * turn's steps, positive clockwise (decided 2026-11-19) */
+typedef int  (*std1_ev_enc_fn)(unsigned enc, int delta);                 /* UI, may take */
 
 /* -- views, menus and parameters */
 typedef void (*std1_ev_settings_fn)(void *menu);                         /* UI, observer */
