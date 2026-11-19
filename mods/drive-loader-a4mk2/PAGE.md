@@ -92,11 +92,11 @@ As the Rytm's page, with these differences:
 
 `/mods/.store` is read when the page opens and after FORGET DATA (`park.h`). A build row whose mod
 it keeps anything for (fields, lock codes or CCs, live or parked: `dl_store_has`) gets a `*`
-(decided 2026-11-18, in place of the Rytm's `PARK` word). The `*` has a column of its own, its
+(the Rytm's page says `PARK`). The `*` has a column of its own, its
 right edge `STATE_GAP` left of the widest state word, so every row's `*` lines up whatever word
 follows it: `* KEEP`, `* ADD`, `* DROP`, `* !`.
 
-The parked mods (fields no chosen mod declares any more) that have no build row follow the
+The parked mods (fields no chosen mod declares) that have no build row follow the
 build's rows, with the `*` alone in that column. A parked mod back in the build has no second
 row: its build row carries the `*`. YES on a parked-only row ticks it and shows its parked bits
 per scope, lock codes and CCs; FORGET DATA drops the ticked rows' parked data, on a build row or
