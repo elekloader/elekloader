@@ -118,4 +118,55 @@ struct core_view_page {
     int32_t (*shown)(void *view);   /* 0: always; else non-0 while the key may step to it */
 };
 
+/* Knob ids by count (decided 2026-11-16): a mod that declares "knobs": n in
+ * its mod.json gets n ids in a row from 0x200 up (0x4000 up from the +Drive),
+ * past every other mod's; the linker defines __knobs, the mod's own, as the
+ * first. CORE_KNOB(k) is knob k's id, 0..n-1, a constant in a const table
+ * (an abs32 relocation):
+ *
+ *     CORE_KNOBS;
+ *     const struct core_page my_page = {MY_PAGE, "MY PAGE", {CORE_KNOB(0), CORE_KNOB(1)}};
+ *     const struct core_param my_params = {CORE_KNOB(0), CORE_KNOB(1), ...};
+ *
+ * The ids can differ from one build to the next with other mods, so keep a
+ * knob's values by id - CORE_KNOB(0), never by the id. A mod may still pick
+ * its own ids, 0x200..0x3fff. */
+#define CORE_KNOBS extern char __knobs[]
+#define CORE_KNOB(k) ((int32_t)__knobs + (k))
+
+/* core-a4mk2 0.6: knob looks (core-ar2 0.13's). A mod's own id (above 0x126)
+ * has no stock records, so stock draws its knob as record 0's dial on
+ * record 0's range. An entry in core_knob_looks gives the ids the look of
+ * any stock knob, or a UI record of the mod's own:
+ *
+ *     {"to": "core_knob_looks", "order": 50, "data": "00000000",
+ *      "relocs": [[0, "abs32", "sym:my_looks", 0]]}
+ *
+ *     const struct core_knob_look my_looks = {449, 449, 23, 0, 0, 0};
+ *
+ * look is a stock id (1..0x126): the knob is drawn as that id's knob, its
+ * graphic, the parts its flags draw, its turn's steps, its pop-ups, and its
+ * range, which min and max replace when min < max (8.8, as the parameter
+ * record's); then the graphic also spans min..max (core moves the value onto
+ * look's range for it). ui, when not 0, answers an 84-byte UI record of the
+ * mod's own for the id (stock's layout, as the Rytm's: flags +0, steps
+ * +4..+0x10, delegates from +0x14), or 0 for look's; a mod builds one by
+ * copying a stock record, core_knob_stock_ui(id), and changing fields, once
+ * stock has built its records (any draw: not in ev_boot). A pointer it
+ * returns is read from %a0 (asm: return it in %a0 and %d0). The label, the
+ * name, the value and its text stay the mod's, and nothing else of look's
+ * parameter (its sound slot, its lists, MIDI) comes along. An id an entry
+ * doesn't cover draws as record 0; an entry's ids at or below 0x126 are
+ * stock's own and keep their look. (mods/core-a4mk2/README.md, "Knob looks
+ * (0.6)") */
+struct core_knob_look {
+    int32_t first, last;    /* the ids this entry answers for (above 0x126) */
+    int32_t look;           /* the stock id whose knob these look like, 1..0x126 (0: record 0) */
+    const void *(*ui)(int32_t id);  /* an 84-byte UI record of the mod's own, or 0 for look's */
+    int32_t min, max;       /* min < max: the range (8.8) in place of look's, the graphic's too */
+};
+
+/* the stock UI record of id (0..0x126; record 0 for any other id), to copy */
+const void *core_knob_stock_ui(int32_t id);
+
 #endif

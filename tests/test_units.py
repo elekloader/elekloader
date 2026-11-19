@@ -3,6 +3,7 @@
 import json
 import os
 import random
+import re
 import struct
 import sys
 import tempfile
@@ -345,6 +346,43 @@ def test_a_longer_section_table_moves_the_data_start():
     assert all(o.stored[k] == s.stored[k] for k in (5, 2, 4, 6, 7, 8))
 
 
+
+def test_an_ele2_file_round_trips_and_its_checks_refuse():
+    """ELE2 (the Analog Rytm MKI): a 0x14-byte header, the load address and the
+    one section, padded to 4. Read, rewritten byte for byte, given a version,
+    verified, and refused when the header or the load address changes."""
+    dev = [d for d in devices.devices() if d.key == 'analog-rytm-mk1'][0]
+    body = b'an mki main os ' * 400
+    sec = syx.pack_main(body)
+    cont = bytearray(b'ELE2' + b'0176' + b' ' * 8 + b'1.74') + struct.pack('>I', dev.main_load) + sec
+    cont += bytes(-len(cont) % 4)
+    cont = bytes(cont)
+    stream = struct.pack('>II', len(cont), transport.content_checksum(cont)) + cont
+    f0, f1 = bytearray(FRAMING0), bytearray(FRAMING1)
+    f0[4] = f1[4] = 0x07                               # the MKI's device byte
+    raw = transport.encode_syx(stream, 0x07, bytes(f0), bytes(f1))
+    s = syx.Syx(raw)
+    assert s.family == 'ELE2' and s.version == '1.74' and s.section(3) == body
+    assert [(t[0], t[1], t[3]) for t in s.table] == [(3, 0x18, dev.main_load)]
+    assert syx.write(s, s.stored[3], dev) == raw
+    out = syx.write(s, syx.pack_main(body + b'!'), dev, 'MW01')
+    o = syx.Syx(out)
+    assert o.version == 'MW01' and o.section(3) == body + b'!' and o.container[:0x10] == cont[:0x10]
+
+    def tampered(at):
+        c = bytearray(syx.Syx(out).container)
+        c[at] ^= 1
+        st2 = struct.pack('>II', len(c), transport.content_checksum(bytes(c))) + bytes(c)
+        return transport.encode_syx(st2, 0x07, bytes(f0), bytes(f1))
+
+    for at, word in ((5, 'header'), (0x15, 'destinations')):      # 0x14: the load address
+        try:
+            syx.verify(tampered(at), s, body + b'!', dev, 'MW01')
+        except syx.SyxError as e:
+            assert word in str(e), e
+        else:
+            raise AssertionError('not refused: byte 0x%x' % at)
+
 def test_the_update_limit_counts_the_preamble_and_is_optional():
     from dataclasses import replace
     body = b'main os image ' * 300
@@ -364,7 +402,7 @@ def test_the_update_limit_counts_the_preamble_and_is_optional():
         else:
             raise AssertionError('accepted an update over the limit')
     assert [(d.key, d.update_max) for d in devices.devices() if d.update_max is not None] == [
-        ('digitone-mk2', 0x200000)]
+        ('digitone-mk2', 0x200000), ('analog-rytm-mk1', 0x1F0000)]
 
 
 def test_the_main_os_is_stored_padded_to_4():
@@ -2143,7 +2181,7 @@ def test_core_ar2_0_12_room_for_drive_mods():
     """core-ar2 0.12's tables have room for +Drive mods (mods/core-ar2/README.md, "Room for +Drive
     mods"): its events for as many handlers as the Drive Loader links (256), not the default 16
     (found 2026-11-07: a 17th ev_tick handler was refused `full`), the machines table for its 10
-    hidden slots, the page tables by the views' room (10 views of VIEW_MAX 16 pages, 11 of them
+    hidden slots less the flashed mods' machines, the page tables by the views' room (10 views of VIEW_MAX 16 pages, 11 of them
     stock's), the id-range tables by the loader's mods, and core_step_owners stopping at its 8
     owners (steps.c OWNERS)."""
     path = os.path.join(HERE, '..', 'mods', 'core-ar2', 'mod.json')
@@ -2158,14 +2196,400 @@ def test_core_ar2_0_12_room_for_drive_mods():
             assert isinstance(v, dict) and v.get('spare') == 256, (name, v)
     # 0.14: the boot link's own event, which no +Drive mod joins (README, "+Drive storage at boot")
     assert cols['ev_boot_drive'] == {'entry': 4, 'spare': 0}
-    assert cols['core_machines'] == {'entry': 4, 'spare': 10}
+    assert cols['core_machines'] == {'entry': 4, 'spare': 10, 'max': 10}   # less the flashed mods' machines
     for name in ('core_pages', 'core_page_fns', 'core_view_pages'):
         assert cols[name] == {'entry': 4, 'spare': 10 * 16 - 11}, name
     for name in ('core_params', 'core_param_locks', 'core_param_scales'):
         assert cols[name] == {'entry': 4, 'spare': 256}, name
     assert cols['core_step_owners'] == {'entry': 4, 'spare': 8, 'max': 8}
-    assert cols['core_lock_params'] == 4      # +Drive mods have no storage, so no lock codes
+    assert cols['core_lock_params'] == 4      # its 32 spare are the linker's (link.DRIVE_SPARE)
 
+
+
+def test_core_a4mk2_0_7_std_midi_sites():
+    """core-a4mk2 0.7's MIDI events and ev_seq_tick (stdmidi.c, stdmidi.s): seven std tables, a
+    site for each stock routine read in 1.56, every target a global of stdmidi.s, and each jmp
+    site's stub resuming right after the stock bytes it displaced (a jsr site's stub tail-calls the
+    status handler instead, and the tick's stub ends in rte)."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    events = ('ev_midi_in', 'ev_sysex_in', 'ev_midi_cc', 'ev_midi_pc', 'ev_midi_out', 'ev_seq_midi',
+              'ev_seq_tick')
+    for e in events:
+        assert doc['std'][e] == 'std_' + e[3:] and _entry(doc['collections']['std_' + e[3:]]) == 4, e
+    assert 'stdmidi.c' in doc['sources'] and 'stdmidi.s' in doc['sources']
+    with open(os.path.join(mdir, 'stdmidi.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    globs = set(re.findall(r'core_std_\w+_site', ' '.join(re.findall(r'\.globl\s+(.*)', asm))))
+    want = {'0x4006578a': ('jsr', 'core_std_in_din_site'), '0x40065818': ('jsr', 'core_std_in_usb_site'),
+            '0x40066320': ('jmp', 'core_std_sysex_site'), '0x40068632': ('jmp', 'core_std_cc_site'),
+            '0x40065e9e': ('jmp', 'core_std_pc_site'), '0x400687aa': ('jmp', 'core_std_send_site'),
+            '0x40068698': ('jmp', 'core_std_bits_site'), '0x40068704': ('jmp', 'core_std_rt_site'),
+            '0x40101acc': ('jmp', 'core_std_seq_midi_site'), '0x4007badc': ('jmp', 'core_std_seq_tick_site')}
+    sites = {s['addr']: s for s in doc['sites'] if s.get('target') in globs}
+    assert set(sites) == set(want)
+    for addr, (op, target) in want.items():
+        s = sites[addr]
+        assert (s['op'], s['target']) == (op, target), addr
+        stub = asm.split(target + ':', 1)[1].split('\n\n', 1)[0]
+        if op == 'jsr':
+            assert s['len'] == 6 and 'jmp     (%a0)' in stub, addr
+        elif target == 'core_std_seq_tick_site':
+            assert stub.rstrip().endswith('rte')
+        else:
+            resume = int(addr, 16) + s['len']
+            assert ('0x%08x' % resume) in stub, (addr, hex(resume))
+    with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2', 'ports.h'),
+              encoding='utf-8') as fh:
+        ports = fh.read()
+    for name in ('CORE_MIDI_CC_AUTO', 'CORE_MIDI_PC_STOCK', 'CORE_MIDI_CC_PERF'):
+        assert name in ports
+
+def test_core_a4mk2_0_7_voice_events():
+    """core-a4mk2 0.7's std1 voice events (voice.c, voice.s) run in the audio interrupt: the voice
+    apply (0x401025ac) passes the voice, the channel's track and the request's type, and the
+    interrupt's two frees (0x40102174, 0x40102e10) end a started voice before stock frees it."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    assert doc['std']['ev_voice_start'] == 'std_voice_start'
+    assert doc['std']['ev_voice_end'] == 'std_voice_end'
+    assert _entry(doc['collections']['std_voice_start']) == _entry(doc['collections']['std_voice_end']) == 4
+    assert 'voice.c' in doc['sources'] and 'voice.s' in doc['sources']
+    sites = {s['addr']: s for s in doc['sites']}
+    assert sites['0x401025ac']['target'] == 'core_voice_apply'
+    # (their stock bytes are checked against the stock image in test_analog_four_mk2)
+    assert sites['0x40102174']['target'] == 'core_voice_free_cut' and sites['0x40102174']['len'] == 6
+    assert sites['0x40102e10']['target'] == 'core_voice_free_len' and sites['0x40102e10']['len'] == 6
+    with open(os.path.join(mdir, 'voice.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    for fn in ('core_voice_end', 'core_voice_note'):
+        assert re.search(r'^void %s\(' % fn, src, re.M), fn
+    with open(os.path.join(mdir, 'rows.s'), encoding='utf-8') as fh:
+        body = fh.read().split('core_voice_apply:', 1)[1].split('rts', 1)[0]
+    assert body.index('jsr     core_rows_voice') < body.index('jsr     core_voice_note')
+    assert body.rstrip().endswith('moveq   #2,%d5')       # the displaced instructions, last
+    with open(os.path.join(mdir, 'voice.s'), encoding='utf-8') as fh:
+        vs = fh.read()
+    cut = vs.split('core_voice_free_cut:', 1)[1].split('core_voice_free_len:', 1)[0]
+    assert 'jmp     0x40105410' in cut                # the argument stock pushed stays for the free
+    ln = vs.split('core_voice_free_len:', 1)[1]
+    assert ln.index('jsr     core_voice_end') < ln.index('jsr     0x40105410') < ln.index('rts')
+
+
+def test_core_a4mk2_0_7_std_map():
+    """core-a4mk2 0.7 serves std1 at the sites it owns: each map entry is a std1.h event and one
+    of core's tables, the native table for the same prototype or its first part, a std_ table of
+    its own for the thunks (std.c) that core's own handlers or sites call."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'std1.h'), encoding='utf-8') as fh:
+        events = set(re.findall(r'\(\*std1_(ev_\w+)_fn\)', fh.read()))
+    std = doc['std']
+    ui = {'ev_boot_done', 'ev_idle', 'ev_crash', 'ev_usb', 'ev_key_leds', 'ev_mode', 'ev_param_set',
+          'ev_clip', 'ev_pattern', 'ev_mute', 'ev_view'}
+    midi = {'ev_midi_in', 'ev_sysex_in', 'ev_midi_cc', 'ev_midi_pc', 'ev_midi_out', 'ev_seq_midi', 'ev_seq_tick'}
+    voice = {'ev_voice_start', 'ev_voice_end'}
+    assert set(std) == {'ev_boot', 'ev_tick', 'ev_draw', 'ev_key', 'ev_settings', 'ev_project',
+                        'ev_render_in', 'ev_param_turn'} | ui | midi | voice
+    assert set(std) <= events
+    assert all(t in doc['collections'] for t in std.values())
+    native = {e for e, t in std.items() if t == e}
+    assert native == {'ev_tick', 'ev_draw', 'ev_settings', 'ev_project', 'ev_render_in'}
+    assert {std[e] for e in ('ev_boot', 'ev_key', 'ev_param_turn')} == {'std_boot', 'std_key', 'std_param_turn'}
+    # every other entry is core's own std_<event> table, which one of its C sources walks
+    csrc = ''
+    for name in doc['sources']:
+        if name.endswith('.c') and not name.startswith('..'):
+            with open(os.path.join(mdir, name), encoding='utf-8') as fh:
+                csrc += fh.read()
+    for e in set(std) - native:
+        assert std[e] == 'std_' + e[3:], e
+        assert re.search(r'^extern const \w+ %s\[\];' % std[e], csrc, re.M), e
+    assert doc['defsym'].get('BOOT_INIT') == '1' and 'std.c' in doc['sources']
+    subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
+    assert subs[('ev_key', 'core_std_key')] == 0
+    assert subs[('ev_enc', 'core_std_enc')] == -1000000
+    assert subs[('ev_tick', 'core_std_tick')] == -1000000
+    assert subs[('ev_tick', 'core_std_tick_end')] == 1000000
+    with open(os.path.join(mdir, 'std.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    for fn in ('core_boot_init', 'core_std_key', 'core_std_enc', 'core_std_param_turn', 'core_redraw',
+               'core_post', 'core_timer', 'core_std_tick', 'core_std_tick_end'):
+        assert re.search(r'^\w[\w ]*\b%s\(' % fn, src, re.M), fn
+    with open(os.path.join(mdir, 'pages.s'), encoding='utf-8') as fh:
+        assert 'jsr     core_std_param_turn' in fh.read()
+
+
+def test_core_a4mk2_0_7_ui_sites():
+    """core-a4mk2 0.7's UI and system events (ui.c, ui.s): every site's target is a global of ui.s
+    or a function of ui.c, each std table is read in ui.c, the native ev_knob_turn,
+    ev_analog_frame and ev_mod_set have their tables, and core_ui_tick runs right after core_std_tick."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(mdir, 'ui.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    with open(os.path.join(mdir, 'ui.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    globs = set(re.findall(r'^\s*\.globl\s+(\w+)', asm, re.M))
+    globs |= {m for m in re.findall(r'^\s*(?:CLIP|PREQ|MODSET)\s+(\w+),', asm, re.M)}
+    cfns = set(re.findall(r'^\w[\w ]*?\b(core_\w+)\(', src, re.M))
+    ui_sites = [s for s in doc['sites'] if s.get('target') in globs | cfns]
+    # ev_live_rec: live record's three pattern writes, counted on their own
+    live = [s for s in ui_sites if s['target'].startswith('core_live_')]
+    assert [(s['addr'], s['op'], s['target']) for s in live] == [
+        ('0x400a954a', 'jmp', 'core_live_note_site'), ('0x400a6a08', 'jmp', 'core_live_value_site'),
+        ('0x400a690c', 'jmp', 'core_live_lock_site')]
+    for s in live:      # each stub resumes past the 8 bytes its jmp displaced
+        assert s['len'] == 8 and 'jmp     0x%08x' % (int(s['addr'], 16) + 8) in asm, s
+    assert doc['collections']['ev_live_rec']['entry'] == 4 and 'ev_live_rec[]' in src
+    ui_sites = [s for s in ui_sites if s not in live]
+    assert len(ui_sites) == 70
+    assert len([s for s in ui_sites if s['target'].startswith('core_clip_')]) == 36
+    modset = [s for s in ui_sites if s['target'].startswith('core_modset_')]
+    assert len(modset) == 6 and all(s['op'] == 'jmp' for s in modset)
+    assert len([s for s in ui_sites if s['target'].startswith('core_view_')]) == 5
+    assert len([s for s in ui_sites if s['target'].startswith('core_pattern_') and s['target'] != 'core_pattern_site']) == 6
+    for s in ui_sites:
+        assert s['len'] >= (4 if s['op'] == 'ptr' else 6), s
+    for t in ('std_boot_done', 'std_idle', 'std_crash', 'std_usb', 'std_key_leds', 'std_mode',
+              'std_param_set', 'std_clip', 'std_pattern', 'std_mute', 'std_view'):
+        assert re.search(r'\b%s\[' % t, src), t
+    assert _entry(doc['collections']['ev_knob_turn']) == 4 and 'ev_knob_turn[0]' in src
+    assert _entry(doc['collections']['std_view']) == 4 and doc['std']['ev_view'] == 'std_view'
+    assert _entry(doc['collections']['ev_analog_frame']) == 4 and 'tst.l   ev_analog_frame' in asm
+    assert _entry(doc['collections']['ev_mod_set']) == 4 and 'ev_mod_set[0]' in src
+    assert 'ui.c' in doc['sources'] and 'ui.s' in doc['sources']
+    subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
+    assert subs[('ev_tick', 'core_ui_tick')] == -999999
+    inc = os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2')
+    for h in ('keys.h', 'leds.h', 'params.h', 'ports.h'):
+        assert os.path.isfile(os.path.join(inc, h)), h
+    with open(os.path.join(inc, 'keys.h'), encoding='utf-8') as fh:
+        assert '#define CORE_TICK_HZ 20' in fh.read()
+
+
+def test_core_a4mk2_0_8_track_key():
+    """core-a4mk2 0.8's ev_track_key (trackkey.c, trackkey.s): one jmp site over the sequencer view's key-code
+    call, whose stub makes that call, resumes after it and leaves taken keys through the handled exit;
+    the table, its typedef and the helpers in ui.h."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(mdir, 'trackkey.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    with open(os.path.join(mdir, 'trackkey.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    assert tuple(map(int, doc['version'].split('.'))) >= (0, 8) and 'trackkey.c' in doc['sources'] and 'trackkey.s' in doc['sources']
+    site = [s for s in doc['sites'] if s.get('target') == 'core_track_key_site']
+    # (its stock bytes are checked against the stock image in test_analog_four_mk2)
+    assert site == [{'addr': '0x400c8ba2', 'len': 6, 'stock_sha256': '71b362f711c113689fd93a04c5b98ab51fd214ec779f9ad2bcbfc646d856b734', 'op': 'jmp',
+                     'target': 'core_track_key_site'}]
+    assert re.search(r'^core_track_key_site:\n\s+jsr\s+0x4005b6f0$', asm, re.M)
+    assert 'jmp     0x400c8ba8' in asm and 'jmp     0x400c8f6a' in asm   # 0x400c8ba2 + 6; the handled exit
+    assert 'tst.l   ev_track_key' in asm and 'ev_track_key[]' in src
+    assert _entry(doc['collections']['ev_track_key']) == 4
+    for fn in ('core_track_held', 'core_track_current', 'core_track_pattern'):
+        assert re.search(r'^\w[\w *]*\b%s\(void \*view\)$' % fn, src, re.M), fn
+    assert '.globl  core_popup' in asm
+    with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2', 'ui.h'), encoding='utf-8') as fh:
+        h = fh.read()
+    assert 'typedef int (*ev_track_key_fn)(void *view, void *event, int key, int pressed);' in h
+    for fn in ('core_track_held', 'core_track_current', 'core_track_pattern', 'core_popup'):
+        assert fn + '(' in h, fn
+
+
+def test_core_a4mk2_0_8_sound_events():
+    """core-a4mk2 0.8's ev_voice_params and ev_sound_setup (sound.s, sound.c): each a jmp site whose stub runs
+    its table, then the displaced instructions, and resumes 6 bytes on; the tables, typedefs and the toggle row."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(mdir, 'sound.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    with open(os.path.join(mdir, 'sound.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    assert 'sound.c' in doc['sources'] and 'sound.s' in doc['sources']
+    sites = {s.get('target'): s for s in doc['sites']}
+    # (their stock bytes are checked against the stock image in test_analog_four_mk2)
+    assert sites['core_voice_params_site'] == {'addr': '0x40103af6', 'len': 6, 'op': 'jmp',
+                                               'stock_sha256': 'd92ee75213456a7a13d91048d49cefad7ddab6b7d7f7d56eaa61332f042ae107',
+                                               'target': 'core_voice_params_site'}
+    assert sites['core_sound_setup_site'] == {'addr': '0x400e62c8', 'len': 6, 'op': 'jmp',
+                                              'stock_sha256': 'e8aa53b410decd67ab49630aef6dbe1806885013588d331d080875d7458a7113',
+                                              'target': 'core_sound_setup_site'}
+    assert re.search(r'jsr\s+0x400fa2b0\n\s+jmp\s+0x40103afc', asm)
+    assert re.search(r'movea.l\s+\(%a3\),%a0\n\s+move.l\s+8\(%a0\),%d7\n\s+jmp\s+0x400e62ce', asm)
+    for t in ('ev_voice_params', 'ev_sound_setup'):
+        assert _entry(doc['collections'][t]) == 4 and 'tst.l   ' + t in asm, t
+    assert re.search(r'^void core_sound_setup_toggle\(void \*menu, const struct core_toggle \*t\)$', src, re.M)
+    with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2', 'ui.h'), encoding='utf-8') as fh:
+        h = fh.read()
+    assert 'typedef void (*ev_voice_params_fn)(uint16_t *words, const int32_t *voice_track);' in h
+    assert 'typedef void (*ev_sound_setup_fn)(void *menu);' in h and 'struct core_toggle {' in h
+
+
+def _entry(v):
+    """A collection's entry size: a plain number, or a dict's "entry" (a core's spare entries)."""
+    return v['entry'] if isinstance(v, dict) else v
+
+
+def test_core_a4mk2_room_for_drive_mods():
+    """core-a4mk2's tables have room for +Drive mods (mods/core-a4mk2/README.md,
+    "+Drive mods"), as core-ar2 0.12's: every event table, native and std1's, for as many handlers as
+    the Drive Loader links (256), the audio interrupt's marked render; the page tables by the views'
+    room (pages.s VIEW_MAX 16: every A4 page is a view), core_params by the loader's mods, and
+    core_lock_params left to the linker's default (a +Drive mod has no storage, so no lock codes);
+    ev_boot_drive and ev_drive_format none: the Drive Loader runs in them, no +Drive mod."""
+    path = os.path.join(HERE, '..', 'mods', 'core-a4mk2', 'mod.json')
+    if not os.path.exists(path):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(path, encoding='utf-8') as fh:
+        doc = json.load(fh)
+    cols = doc['collections']
+    render = {'ev_render_in', 'ev_render_out', 'ev_analog_frame', 'std_voice_start', 'std_voice_end',
+              'std_seq_midi', 'ev_voice_params', 'ev_fx_in', 'ev_fx_out', 'ev_noise_fade', 'ev_noise_mix'}
+    loader_only = ('ev_boot_drive', 'ev_drive_format')
+    events = [n for n in cols if n.startswith(('ev_', 'std_')) and n not in loader_only]
+    assert set(doc['std'].values()) <= set(events)
+    for name in loader_only:                 # the Drive Loader's own: no +Drive mod is called in them
+        assert cols[name] == {'entry': 4, 'spare': 0}, name
+    for name in events:
+        want = {'entry': 4, 'render': True, 'spare': 256} if name in render else {'entry': 4, 'spare': 256}
+        assert cols[name] == want, (name, cols[name])
+    with open(os.path.join(HERE, '..', 'mods', 'core-a4mk2', 'pages.s'), encoding='utf-8') as fh:
+        view_max = int(re.search(r'\.equ\s+VIEW_MAX,\s*(\d+)', fh.read()).group(1))
+    for name in ('core_pages', 'core_page_fns', 'core_view_pages'):
+        assert cols[name] == {'entry': 4, 'spare': view_max}, name
+    assert cols['core_params'] == {'entry': 4, 'spare': 256}
+    assert cols['core_lock_params'] == 4 and cols['core_knob_looks'] == 4
+    assert cols['core_knob_names'] == {'entry': 4, 'spare': 256}
+    for name in ('core_store_ids', 'core_lock_codes', 'core_lock_ccs', 'core_field_inits', 'core_payloads'):
+        assert not isinstance(cols[name], dict), name     # the linker fills these (link.NO_SPARE)
+
+
+def test_core_a4mk2_audio_events():
+    """core-a4mk2's audio events (audio.s): the dry mute read at the track levels' volume load (a jmp
+    that makes no call: the accumulators are live there), ev_fx_in and ev_fx_out around the effects
+    block's only call (keep2, the block called with the caller's arguments), ev_noise_fade and
+    ev_noise_mix in the noise generator, each stub resuming where stock does; core clears core_dry_mute
+    in ev_render_out before the value snapshot; and core_knob_names is asked before core's own names."""
+    base = os.path.join(HERE, '..', 'mods', 'core-a4mk2')
+    if not os.path.isdir(base):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(os.path.join(base, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(base, 'audio.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    with open(os.path.join(base, 'dests.c'), encoding='utf-8') as fh:
+        dests = fh.read()
+    assert 'audio.s' in doc['sources']
+    sites = {x['target']: x for x in doc['sites'] if 'target' in x}
+    want = {'core_dry_mute_site': ('0x400fa6c4', 'jmp', 'jmp     0x400fa6ca'),
+            'core_fx_site': ('0x40103dda', 'keep2', 'jsr     0x400fe73c'),
+            'core_noise_fade_site': ('0x400ffe04', 'jmp', 'jmp     0x400ffe0a'),
+            'core_noise_mix_site': ('0x400ffe50', 'jmp', 'jmp     0x400ffe56')}
+    for t, (addr, op, resume) in want.items():
+        assert sites[t]['addr'] == addr and sites[t]['op'] == op and sites[t]['len'] == 6, t
+        stub = asm.split('\n%s:' % t, 1)[1].split('\n| ----', 1)[0]
+        assert resume in stub, t
+    dry = asm.split('\ncore_dry_mute_site:', 1)[1].split('\n| ----', 1)[0]
+    assert 'jsr' not in dry and 'btst    %d2,core_dry_mute' in dry
+    sub = [(x['event'], x['fn'], x['order']) for x in doc['subscribe'] if x['event'] == 'ev_render_out']
+    assert ('ev_render_out', 'core_dry_mute_clear', 0) in sub
+    assert ('ev_render_out', 'core_value_snapshot', 1) in sub
+    short = dests.split('const char *core_set_short', 1)[1]
+    assert short.index('mod_name(set, id, 0)') < short.index('named(set, id)')
+    with open(os.path.join(HERE, '..', 'elekloader', 'sdk', 'include', 'analog-four-mk2', 'ui.h'),
+              encoding='utf-8') as fh:
+        h = fh.read()
+    for t in ('ev_fx_in_fn', 'ev_fx_out_fn', 'ev_noise_fade_fn', 'ev_noise_mix_fn', 'struct core_knob_name',
+              'extern volatile uint8_t core_dry_mute;'):
+        assert t in h, t
+
+def test_core_a4mk2_drive_storage_hooks():
+    """core-a4mk2 has core-ar2 0.14's +Drive storage contract where the A4 needs it (README, "+Drive
+    mods"): the live generations core_store_gens, this build's from .boot, which every scope's check
+    reads; ev_boot_drive comes before 0x400f1b18, the boot's project load, so the A4 loads once (no
+    deferred load), and has no core_lfo_dsts (its LFOs are "mod" destinations)."""
+    d = os.path.join(HERE, '..', 'mods', 'core-a4mk2')
+    if not os.path.isdir(d):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(os.path.join(d, 'store.c'), encoding='utf-8') as fh:
+        store_c = fh.read()
+    with open(os.path.join(d, 'std.c'), encoding='utf-8') as fh:
+        std_c = fh.read()
+    with open(os.path.join(d, 'store.s'), encoding='utf-8') as fh:
+        store_s = fh.read()
+    assert re.search(r'^unsigned char core_store_gens\[6\];', store_c, re.M)
+    gen = re.search(r'static unsigned gen\(int scope\)\s*\{(.*?)\}', store_c, re.S).group(1)
+    assert 'core_store_gens[scope - 1]' in gen and '__store_gen' not in gen
+    init = re.search(r'void core_store_boot_init\(void\)\s*\{(.*?)\n\}', store_c, re.S).group(1)
+    assert 'core_store_gens[s - 1] = built_gen(s)' in init
+    boot = re.search(r'void core_boot_init\(void\)\s*\{(.*?)\n\}', std_c, re.S).group(1)
+    assert boot.index('core_store_boot_init();') < boot.index('std_boot')     # before any ev_boot handler
+    site = re.search(r'core_boot_drive_site:\s*\n(.*?)\n\n', store_s, re.S).group(1).split('\n')
+    assert [l.split() for l in site] == [['jsr', 'core_boot_drive'], ['jmp', '0x400f1b18']]
+    assert 'core_lfo_dsts' not in store_c and 'boot_wait' not in store_c
+
+
+def test_the_a4_pre_link_ranges_are_ordered_and_inside_the_main_os():
+    """The Analog Four MKII 1.56's pre-link ranges (the boot-order trace of 2026-11-14): sorted, apart,
+    inside the main OS, holding main() up to the +Drive hook at 0x401061e8 but not the hook, and not
+    0x400f1b18, the boot's project load, which runs after it (core-a4mk2 README, "+Drive mods")."""
+    from elekloader import devices
+    dev = [d for d in devices.devices() if d.key == 'analog-four-mk2'][0]
+    rel = dev.releases['1.56']
+    pre = rel.prelink
+    assert pre == tuple(sorted(pre)) and all(lo < hi for lo, hi, _k, _w in pre)
+    assert all(a[1] <= b[0] for a, b in zip(pre, pre[1:]))
+    assert all(dev.main_load <= lo and hi <= dev.image_end(rel) and k in (1, 2) for lo, hi, k, _w in pre)
+    assert any(lo == 0x40105fb6 and hi == 0x401061e8 for lo, hi, _k, _w in pre)
+    for at in (0x401061e8, 0x400f1b18, 0x400145f6, 0x40011054):
+        assert not any(lo <= at < hi for lo, hi, _k, _w in pre), hex(at)
+    assert sum(k == 1 and w.startswith('constructor') for lo, hi, k, w in pre) == 132
+
+
+def test_the_rytm_pre_link_ranges_are_ordered_and_inside_the_main_os():
+    """The Analog Rytm MKII 1.74's pre-link ranges (the boot-order trace, docs/DRIVE.md): sorted, apart,
+    inside the main OS, and holding main() up to the +Drive hook at 0x401009e0 but not the hook itself."""
+    from elekloader import devices
+    dev = [d for d in devices.devices() if d.key == 'analog-rytm-mk2'][0]
+    rel = dev.releases['1.74']
+    pre = rel.prelink
+    assert pre == tuple(sorted(pre)) and all(lo < hi for lo, hi, _k, _w in pre)
+    assert all(a[1] <= b[0] for a, b in zip(pre, pre[1:]))
+    assert all(dev.main_load <= lo and hi <= dev.image_end(rel) and k in (1, 2) for lo, hi, k, _w in pre)
+    assert any(lo <= 0x401006ee and hi == 0x401009e0 for lo, hi, _k, _w in pre)
+    assert not any(lo <= 0x401009e0 < hi for lo, hi, _k, _w in pre)
+    assert sum(k == 1 and w.startswith('constructor') for lo, hi, k, w in pre) == 146   # the table's count
 
 if __name__ == '__main__':
     import traceback

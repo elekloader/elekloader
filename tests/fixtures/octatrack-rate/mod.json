@@ -1,0 +1,11 @@
+{
+ "id": "rate-probe", "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "rate probe", "category": "Test", "author": "irpina",
+ "description": "A probe of core-ot 0.30's ev_play_increment: counts each track's calls with the last increment it saw, and doubles track 1's when a poked control word says.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["probe.c"],
+ "subscribe": [{"event": "ev_play_increment", "fn": "rp_inc", "order": 50}],
+ "requires": ["core"],
+ "resources": {"core": "0.30"}
+}

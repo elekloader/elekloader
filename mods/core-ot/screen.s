@@ -117,3 +117,191 @@ core_dial_fx1:
         DIAL    2, %d3, DIAL_FX1_NEXT   | OT_P2_FX1
 core_dial_amp:
         DIAL    1, %d5, DIAL_AMP_NEXT   | OT_P2_AMP
+
+| ---- two more SETUP windows (core-ot 0.22) -------------------------------------------------------------
+| The SRC / NOTE SETUP window (0x40036548, "CHAN": MIDI NOTE SETUP, FUNC + PLAYBACK in MIDI mode, and the
+| audio tracks' setup octabam's VARISPEED reaches; MIDI FOLLOW too, MIT) and MIDI ARP
+| SETUP (0x40079d48) draw their knobs with the same widget call. In each the knob's formatter slot is at
+| \base (widget at 48(\base)), the knob in \knob, its value byte in \val (unsigned), the canvas in
+| \canvas. The SRC window's flags are a1; ARP SETUP's are 0. Same contract as DIAL above; the value
+| goes back into \val's low byte, where the widget call takes it from.
+        .macro  DIAL2 page, base, knob, val, flags, canvas, next
+        movea.l 48(%\base), %a0
+        tst.l   %a0
+        bne.s   1f
+        lea     DIAL_WIDGET, %a0
+1:      .ifc    \flags, zero
+        suba.l  %a1, %a1
+        .endif
+        tst.l   ev_setup_dial
+        beq.s   2f
+        lea     -20(%sp), %sp
+        move.b  #\page, (%sp)
+        move.b  %\knob, 1(%sp)
+        moveq   #0, %d0
+        move.b  %\val, %d0
+        move.l  %d0, 4(%sp)
+        move.l  %a1, 8(%sp)
+        move.l  (%\base), 12(%sp)
+        move.l  %a0, 16(%sp)
+        pea     (%sp)
+        jsr     otd_dial
+        addq.l  #4, %sp
+        move.l  4(%sp), %d0
+        move.b  %d0, %\val
+        movea.l 8(%sp), %a1
+        movea.l 16(%sp), %a0
+        lea     20(%sp), %sp
+2:      move.l  %\canvas, -(%sp)
+        move.l  (%\base), -(%sp)
+        move.l  %a1, -(%sp)
+        jmp     \next
+        .endm
+
+        .globl  core_dial_src, core_dial_arp
+core_dial_src:
+        DIAL2   0, a4, d4, d3, a1, d5, 0x400366ac       | OT_P2_PLAYBACK
+core_dial_arp:
+        DIAL2   4, a3, d3, d4, zero, d6, 0x4007a200     | OT_SETUP_ARP
+
+| ---- the MIDI CTRL pages' knobs (core-ot 0.26) -------------------------------------------------------------
+| 0x4004e382 (was: movea.l -52(a6),a1 ; movea.l 48(a1),a0 ; tst.l a0 ; bne.s ; lea 0x400479b4(pc),a0), in the
+| page drawer 0x4004d948: a knob of the MIDI tracks' CTRL pages about to be drawn with the SETUP widget:
+| -52(a6) its formatter record, a4 the knob, d0 the value, d5 the flags. octabam's MIDI SCENES (MIT) shows a
+| held scene's lock here. ev_setup_dial with page OT_PAGE_CTRL; the value, flags and widget come back.
+        .globl  core_dial_ctrl
+core_dial_ctrl:
+        movea.l -52(%a6), %a1
+        movea.l 48(%a1), %a0
+        tst.l   %a0
+        bne.s   1f
+        lea     DIAL_WIDGET, %a0
+1:      tst.l   ev_setup_dial
+        beq.s   2f
+        lea     -20(%sp), %sp
+        move.b  #5, (%sp)               | OT_PAGE_CTRL
+        move.l  %a4, %d1
+        move.b  %d1, 1(%sp)             | the knob
+        move.l  %d0, 4(%sp)
+        move.l  %d5, 8(%sp)
+        move.l  (%a1), 12(%sp)
+        move.l  %a0, 16(%sp)
+        pea     (%sp)
+        jsr     otd_dial
+        addq.l  #4, %sp
+        move.l  4(%sp), %d0
+        move.l  8(%sp), %d5
+        movea.l 16(%sp), %a0
+        lea     20(%sp), %sp
+2:      jmp     0x4004e392
+
+| ---- the track tabs (core-ot 0.17) ---------------------------------------------------------------------
+| 0x40040146 (was: moveq #4,d0 ; cmp.l a4,d0 ; bne.s 0x400401c6), in the track tabs' renderer 0x4003fed8
+| (the UI task's display loop): stock has just drawn track d4's machine letter at x d3, y a2 + 1 (a4 the
+| track's machine). octabam's REC TRIG MUTE draws its dots here (MIT). Handlers: void f(unsigned trk,
+| int x, int y), after stock's letter: draw beside it (ot_blit). The tab's other marks come after.
+        .globl  core_tab_draw
+core_tab_draw:
+        tst.l   ev_track_tab_draw
+        beq.s   9f
+        lea     -24(%sp), %sp
+        movem.l %d0-%d2/%a0-%a2, (%sp)
+        move.l  %a2, %d2
+        addq.l  #1, %d2                 | the letter's y (d2: the handlers keep it)
+        lea     ev_track_tab_draw, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        move.l  %d2, -(%sp)
+        move.l  %d3, -(%sp)
+        move.l  %d4, -(%sp)
+        movea.l %d1, %a0
+        jsr     (%a0)
+        lea     12(%sp), %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d2/%a0-%a2
+        lea     24(%sp), %sp
+9:      moveq   #4, %d0
+        cmp.l   %a4, %d0
+        bne.s   8f
+        jmp     0x4004014c
+8:      jmp     0x400401c6
+
+| ---- the knob widget (core-ot 0.23) ---------------------------------------------------------------------
+| 0x400467a4 (was: lea -48(sp),sp ; movem.l d2-d7/a2-a3,(sp)), the knob widget: the page parameter
+| descriptors name it (their widget field, 0x400d3438 on), RECORDING SETUP calls it (0x4002fa1a, 0x4002faba,
+| 0x4002fb5e) and two drawers reach it by a tail branch (0x40047c76, 0x40047d04). Its arguments, at 4(sp) on entry: x, y, mode, value, flags, formatter, canvas (struct
+| ot_knob, core.h). octabam's RLEN PLEN and REC THRESHOLD (MIT) swap RECORDING SETUP's formatters at the
+| calls. Handlers: void f(struct ot_knob *k): read it, or change value, flags or the formatter; the
+| widget reads them after. In the task that draws the screen.
+        .globl  core_knob_draw
+core_knob_draw:
+        tst.l   ev_knob_draw
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_knob_draw, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        pea     24(%sp)                 | the arguments (20 saved + the return address)
+        movea.l %d1, %a0
+        jsr     (%a0)
+        addq.l  #4, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      lea     -48(%sp), %sp
+        movem.l %d2-%d7/%a2-%a3, (%sp)
+        jmp     0x400467ac
+
+| ---- the LEDs (core-ot 0.24) -------------------------------------------------------------------------------
+| 0x400136a8 (was: lea -20(sp),sp ; movem.l d2/a2-a5,(sp)), the LED flush: it sends the panel each of the 17
+| rows of the LED map (0x460ba98c, one bit an LED: the on/off routines 0x400131a0 / 0x400131c8 and their
+| two-bit forms set it) that differs from the copy last sent (0x460ba9ae). The UI task, the key-repeat task
+| and the redraws call it. octabam's CHORDS, SCALES and BAR LED (MIT) light other LEDs in the trig pass.
+| Handlers: void f(uint8_t *map), just before the rows go out: set or clear bits (OT_LED_*); stock writes
+| its own bits again on its next pass, so a handler sets its LEDs at each flush.
+        .globl  core_leds
+core_leds:
+        tst.l   ev_leds
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_leds, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        pea     0x460ba98c
+        movea.l %d1, %a0
+        jsr     (%a0)
+        addq.l  #4, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      lea     -20(%sp), %sp
+        movem.l %d2/%a2-%a5, (%sp)
+        jmp     0x400136b0
+
+| ---- the trig mode box (core-ot 0.25) ------------------------------------------------------------------
+| 0x400453f8 (was: movem.l (sp),d2-d7/a2-a6 ; lea 44(sp),sp ; then rts), the one way out of the trig mode
+| box's drawer 0x40044920 (the keyboard of CHROMATIC, the slots, the arp), which the pages and the windows
+| call to draw it. octabam's QUANTIZER and CHORDS (MIT) draw over it (the octave number, the chord).
+| Handlers: void f(unsigned mode), mode the trig mode (0x460d16f0), after stock drew the box (or found
+| none to draw): draw over it.
+        .globl  core_trig_box
+core_trig_box:
+        tst.l   ev_trig_box_draw
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_trig_box_draw, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        move.l  0x460d16f0, -(%sp)
+        movea.l %d1, %a0
+        jsr     (%a0)
+        addq.l  #4, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      movem.l (%sp), %d2-%d7/%a2-%a6
+        lea     44(%sp), %sp
+        rts

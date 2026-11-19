@@ -23,7 +23,8 @@
 |       1 and *value (8.8) when it answers, 0 to pass
 |   int delta(void *view, int32_t id, int32_t delta, int32_t func)
 |       delta in 8.8, func 1 while FUNC is held; 1 when it took the turn (core
-|       then redraws the view, and stock makes no lock), 0 to pass
+|       then marks the project modified (0.6, core_project_edited) and redraws
+|       the view, and stock makes no lock), 0 to pass
 |   int text(struct core_text *t)
 |       t is the routine's own arguments {obj, id, value, buf}: 0 to pass, 1
 |       when it wrote buf, 2 when stock should go on with t's id and value,
@@ -129,6 +130,8 @@ core_param_get:
 
 | param_apply_delta (0x400232e2): `lea %sp@(-12),%sp; moveml %d2-%d3/%a2,%sp@`.
 | Frame: 0 the cursor, 8 view, 12 id, 16 delta, 20 func (its low byte).
+| From 0.7 a turn no core_params entry took goes to the std1 mods'
+| ev_param_turn handlers (std.c) before stock.
 core_param_delta:
         lea     core_params,%a1
         subq.l  #4,%sp
@@ -152,11 +155,27 @@ core_param_delta:
         move.l  12(%sp),-(%sp)            | taken: (0.5) a mod parameter's live record
         jsr     core_lock_turned
         addq.l  #4,%sp
+        jsr     core_project_edited       | the project is modified (0.6)
         move.l  8(%sp),-(%sp)             | and redraw the view now
         jsr     VIEW_INVALIDATE
         addq.l  #8,%sp
         rts
-9:      addq.l  #4,%sp
+9:      tst.l   std_param_turn            | (0.7) no entry took it: std1's ev_param_turn
+        beq.s   8f
+        mvz.b   23(%sp),%d0
+        move.l  %d0,-(%sp)                | func
+        move.l  20(%sp),-(%sp)            | delta
+        move.l  20(%sp),-(%sp)            | id
+        move.l  20(%sp),-(%sp)            | view
+        jsr     core_std_param_turn       | std.c
+        lea     16(%sp),%sp
+        tst.l   %d0
+        beq.s   8f
+        move.l  8(%sp),-(%sp)             | taken: stock makes no lock; redraw the view
+        jsr     VIEW_INVALIDATE
+        addq.l  #8,%sp
+        rts
+8:      addq.l  #4,%sp
         lea     -12(%sp),%sp
         movem.l %d2-%d3/%a2,(%sp)
         jmp     DELTA_RET

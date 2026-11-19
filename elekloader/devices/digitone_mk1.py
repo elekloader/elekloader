@@ -52,6 +52,9 @@ the DDR area, so what follows holds for both:
   at power-on are whatever the DDR holds: a mod clears what it reads before
   it has written it. Checked in digikit on 1.43 and 1.44 with a mod's 26 MB
   of buffers there (a looper and an input history, recording and playing).
+- +Drive mods: a mod that imports core_desc and links more mods on the
+  unit (TELOS, github.com/elekloader/telos) gets what the flashed build
+  leaves of core_ddr (drive_align), about 1.1 MB beside core alone.
 """
 from . import Device, Release
 
@@ -84,6 +87,9 @@ DEVICE = Device(
     },
     ddr=(0x47BE0000, 0x47C00000),
     core_ddr=(('4.0', (0x43EC0000, 0x44000000)),),   # core-dn1 4.0: 1.25 MB (above)
+    drive_align=0x1000,                       # +Drive mods' area (above): what the flashed build
+                                              # leaves of core_ddr, from a 4 KB boundary
+    drive_shadow=True,                        # TELOS copies stock parts from RAM (desc.py, "shadow")
     # a parameter slot's descriptor (core-dn1 2.1, core_params) names the sound slot it edits at +8:
     # the mod claims it, so two mods that store in one of a sound's 79 slots never link together
     slot_claims=(('core_params', 8, 79, 'soundslot'),

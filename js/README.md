@@ -1,7 +1,7 @@
 # elekloader in TypeScript
 
 elekloader's mod manager as a TypeScript package with no dependencies, for web pages and workers. It covers:
-- Elektron OS files: the Digitakt mk1 and II, the Digitone mk1 and II, the Octatrack, the Analog Rytm MKII and the Analog Four MKII;
+- Elektron OS files: the Digitakt mk1 and II, the Digitone mk1 and II, the Octatrack, the Analog Rytm MKI and MKII and the Analog Four MKII;
 - the `.elemod` checks and the linker;
 - the build with its verification;
 - the web page's bridge;
@@ -60,6 +60,8 @@ The unit tests compare against what Python gave for synthetic inputs (`test/vect
 - the zip reader.
 
 `test/drive-vectors.json` (`tools/drive_vectors.py`) holds the build-checker's results for every fixture of `tests/test_drive.py` and a recording of `elekloader mods`' requests and a fake unit's replies, which `test/drive.test.ts` replays. Run the tool again after a change to `drive.py`, `container.py` or `datarpc.py`.
+
+`test/drivestore-vectors.json` (`tools/drivestore_vectors.py`) holds runs of +Drive storage placements, which `test/drivestore.test.ts` replays. Run it again after a change to `drive_store.py`. `test/drivereserve-vectors.json` (`tools/drivereserve_vectors.py`) holds the lockfiles `tests/test_drive_reserve.py` builds with a `.store`'s `"drive"`, which `test/drivereserve.test.ts` replays; run it again after a change to how `store.py` reads it.
 
 With your own stock files and mods (which never go in the repository), compare everything against the Python:
 

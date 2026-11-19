@@ -363,15 +363,18 @@ the Digitone needs it. On its own it changes nothing the unit does.
 
   With no subscriber the unit is stock. machines-dn1 0.5 carries out the
   SDK's mono machines on it.
+- **5.4, for a +Drive loader** (TELOS; [params.s](params.s)), no new site:
+  `core_param_install`, `core_stock_info` (the OS image, copied to 0x44200000
+  before the OS runs) and `core_tasks`; core3.h describes them.
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.3.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.3-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-5.3-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.4.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.4-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-5.4-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
 The LFO name hooks have ColdFire ABI probes (stock fallback, first answer,
@@ -382,16 +385,11 @@ file is needed:
 ELEKLOADER_CROSS=m68k-elf- python tests/test_digitone_lfo_names.py
 ```
 
-A release names them `core-dn1-5.3.elemod` and `core-dn1-5.3-os1.44.elemod`.
-5.3 is on main, not released yet; 5.2.1's are in the latest release, and
-5.1's on the [core-dn1-v5.1](https://github.com/elekloader/elekloader/releases/tag/core-dn1-v5.1) pre-release
-(5.2, 5.0.1, 5.0 and 4.2 were not released);
-4.1.1's are in release v0.9.0, 4.1's on the [core-dn1-v4.1](https://github.com/elekloader/elekloader/releases/tag/core-dn1-v4.1) pre-release,
-4.0's on the [core-dn1-v4.0](https://github.com/elekloader/elekloader/releases/tag/core-dn1-v4.0) pre-release
-(3.3 was not released);
-3.2's are on the [core-dn1-v3.2](https://github.com/elekloader/elekloader/releases/tag/core-dn1-v3.2) pre-release
-(3.0 and 3.1 were not released), and
-2.3's on the [core-dn1-v2.3](https://github.com/elekloader/elekloader/releases/tag/core-dn1-v2.3) pre-release.
+A release names them `core-dn1-5.4.elemod` and `core-dn1-5.4-os1.44.elemod`.
+5.4 and 5.3 are on main, not released; 5.2.1's are in the latest release,
+4.1.1's in v0.9.0, and 5.1, 4.1, 4.0, 3.2 and 2.3 each on its
+`core-dn1-v<version>` pre-release ([releases](https://github.com/elekloader/elekloader/releases));
+the others were not released.
 
 Checked by cold-booting it in digikit's emulator against stock (docs/DEVICES.md):
 - every stage passes, and every screen is identical;

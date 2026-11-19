@@ -1,0 +1,13 @@
+{
+ "id": "pset-probe", "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "pattern settings probe", "category": "Test", "author": "irpina",
+ "description": "A probe of core-ot 0.31's PATTERN SETTINGS rows: a row PROBE in every audio track's pane, whose value its edit steps and its text shows, counting both with the track they saw.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["probe.c"],
+ "contribute": [{"to": "ot_track_rows", "order": 50, "data": "000000000000000000000000000000000000000000000000",
+                 "relocs": [[0, "abs32", "sym:ps_label", 0], [8, "abs32", "sym:ps_edit", 0],
+                            [12, "abs32", "sym:ps_text", 0]]}],
+ "requires": ["core"],
+ "resources": {"core": "0.31"}
+}

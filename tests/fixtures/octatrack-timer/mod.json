@@ -1,0 +1,11 @@
+{
+ "id": "timer-probe", "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "timer probe", "category": "Test", "author": "irpina",
+ "description": "A probe of the Octatrack's firmware timers and vectors in octatrack/core.h: starts a timer every 6 UI ticks at ev_boot_done and counts it, and reads two interrupt vectors.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["probe.c"],
+ "subscribe": [{"event": "ev_boot_done", "fn": "tm_boot", "order": 50}],
+ "requires": ["core"],
+ "resources": {"core": "0.6"}
+}

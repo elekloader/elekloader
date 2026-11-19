@@ -7,7 +7,8 @@
  * The id is the FNV-1a hash (32 bits) of the mod's id (link.py payload_id).
  * From 0.11 the mods' area is 0x47b10000..0x47fff000 (the profile's
  * core_ddr), above the step tag tables core keeps at fixed
- * addresses (steps.c).
+ * addresses (steps.c). core-a4mk2 0.6 builds this file too, with the A4's
+ * area from 0.6, 0x45650000..0x47c00000.
  */
 
 #include <stdint.h>

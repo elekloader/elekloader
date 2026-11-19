@@ -1,8 +1,8 @@
 {
- "id": "core", "version": "4.3",
+ "id": "core", "version": "4.4",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina",
- "description": "The boot copier, the hook bus, SRC machine slots, from 3.0 the firmware locations as named exports and machines that describe their own page, and from 4.0 256 KB for the mods' code, tables and variables (from 0x47BC0000, in place of the 128 KB at 0x47BE0000), and from 4.1 the master output: the master pair before it goes out (ev_render_master), pages of the mods' own among the master pages (core_mpages) and rows in SETTINGS > GLOBAL FX/MIX (ev_fxmix), and from 4.2 the played notes (ev_live_note, fw_note_on, fw_note_off), and from 4.3 the MIDI CCs the unit receives, before the stock applies them (ev_midi_cc): every other mod needs it. On its own it changes nothing the unit does.",
+ "description": "The boot copier, the hook bus, SRC machine slots, from 3.0 the firmware locations as named exports and machines that describe their own page, and from 4.0 256 KB for the mods' code, tables and variables (from 0x47BC0000, in place of the 128 KB at 0x47BE0000), and from 4.1 the master output: the master pair before it goes out (ev_render_master), pages of the mods' own among the master pages (core_mpages) and rows in SETTINGS > GLOBAL FX/MIX (ev_fxmix), and from 4.2 the played notes (ev_live_note, fw_note_on, fw_note_off), and from 4.3 the MIDI CCs the unit receives, before the stock applies them (ev_midi_cc), and from 4.4 the AMP envelope (fw_amp_level; fw_amp_env is the filter envelope, also fw_filter_env): every other mod needs it. On its own it changes nothing the unit does.",
  "device": "digitakt-mk1", "os": "1.53",
  "sources": ["core.s", "settings.s", "render.s", "machines.s", "fw.s", "master.s", "notes.s", "midi.s"],
  "defsym": {
@@ -42,6 +42,7 @@
   "FW_VOICE_VEL": "0x80001f18",
   "FW_VOICE_START": "0x80001228",
   "FW_AMP_ENV": "0x4199df54",
+  "FW_AMP_LEVEL": "0x4199dd64",
   "FW_PITCH_TAB": "0x4019b1c0",
   "FW_ACTIVE_TRACK": "0x4197b6b4",
   "FW_KIT": "0x4199dc44",
@@ -157,6 +158,7 @@
     "FW_VOICE_VEL": "0x80001f18",
     "FW_VOICE_START": "0x80001228",
     "FW_AMP_ENV": "0x4199ef54",
+    "FW_AMP_LEVEL": "0x4199ed64",
     "FW_PITCH_TAB": "0x4019b4c0",
     "FW_ACTIVE_TRACK": "0x4197c6b4",
     "FW_KIT": "0x4199ec44",

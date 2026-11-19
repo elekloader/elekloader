@@ -215,17 +215,50 @@ static const struct core_lock_param *named(void *set, int id)
     return core_lock_by_id_in(id, &code, k);
 }
 
+/* core_knob_names: names mods give any knob id of a set's
+ * kind, stock ids included, asked before core's lock-param names and stock's;
+ * an entry's name(id, long) answers 0 for an id it leaves alone */
+struct core_knob_name {
+    uint16_t first_id, last_id;
+    uint8_t kind;                             /* 0 synth, 1 FX, 2 CV */
+    uint8_t pad[3];
+    const char *(*name)(int32_t id, int32_t long_name);
+};
+extern const struct core_knob_name *const core_knob_names[];
+
+static const char *mod_name(void *set, int id, int long_name)
+{
+    const struct core_knob_name *const *e;
+    const char *n;
+    int k = kind_of_rec(((const unsigned *)set)[1]);
+    if (k < 0)
+        return 0;
+    for (e = core_knob_names; *e; e++)
+        if ((*e)->kind == k && id >= (*e)->first_id && id <= (*e)->last_id
+            && (n = (*e)->name(id, long_name)) != 0)
+            return n;
+    return 0;
+}
+
 /* vtable +0x68: the short name (a knob's label, a Dest's value) */
 const char *core_set_short(void *set, int id)
 {
-    const struct core_lock_param *p = named(set, id);
+    const char *n = mod_name(set, id, 0);
+    const struct core_lock_param *p;
+    if (n)
+        return n;
+    p = named(set, id);
     return p && p->short_name ? p->short_name : STOCK_SHORT(set, id);
 }
 
 /* vtable +0x6c: the long name (the title with a trig held, a list's item) */
 const char *core_set_long(void *set, int id)
 {
-    const struct core_lock_param *p = named(set, id);
+    const char *n = mod_name(set, id, 1);
+    const struct core_lock_param *p;
+    if (n)
+        return n;
+    p = named(set, id);
     return p && p->name ? p->name : STOCK_LONG(set, id);
 }
 

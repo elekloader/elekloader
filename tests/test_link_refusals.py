@@ -2,9 +2,9 @@
 """Every refusal the linker and the mod loader make, each with a fixture that must be refused and
 one that must link (pytest, or run with python). Needs no firmware.
 
-The fixtures run on made-up releases of three real device profiles (the Octatrack's, the Digitakt
-mk1's and the Analog Rytm MKII's): an image of nops, as long as the real one, registered for the
-test only. The profile is the real one, so its protected and kept ranges, its free areas, its RAM
+The fixtures run on made-up releases of four real device profiles (the Octatrack's, the Digitakt
+mk1's, the Analog Rytm MKII's and the MKI's): an image of nops, as long as the real one, registered
+for the test only. The profile is the real one, so its protected and kept ranges, its free areas, its RAM
 and its fast SRAM are the ones a build meets. A fixture's must-pass twin is the smallest change that
 makes the must-refuse one link, and it goes through `link.link` whole, the image check included.
 
@@ -498,6 +498,70 @@ def _(B):
     return B.pair('m 1 has .fast code, which needs the mod that declares fa_copies', fast, declared)
 
 
+# ---- standard events ("events": "std1" and the core's "std" map) ------------------------------------------
+
+def std_mod(d, event='ev_key'):
+    """Make `m` a std1 mod whose one entry subscribes to the standard event `event`."""
+    d[1].update(events='std1')
+    d[1]['contribute'][0].update(to=event, std=True)
+
+
+@row('Mod2.__init__', '<>: "events" is <>; the standard event set is <>')
+def _(B):
+    return B.pair('m: "events" is \'std2\'; the standard event set is "std1"',
+                  lambda d: d[1].update(events='std2'), lambda d: d[1].update(events='std1'))
+
+
+@row('Mod2.__init__', '<>: "std" maps each standard event\'s name to a table of the core')
+def _(B):
+    return B.pair('core: "std" maps each standard event\'s name to a table of the core',
+                  lambda d: d[0].update(std={'ev_key': 3}), lambda d: d[0].update(std={'ev_key': 'ev_x'}))
+
+
+@row('Mod2.__init__', '<>: a "std" map is a core\'s (the mod with .boot)')
+def _(B):
+    return B.pair('m: a "std" map is a core\'s (the mod with .boot)',
+                  lambda d: d[1].update(std={'ev_key': 'ev_x'}), lambda d: d[0].update(std={'ev_key': 'ev_x'}))
+
+
+@row('Mod2.__init__', '<>: a standard event\'s subscription ("std": true) needs the mod\'s "events"')
+def _(B):
+    def good(d):
+        std_mod(d)
+        d[0].update(std={'ev_key': 'ev_x'})
+    return B.pair('m contribution 0: a standard event\'s subscription ("std": true) needs the mod\'s "events"',
+                  lambda d: d[1]['contribute'][0].update(to='ev_key', std=True), good)
+
+
+@row('std_tables', '<> subscribes to <> events, and <> maps none')
+def _(B):
+    def good(d):
+        std_mod(d)
+        d[0].update(std={'ev_key': 'ev_x'})
+    return B.pair('m 1 subscribes to std1 events, and core 1 maps none', std_mod, good)
+
+
+@row('std_tables', '<> subscribes to <>, which <> does not map')
+def _(B):
+    def bad(d):                         # ev_x is a table, but std mods reach it only through the map
+        std_mod(d, 'ev_x')
+        d[0].update(std={'ev_key': 'ev_x'})
+
+    def good(d):
+        std_mod(d)
+        d[0].update(std={'ev_key': 'ev_x'})
+    return B.pair('m 1 subscribes to ev_x, which core 1 does not map', bad, good)
+
+
+@row('std_tables', '<>: its std map sends <> to <>, which no given mod declares')
+def _(B):
+    def good(d):
+        d[0].update(std={'ev_key': 'std_key'})
+        d[0]['collections']['std_key'] = {'entry': 4}
+    return B.pair('core 1: its std map sends ev_key to std_key, which no given mod declares',
+                  lambda d: d[0].update(std={'ev_key': 'std_key'}), good)
+
+
 @row('check', '<> holds at most <> entries on <> <>; <> add<> <>', device='digitakt-mk1')
 def _(B):
     def machines(n_m, n_n):
@@ -569,6 +633,17 @@ def _(B):
     def site(at):
         return lambda d: d[1].update(sites=[B.site(at, 4)])
     return B.pair('m 1 site 0x%08x is inside 0x%08x-0x%08x' % (lo, lo, hi), site(lo), site(lo - 4))
+
+
+@row('check', '<>: <> links to 0x<>, inside 0x<>-0x<>, <>: no mod may link to it on the <>',
+     'analog-rytm-mk1')
+def _(B):
+    lo, hi, _why = B.dev.no_link[0]
+
+    def sym(v):
+        return lambda d: d[1]['symbols'].update(flash=['abs', v])
+    return B.pair('m 1: symbol flash links to 0x%08x, inside 0x%08x-0x%08x' % (lo, lo, hi),
+                  sym(lo), sym(hi))
 
 
 @row('common_checks', '<> site 0x<> writes into 0x<>-0x<>, which stays stock on the <>: <>')
@@ -674,6 +749,20 @@ def _(B):
         keeps_payloads(d)
     return B.pair('m carries a payload, which core 1 does not keep (no table core_payloads of 12-byte entries)',
                   bad, good)
+
+
+@row('Mod2.__init__', '<> .payload: its bytes do not match its sha256')
+def _(B):
+    import hashlib
+
+    def with_sha(digest):
+        def f(d):
+            d[1]['sections'].update(payload(64))
+            d[1]['sections']['.payload']['sha256'] = digest
+            keeps_payloads(d)
+        return f
+    return B.pair('m .payload: its bytes do not match its sha256', with_sha('00' * 32),
+                  with_sha(hashlib.sha256(bytes.fromhex('a5' * 64)).hexdigest()))
 
 
 @row('link', 'the payloads (<> bytes) and the mods need RAM to 0x<>, past 0x<> (<> bytes over): the area has '
@@ -923,6 +1012,20 @@ def _(B):
         [knobs(B), both(B, 560, 573), answering(B, 574, 580, 'core_param_locks', 'n')]
 
 
+def a4knobs(B):
+    c = B.core()
+    c['collections'].update({'core_params': {'entry': 4}, 'core_knob_looks': {'entry': 4}})
+    return c
+
+
+@row('id_problems', "<>: its <> entry takes ids <>..<>, and <>..<> are the +Drive mods' knob ids",
+     device='analog-four-mk2')
+def _(B):
+    return [("m 1: its core_params entry takes ids 16380..16390, and 16384..32767 are the +Drive mods' "
+             "knob ids", [a4knobs(B), answering(B, 0x3ffc, 0x4006)])], \
+        [a4knobs(B), answering(B, 0x3ffc, 0x3fff)]
+
+
 # ---- the build descriptor (core_desc, elekloader/desc.py) ------------------------------------------
 
 def loader(d):
@@ -1134,6 +1237,10 @@ def test_digitakt_fixtures():
 
 def test_analog_rytm_fixtures():
     assert run_rows('analog-rytm-mk2') == 21
+
+
+def test_analog_rytm_mk1_fixtures():
+    assert run_rows('analog-rytm-mk1') == 1
 
 
 def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():
@@ -1411,6 +1518,31 @@ def test_knob_ids_are_given_from_555_past_fixed_ids_and_written_as_abs32_and_abs
             ['k 1 and f 1 both take ids 558..560 (core_param_locks, core_param_locks)']
 
 
+def test_knob_ids_on_the_analog_four_mk2_start_at_0x200_and_stay_below_the_drive_range():
+    """The A4's flashed "knobs" runs come from 0x200 up, past fixed ids (the AE mods' 0x300..), and
+    never reach 0x4000..0x7fff, the +Drive mods' (decided 2026-11-16)."""
+    with Bench('analog-four-mk2') as B:
+        def a4knobbed(count, ident):
+            d = knobbed(B, count, ident)
+            d['contribute'][0]['to'] = 'core_params'
+            return d
+        mods = [a4knobs(B), answering(B, 0x300, 0x306, 'core_params', 'f'), a4knobbed(4, 'k'),
+                a4knobbed(0x100, 'j')]
+        out = link.link([link.Mod2(d, d['id']) for d in mods], B.img)
+        assert out.knobs == {'j': [0x200, 0x100], 'k': [0x307, 4]}
+        big = [a4knobs(B), a4knobbed(1024, 'a'), a4knobbed(1024, 'b'), a4knobbed(1024, 'c'),
+               a4knobbed(1024, 'd'), a4knobbed(1024, 'e'), a4knobbed(1024, 'g'), a4knobbed(1024, 'h'),
+               a4knobbed(1024, 'i'), a4knobbed(1024, 'l'), a4knobbed(1024, 'n'), a4knobbed(1024, 'o'),
+               a4knobbed(1024, 'p'), a4knobbed(1024, 'q'), a4knobbed(1024, 'r'), a4knobbed(1024, 'u'), a4knobbed(512, 's'),
+               a4knobbed(4, 't')]
+        try:
+            link.link([link.Mod2(d, d['id']) for d in big], B.img)
+        except ModError as e:
+            assert 'ids 512..16383 have no run that long free' in str(e), e
+        else:
+            raise AssertionError('a run past 0x3fff was given')
+
+
 def test_a_core_with_a_lockfile_keeps_the_knob_ids_from_build_to_build():
     with Bench('analog-rytm-mk2') as B:
         core = keeper(B)
@@ -1427,6 +1559,29 @@ def test_a_core_with_a_lockfile_keeps_the_knob_ids_from_build_to_build():
         three = build(two.store, knobbed(B, 4, 'k'), knobbed(B, 2, 'j', (0, 1)), knobbed(B, 3, 'a', (0, 2)))
         assert three.knobs == {'a': [561, 3], 'j': [555, 2], 'k': [557, 4]}
         assert three.knob_notes == ['j: back with knob ids 555..556']
+
+
+def test_std_and_native_mods_share_the_core_tables_through_its_std_map():
+    """A std1 mod's subscriptions land in the table the core's map names for each standard event:
+    a native table (= or prefix) beside a native mod's entries, or the core's own std table
+    (thunk). The contribution keeps the standard name as its "event"."""
+    with Bench('octatrack') as B:
+        core = B.core(std={'ev_tick': 'ev_x', 'ev_key': 'std_key'})
+        core['collections']['std_key'] = {'entry': 4}
+        native = B.mod('n')
+        std = B.mod('s', events='std1')
+        std['contribute'] = [{'to': 'ev_tick', 'std': True, 'data': '00000000',
+                              'relocs': [[0, 'abs32', 'sym:fn_s', 0]]},
+                             {'to': 'ev_key', 'std': True, 'data': '00000000',
+                              'relocs': [[0, 'abs32', 'sym:fn_s', 0]]}]
+        mods = [link.Mod2(d, d['id']) for d in (core, native, std)]
+        out = link.link(mods, B.img)
+        assert out.tables['ev_x'][1] == 2 and out.tables['std_key'][1] == 1
+        assert [(c['event'], c['to']) for c in mods[2].contribute] == [('ev_tick', 'ev_x'), ('ev_key', 'std_key')]
+        # the same std mod with a core whose map lacks ev_key is refused; a native mod is not affected
+        bare = B.core(std={'ev_tick': 'ev_x'})
+        assert link.check([link.Mod2(d, d['id']) for d in (bare, native, std)], B.img) == \
+            ['s 1 subscribes to ev_key, which core 1 does not map']
 
 
 def test_every_refusal_has_a_fixture():
@@ -1486,7 +1641,7 @@ def test_the_build_descriptor():
         at, end = out.layout['desc']
         assert out.map['core_desc'] == at and found[0] == B.dev.image_end(B.rel) - B.dev.main_load \
             + out.layout['run_load'] - out.layout['boot'][0] + at - out.layout['ddr'][0]
-        assert d['size'] == end - at and d['abi'] == (1, 1) and d['os'] == 'SYN'
+        assert d['size'] == end - at and d['abi'] == (1, 3) and d['os'] == 'SYN'
         assert (d['family'], d['device_key']) == (2, 'analog-rytm-mk2')
         assert [(x['name'], x['kind'], x['flags'], len(x['exports'])) for x in d['modules']] == \
             [('core', 0, 0, 2), ('m', 2, 0, 1), ('n', 1, 1, 0)]
@@ -1500,9 +1655,21 @@ def test_the_build_descriptor():
         assert tabs['ev_x']['flags'] == desc.F_MORE
         assert tabs['ev_render_x']['flags'] == desc.F_MORE | desc.F_RENDER
         assert (tabs['ev_render_x']['count'], tabs['ev_render_x']['capacity']) == (1, 3)
-        ids = tabs['core_store_ids']
-        assert ids['flags'] == 0 and ids['capacity'] == ids['count'] == 1
+        ids = tabs['core_store_ids']             # open to the loader alone: the layout ID and 15 ancestors
+        assert ids['flags'] == desc.F_LOADER and ids['count'] == 1 and ids['capacity'] == 1 + 16
         assert ids['entries'] == [(desc.LINKER_ORDER, 0)]
+        assert tabs['core_handles']['flags'] == desc.F_LOADER and tabs['core_handles']['capacity'] == 32
+        # ABI 1.2: the site map: n's site, the boot copier, the RAM image's copy and the trailer
+        site = B.at(0x1000)
+        taken = {k: (lo, hi, mi) for lo, hi, k, mi in d['sites']}
+        assert len(d['sites']) == 4 and d['sites'] == sorted(d['sites'])
+        assert taken[desc.SITE_SITE][0] == site and taken[desc.SITE_SITE][2] == 2
+        assert taken[desc.SITE_BOOT] == (out.layout['boot'][0], out.layout['boot'][1], 0)
+        assert taken[desc.SITE_RUN][:2] == (out.layout['run_load'], out.layout['run_load'] + out.layout['blob_len']
+                                            - (out.layout['run_load'] - out.layout['boot'][0]))
+        assert taken[desc.SITE_TRAILER][:2] == (d['storage']['trailer'][0], sum(d['storage']['trailer']))
+        assert d['prelink'] == []
+        assert 'taken 0x%08x' % site in desc.dump(d)
         assert d['claims'] == [(desc.CLAIM_NAME, 1, 'sysex:7d')]
         end = out.layout['bss'][1]           # the +Drive area: the rest of core 0.11's, from 4 KB
         assert d['area'] == (end, link._align(end, 0x1000), 0x47FFF000, 0, 0x80000)
@@ -1520,6 +1687,39 @@ def test_the_build_descriptor():
         run = out.layout['sections']['m .run'] - out.layout['ddr'][0]
         assert int.from_bytes(ddr[run + 4:run + 8], 'big') == at
         assert 'module 1 m 1 (loader)' in desc.dump(d)
+
+
+def test_the_digitone_mk1_descriptor_has_a_drive_area():
+    """On the Digitone mk1 a loader of +Drive mods (TELOS, github.com/elekloader/telos) gets what the
+    flashed build leaves of core-dn1's linker area, from a 4 KB boundary (the profile's drive_align);
+    with core 4.0 and newer that area ends at 0x44000000."""
+    from elekloader import desc
+    with Bench('digitone-mk1') as B:
+        core = B.core(version='5.0')
+        m = B.mod('m')
+        m['imports'] = m['imports'] + ['core_desc']
+        m['relocs'] = [['.run', 4, 'abs32', 'sym:core_desc', 0]]
+        out = link.link([link.Mod2(d, d['id']) for d in (core, m)], B.img)
+        d = desc.decode(out.image, desc.find(out.image)[0])
+        end = out.layout['bss'][1]
+        assert end < 0x44000000 - 0x100000
+        assert d['area'] == (end, link._align(end, 0x1000), 0x44000000, 0, 0)
+
+
+def test_the_build_descriptor_on_the_analog_four_mk2():
+    """The Analog Four MKII's +Drive area (its profile's drive_align, 4 KB): what the flashed build
+    leaves of core-a4mk2's linker area (core_ddr from 0.6, to 0x47C00000), from its RAM end rounded
+    up; the whole of core_ddr, with no cap below the top. Its data container's ids are not known
+    yet, so the descriptor names them 0."""
+    from elekloader import desc
+    with Bench('analog-four-mk2') as B:
+        assert B.dev.drive_align == 0x1000
+        out = link.link([link.Mod2(d, d['id']) for d in descriptor_mods(B)], B.img)
+        d = desc.decode(out.image, desc.find(out.image)[0])
+        assert d['device_key'] == 'analog-four-mk2' and (d['family'], d['device']) == (0, 0)
+        assert out.layout['ddr'][0] == 0x45650000
+        end = out.layout['bss'][1]
+        assert d['area'] == (end, link._align(end, 0x1000), 0x47C00000, 0, 0x80000)
 
 
 def test_the_build_descriptor_keeps_whole_orders():
@@ -1549,7 +1749,7 @@ def test_the_build_descriptor_keeps_whole_orders():
         struct.pack_into('>I', blk, 0x0c, 0)
         struct.pack_into('>I', blk, 0x0c, zlib.crc32(bytes(blk)) & 0xFFFFFFFF)
         old = desc.decode(bytes(blk))
-        assert old['abi'] == (1, 0)
+        assert old['abi'] == (1, 0) and old['sites'] == [] and old['prelink'] == []
         assert {t['name']: t for t in old['tables']}['ev_x']['entries'] == [(0, 2)] * 2 + [(50, 1), (65534, 2)]
         assert {t['name']: t for t in old['tables']}['core_store_ids']['entries'] == [(desc.LINKER_ORDER, 0)]
         for bad in (desc.LINKER_ORDER, desc.ORDER_MIN - 1):
@@ -1592,3 +1792,47 @@ if __name__ == '__main__':
             failed += 1
     print('%d passed, %d failed' % (ok, failed))
     sys.exit(1 if failed else 0)
+
+
+def test_the_build_descriptor_opens_the_lock_tables_to_the_loader():
+    """+Drive storage (descriptor ABI 1.2): the tables the linker fills from storage get spare entries
+    the loader alone may fill (F_LOADER, not F_MORE): 32 lock codes and CCs, 32 inits held to 63 in
+    all, the layout ID and 15 ancestors; core_lock_params gets 32 spare where its collection says
+    none; a collection's "spare" still wins. Pre-link ranges come from the release's profile, and a
+    copied block and the device's kept ranges are in the site map."""
+    import dataclasses
+    from elekloader import desc
+    with Bench('analog-rytm-mk2') as B:
+        docs = descriptor_mods(B)
+        core = docs[0]
+        core['collections'].update({'core_lock_codes': {'entry': 8}, 'core_lock_ccs': {'entry': 8},
+                                    'core_field_inits': {'entry': 4}, 'core_lock_params': {'entry': 4}})
+        docs[1]['storage'] = [{'sym': 'st_a', 'scope': 'kit', 'bits': 5},
+                              {'sym': 'st_b', 'scope': 'sound', 'bits': 4, 'lock': True, 'cc': True, 'init': 3}]
+        docs[2]['copied'] = [{'lo': hex(B.at(0x2000)), 'hi': hex(B.at(0x2010)), 'to': hex(B.at(0x2000))}]
+        out = link.link([link.Mod2(d, d['id']) for d in docs], B.img)
+        d = desc.decode(out.image, desc.find(out.image)[0])
+        tabs = {t['name']: t for t in d['tables']}
+        for name, n, spare in (('core_lock_codes', 1, 32), ('core_lock_ccs', 1, 32), ('core_field_inits', 1, 32),
+                               ('core_store_ids', 1, 16)):
+            t = tabs[name]
+            assert (t['flags'], t['count'], t['capacity']) == (desc.F_LOADER, n, n + spare), (name, t)
+        assert (tabs['core_lock_params']['flags'], tabs['core_lock_params']['capacity']) == (desc.F_MORE, 32)
+        assert ('copied' in desc.dump(d)) and any(
+            k == desc.SITE_COPIED and (lo, hi, mi) == (B.at(0x2000), B.at(0x2010), 2) for lo, hi, k, mi in d['sites'])
+        # a collection's "spare" and "max" still decide
+        core['collections']['core_lock_codes']['spare'] = 4
+        core['collections']['core_field_inits']['max'] = 2
+        out = link.link([link.Mod2(x, x['id']) for x in docs], B.img)
+        d = desc.decode(out.image, desc.find(out.image)[0])
+        tabs = {t['name']: t for t in d['tables']}
+        assert tabs['core_lock_codes']['capacity'] == 5 and tabs['core_field_inits']['capacity'] == 2
+        # the release's pre-link ranges
+        rel = dataclasses.replace(B.rel, prelink=((B.at(0x10), B.at(0x40), desc.PRE_CODE, 'main'),
+                                                  (B.at(0x80), B.at(0x90), desc.PRE_DATA, 'boot data')))
+        mods = [link.Mod2(x, x['id']) for x in docs]
+        for m in mods:
+            m.rel = rel
+        d = desc.decode(*(lambda o: (o.image, desc.find(o.image)[0]))(link.link(mods, B.img)))
+        assert d['prelink'] == [(B.at(0x10), B.at(0x40), desc.PRE_CODE), (B.at(0x80), B.at(0x90), desc.PRE_DATA)]
+        assert 'pre-link 0x%08x-0x%08x code' % (B.at(0x10), B.at(0x40)) in desc.dump(d)

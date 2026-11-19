@@ -1,0 +1,88 @@
+{
+ "id": "dspload",
+ "version": "0.2",
+ "title": "DSP loader",
+ "category": "Framework",
+ "license": "GPL-2.0-or-later",
+ "author": "irpina",
+ "description": "DSP code at run time for the Octatrack: a mod hands its DSP code to ot_dsp_load, or lists it in mod.json's dsp_load (the SDK puts it in the ot_dsp_blobs table, which TELOS mods from the card can add to), and from the next audio frames it runs on DSP core 0 as an ev_dsp_rx handler. The code goes into the DSP window's clear gap (597 words), sent to DSP core 1 over the host port and copied there by a copier that takes SPATIALIZER's code space on core 1 (after sambanks/octabam's demand loader, MIT). From 0.2 a guard word at each end of the code, checked before it runs, stops it for good if a reverb's buffer reaches it. Needs the DSP bus.",
+ "device": "octatrack",
+ "os": "1.40C",
+ "sources": [
+  "pump.c"
+ ],
+ "dsp": [
+  {
+   "source": "copier.asm",
+   "payload": "B"
+  },
+  {
+   "source": "run.asm",
+   "payload": "A"
+  }
+ ],
+ "collections": {
+  "ev_dsp_b": {
+   "entry": 6,
+   "space": "dsp.B",
+   "head": "007066070200",
+   "end": "0c0000"
+  },
+  "ot_dsp_blobs": 4
+ },
+ "sites": [
+  {
+   "addr": "0x40102de7",
+   "stock": "007066070200",
+   "op": "dsp_jsr",
+   "target": "ev_dsp_b"
+  },
+  {
+   "addr": "0x400f5a1f",
+   "stock": "680800",
+   "op": "bytes",
+   "new": "880500"
+  },
+  {
+   "addr": "0x400f5a7f",
+   "stock": "720800",
+   "op": "bytes",
+   "new": "890500"
+  }
+ ],
+ "subscribe": [
+  {
+   "event": "ev_frame_begin",
+   "fn": "dsl_frame",
+   "order": 10
+  },
+  {
+   "event": "ev_tick",
+   "fn": "dsl_tick",
+   "order": 50
+  }
+ ],
+ "subscribe_dsp": [
+  {
+   "event": "ev_dsp_b",
+   "fn": "dlb_copy",
+   "order": 10
+  },
+  {
+   "event": "ev_dsp_rx",
+   "fn": "dla_run",
+   "order": 90
+  }
+ ],
+ "requires": [
+  "core",
+  "dspbus"
+ ],
+ "resources": {
+  "core": "0.5",
+  "names": [
+   "dsp:harvest:SPATIALIZER-B",
+   "dsp:window:gap"
+  ]
+ }
+}

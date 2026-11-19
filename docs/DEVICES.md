@@ -5,7 +5,8 @@ Everything elekloader knows about a product is in one profile,
 (`_all()`). The Digitakt mk1 profile is the example. The Digitone mk1's
 (`digitone_mk1.py`) is a second device of the same file family, with its own
 core. The Octatrack's (`octatrack.py`) is a second file family, with a core
-and a hook bus of its own.
+and a hook bus of its own. The Analog Rytm MKI's (`analog_rytm_mk1.py`) is a
+third, ELE2, read and written by `syx.py`.
 
 | field | what it is | how it was found for the Digitakt mk1 |
 |---|---|---|
@@ -22,7 +23,7 @@ and a hook bus of its own.
 | `ddr`, `sram_code`, `fast_table` | where the linker puts mods' code and data, fast code, and the table that copies it | the areas above |
 | `core_ddr` | from a core's version on, the linker's area in place of `ddr` | core 4.0: `0x47BC0000-0x47C00000`, the gap between the sample pool's end and the audio input ring |
 | `recovery` | how to get back to stock, shown to the user | FUNC at power-on |
-| `container`, `version_len` | the file family (`'ele3'`, `'elek'`) and the version field's length | the container header |
+| `container`, `version_len` | the file family (`'ele3'`, `'ele2'`, `'elek'`) and the version field's length | the container header |
 | `protected` | main OS ranges no mod may change, with the reason | none on the mk1 |
 | `relocatable` | data inside a protected range that the OS reaches only through the listed 4-byte operands and never writes, so a mod may serve its own copy through them (sdk.octabam does, for a poke there) | none on the mk1 |
 | `keep` | main OS ranges that look free (they read zero, nothing points at them) but that the OS reads, with the reason: no site may write them, and every build must leave them stock | none on the mk1 |
@@ -486,13 +487,14 @@ a project load and a power cycle.
   is unused as well. On a unit (21 Oct 2026), ddr-canary-a4mk2 filled the
   mods' area after the mods' data, 0x448B6D50-0x44C00000 and that gap with a
   pattern and read them back with no word changed, through a session of
-  normal use (Overbridge included) and after a power cycle.
+  normal use and after a power cycle. With
+  core-a4mk2 0.6 mods run from `0x45650000` to `0x47C00000` (`core_ddr`).
 - **The core** (mods/core-a4mk2) has the Rytm's events at the A4's sites, and
   mod storage in bytes of the A4's own structures (mods/core-a4mk2/README.md);
   from 0.2, core-ar2 0.4's parameter routines, and views added behind the
   page keys; from 0.3, core-ar2 0.6's page functions (`core_page_fns`); from
   0.4, core-ar2 0.7's OS upgrade restart (`finish.s`).
-  In rytm-emu (with a fallback added so it accepts a patched A4 image), a
+  In rytm-emu, a
   build with core alone runs as stock does, with the same frames and a
   byte-identical screen; hello-marker-a4 differs from stock only in its
   square; hooks-check counted every event and listed its SETTINGS row.
@@ -701,6 +703,33 @@ smaller core-only CO02 build then flashed and booted successfully (below).
 Mods are made per release: a mod's target names one stock file by hash, so
 supporting a new OS version means adding its release to the profile and
 rebuilding the mods for it (below).
+
+## The Analog Rytm MKI (1.74)
+
+`analog_rytm_mk1.py`; its docstring gives the evidence for each value, and
+Modwerk's `docs/RYTM_MKI_OS_RESEARCH.md` the measurements behind it. Only
+1.74 is supported, the release Elektron distributes.
+
+- **Files.** The Digitakt mk1's SysEx transport (device id `0x07`) around an
+  **ELE2** container: a `0x14`-byte header (version at `0x10`), the load
+  address `0x40000400` and one packed section, the main OS, padded to 4 bytes.
+  The writer reproduces the stock file byte for byte (`tests/test_rytm_mk1.py`).
+- **Boot flash.** The bootstrap (flash `0-0x1FFFF`) runs the startup menu, and
+  with it DIN recovery, before any OS code, so only damage to that flash
+  breaks recovery. The main OS carries a copy of the bootstrap and rewrites
+  flash 0 from it when the installed one is older. The copy, its version
+  words, the entry's compare and the routines that can write the flash are
+  `protected`, and mods may not link to those routines (`no_link`).
+- **Size.** The in-OS upgrade decodes into a fixed 2 MiB buffer with no bound
+  check, so `update_max` is `0x1F0000`; `flash_limit` (`0x780000`, the
+  calibration records) is never reached first.
+- **Mods' area** `0x47BE0000-0x47C00000`, the MKII's; a canary on a unit read
+  it back unchanged. No core ships here yet, so the profile has no mod
+  storage, slot claims or parameter ids.
+- **On a unit.** A build's version field is its own (a build marked `MW01`
+  shows `MW01`). EL01, stock 1.74 repacked by this writer, was flashed with
+  Transfer, booted and played, and the stock file brought the unit back, over
+  USB and over MIDI DIN from the startup menu.
 
 ## A new OS version of a supported device
 

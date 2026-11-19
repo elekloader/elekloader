@@ -53,7 +53,7 @@ static void sound(const struct elek_voice *v, elek_sample *out)
     for (int k = 0; k < 3; ++k) input[rendering][k] = v->knob[k];
     cc9[rendering] = v->cc[9];
     out[0] = ELEK_SAMPLE(1.0);
-    out[1] = 16 * ++*ELEK_STATE(uint32_t, v);
+    out[1] = ++*ELEK_STATE(uint32_t, v);
     ++calls[rendering];
 }
 #define render(voice, block, v) (rendering = (voice), render(voice, block, v))
@@ -135,7 +135,7 @@ int main(void)
     assert(last[5].start);
     assert(last[5].state != last[7].state);
     assert(input[5][0] == 50 && input[7][0] == -50);
-    assert(blocks[5][0] == 0x07ffffff && blocks[5][1] == 1);
+    assert(blocks[5][0] == 0x7fffffff && blocks[5][1] == 1);    /* Q31: machines.c's envelope scales it */
     native[5].fresh = 0;                   /* the native companion consumes its first-block flag */
     render(5, blocks[5], &native[5]); render(7, blocks[7], &native[7]);
     assert(!last[5].start);

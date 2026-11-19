@@ -71,7 +71,8 @@ A format-2 mod is a relocatable object:
 | `imports`, `weak` | the names it uses from others; a weak one resolves to `core_zero` (zeros) if no mod provides it |
 | `relocs` | `[section, offset, "abs32"/"abs16"/"pc32"/"pc16"/"dsp24", target, addend]`; target `"sym:NAME"`, `"sec:NAME"` or `"abs"`; `abs16` writes two big-endian bytes, -32768..65535 |
 | `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below); a core's may add `"spare"` (0 to 4,096), `"max"` (1 to 4,096) and `"render": true` for the build descriptor (DRIVE.md, "The build descriptor") |
-| `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
+| `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}`; `"std": true` makes `to` a standard event |
+| `events`, `std` | a mod's `"std1"`; a core's map of standard events to its tables (ADAPTING.md, "Standard events (std1)") |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII, core-ar2 0.13; "Knob ids" below) |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4mk2 0.1; "Mod storage" below) |
@@ -255,7 +256,9 @@ each program on its own.
      0x43EC0000 (1.25 MB) with core-dn1 4.0, the Digitakt mk1's from
      0x47BC0000 (256 KB) with core 4.0, and both from 0x47BE0000 (128 KB)
      with an older core; the Analog Rytm MKII's from 0x47B10000 to
-     0x47FFF000 (5 MB) with core-ar2 0.11, from 0x47BE0000 (128 KB) before.
+     0x47FFF000 (5 MB) with core-ar2 0.11, from 0x47BE0000 (128 KB) before;
+     the Analog Four MKII's from 0x45650000 to 0x47C00000 (37.7 MB) with
+     core-a4mk2 0.6, from 0x47BE0000 (128 KB) before.
 3. **Builds the tables.** Each table's entries are sorted by (`order`, mod
    id), followed by one zero entry. A table defines two symbols: `NAME` (its
    address) and `NAME_n` (its count). Each `.fast` section is added to the
@@ -319,28 +322,21 @@ Nothing is built unless all of these pass:
 A build with the Drive Loader (`mods/drive-loader-ar2/`, which imports
 `core_desc`) links more mods at boot from `/mods` on the unit's +Drive
 into the +Drive area. This section is what such a mod and `/mods/active`
-may hold; the boot link and the computer's tools are in
-[DRIVE.md](DRIVE.md).
+may hold; the link and tools are in [DRIVE.md](DRIVE.md).
 
 **What a +Drive mod is.** A format-2 mod with only `.run` and `.bss`,
-relocations only in `.run` (`abs32`, `pc32`, `pc16`), and none of `sites`,
-`collections`, `copied`, `storage`, `sharc`, `resources.regions` or a
-contribution's `claims`. It adds entries only to tables whose descriptor
-flags say more may be added (not a DSP table), in whole entries, at an
-order of -2,147,483,648 to 2,147,483,646. Its imports are the build's exports, the tables'
-names and `NAME_n` (the count after the merge), `core_desc`, and the other
-+Drive mods' exports. Its own symbol `drive_init` (in `.run` or `.bss`), if
-it has one, is called after the link as `void drive_init(void)`, in id
-order; it is never a global name. Its id is under 28 bytes.
+relocations only in `.run` (`abs32`, `pc32`, `pc16`), no `sharc`, and the
+rest only where the build's flags take it (DRIVE.md, "The build
+descriptor"). It adds whole entries to tables that allow more, at an order
+below 2^31-1. It imports the build's exports, table names, `NAME_n` (the count after the merge), `core_desc` and other
++Drive mods' globals. Its `drive_init`, if any, is called after the link as
+`void drive_init(void)` in id order; never global. Its id is under 28 bytes.
 
-**`/mods/active`** lists the chosen files, one line each: the file's path
-below `/mods` (`x.elemod`, or in up to 3 folders, `fx/delays/x.elemod`), a
-space, its CRC-32 (zlib's, as 8 hex digits; `0x` is optional). Blank lines,
-`#` lines and lines without a CRC are skipped; the path is everything
-before the last run of spaces, under 128 bytes. More than 256 lines and
+**`/mods/active`**: one line per chosen file, its path below `/mods`
+(up to 3 folders deep), a space, its CRC-32 (zlib's, 8 hex digits, `0x`
+optional). Blank, `#` and CRC-less lines are skipped; the path
+is all before the last run of spaces, under 128 bytes. Over 256 lines and
 nothing loads.
-
-The link's order and its status records are in DRIVE.md, "The boot link".
 
 #### +Drive refusal codes
 
@@ -356,9 +352,9 @@ The link's order and its status records are in DRIVE.md, "The boot link".
 | 0 | `ok` | |
 | 1 | `missing` | the file is not in `/mods` |
 | 2 | `changed` | its CRC-32 is not the one `/mods/active` has |
-| 3 | `too-big` | larger than the staging buffer |
+| 3 | `too-big` | too large for the boot to read in |
 | 4 | `json` | not a JSON object |
-| 5 | `format` | not a format-2 mod the loader reads (the id, version, a relocation, an order, an export) |
+| 5 | `format` | not a format-2 mod the loader reads |
 | 6 | `target` | made for another device or OS |
 | 7 | `feature` | a field or section +Drive mods cannot use (detail: its name) |
 | 8 | `duplicate` | the id of a flashed module or of an earlier mod (detail: the id) |
@@ -371,9 +367,20 @@ The link's order and its status records are in DRIVE.md, "The boot link".
 | 15 | `table` | a table +Drive mods cannot add to, or not whole entries (detail: the table) |
 | 16 | `full` | argument: the table's spare entries; detail: the table |
 | 17 | `room` | argument: KB over the area, rounded up |
-| 18 | `range` | a `pc16` out of range |
+| 18 | `range` | a `pc16` or `abs16` out of range |
 | 19 | `limit` | past the loader's own room (above) |
 | 20 | `count` | more than 256 lines in `/mods/active` |
+| 21 | `site` | sites overlap |
+| 22 | `flashed` | over the build's |
+| 23 | `early` | used before the link (`drive_early`) |
+| 24 | `stock` | not stock |
+| 26 | `busy` | |
+| 27 | `region` | regions overlap |
+| 28 | `outside` | no free area |
+| 29 | `store` | storage room short (detail: what, need, have) |
+| 30 | `clash` | a site, copied block or claim clashes (DRIVE.md; detail: address) |
+| 31 | `std` | an event not in the core's `std` map |
+| 32 | `ids` | knob ids taken, none free |
 
 When nothing is linked, the loader keeps why:
 
@@ -484,25 +491,25 @@ Four MKII)") has the rest.
 ### Knob ids
 
 On a device whose profile gives mods knob ids (`param_ids`: the Analog Rytm
-MKII's start at 555), a mod declares `"knobs": n` and the linker gives it n
-ids in a row. Its symbol `__knobs` is the first; it is the mod's own, so two
-mods' `__knobs` differ. A relocation to `__knobs` is an `abs32` or an `abs16`
-with an addend of 0..n-1, anything else is refused, as is `"knobs"` on a
-device without `param_ids` or a mod that defines `__knobs` itself.
+MKII's start at 555, the Analog Four MKII's 0x200), a mod declares
+`"knobs": n` and the linker gives it n ids in a row, the first its own
+symbol `__knobs`. A relocation to `__knobs` is an `abs32` or an `abs16` with
+an addend of 0..n-1, else refused, as is `"knobs"` on a device without
+`param_ids` or a mod that defines `__knobs` itself.
 
-The linker (`store.knobs`, the same in `js/src/store.ts`) gives the runs from
+The linker (`store.knobs`) gives the runs from
 the first id up, by mod id, past every id a mod's `core_params` or
 `core_param_locks` entry names in its own bytes, and checks the linked
 entries again with their runs. The lockfile keeps them in `knobs` and
-`freed_knobs` (`mod`, `first`, `count`) and `next_knob`, none of them part
-of the layout ID: the ids are not stored data. A mod keeps its run while its
-count stays; one that leaves keeps it in `freed_knobs` and gets it back when
-it returns; one whose count changes keeps its first id when the new run has
-room there; any other takes never-used ids from `next_knob` up. Only when
-those run out (past 65535, which an `abs16` holds) are freed runs given out
-again. A build whose core keeps no lockfile gets the same ids for the same
-mods. The build's manifest carries the runs as `knobs` (`{mod: [first,
-count]}`).
+`freed_knobs` (`mod`, `first`, `count`) and `next_knob`, none of them in
+the layout ID. A mod keeps its run while its count holds; one that leaves
+keeps it in `freed_knobs` and gets it back when it returns; one whose count
+changes keeps its first id when the new run has room there; any other takes
+never-used ids from `next_knob` up. Only when those run out (past 65535,
+which an `abs16` holds; the A4's 0x3fff) are freed runs
+given out again. A build whose core keeps no lockfile gets the same ids for
+the same mods. The build's manifest carries the runs as `knobs` (`{mod:
+[first, count]}`).
 
 ### DSP code
 
