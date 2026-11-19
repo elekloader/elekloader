@@ -317,8 +317,9 @@ page_view_activate does. The view is told by its copy of the list: the
 first of core's ten lists with the same pages. The FX track's page code
 asked a view shown again to go back to its first page (0x400cbd3e, a
 `beqs` around that call); core makes it a `bras`, so FX views keep their
-page as the voice track's do. Both were mods' hooks before (voice-dac's
-cycle, lfo-rnd's title, comp-preview's set-page slot).
+page as the voice track's do. An entry naming a stock page with a `shown`
+gives it that `shown`; the SAMPLE view's draw (vtable 0x401e3420 +0x10)
+first leaves a page gone away (view.c).
 
 | view | site (1.74) | stock pages |
 |---|---|---|
@@ -356,9 +357,8 @@ eleven rytm2_mods mods and duck added 1 to 2 points; fx-sends' chorus about
 peak reached 95%, with no audible artefacts. The 100% that cpu-probe's CPU
 reading touches in that case is the whole processor, the interface's tasks
 included: they get less idle time, not less than they need (the knobs keep
-responding). With the guard the readings were 92% and a 94% peak, within a
-point of the build without it, so at these loads it rarely engages: it is a
-ceiling for heavier builds, not a fix for anything heard.
+responding). The guard is a ceiling for heavier builds: at these loads it
+rarely engages (92%, a 94% peak).
 
 ## Machines (0.5)
 
@@ -486,7 +486,7 @@ and names, and the code is the slot, so the LFO's DST byte holds it.
 | slot to id | sound vtable +76, 0x401dce70 (`ptr`) | a slot with a code gives its pseudo id, so the DST value and the menu's cursor find it |
 | sound edit's write | 0x400bd412 (`jmp`, store.c, `st_sound_through`, 0.9) | stock writes each sound edit into the stored copy at once, the DST byte through 0x40007602, which `core_code_id` passes for 42..127 (for the scene and performance entries), so a code reached the stored byte (0.8: after a power-off it loaded as 0xfb, on core and on stock). After stock's write, a code in the stored byte becomes 41 (None) and goes into `core_lfo_dst` of the live sound the stored one is kept from; a stock destination clears it |
 | sound save, load | 0x4000843a, 0x400081f6 (store.c, `st_sound_save`, `st_sound_load`) | stock saves the LFO's destination (live sound +28, a slot) as the stored sound's +100 through a table of its 42 parameters (0x401c5c7c) and loads it through the inverse (0x401c5d24), which have no entry for a code: a code would come back as a stock parameter (42 as FIN). Core keeps the code, less 41, in its sound field `core_lfo_dst` (7 bits, placed by the linker in a build with an `"lfo"` field) and writes 41 into the stored byte, stock's own None (META:None, slot 0): stock, or a build that does not know the code, loads that LFO with no destination, and stock's saves keep it so. Neither table has a bound: a slot above 41 that stock saves comes back as one of its parameters (64, as 42 loads, as ACC, 39), so on load a slot of 42..127 that `core_lfo_dst` did not give (a sound from stock or another layout) is set to None |
-| list end | 0x400aa31e (`jmp`) | the destination list builder (0x400aa280) appends the pseudo ids for a sound's set (one whose +76 is core's), in the LFO's list (kind 0x600) only: the velocity and aftertouch lists (0x200) index the audio side's parameter table by code, where a code above 41 is another track's parameter |
+| list end | 0x400aa31e (`jmp`) | the destination list builder (0x400aa280) appends the pseudo ids for a sound's set (one whose +76 is core's), in the LFO's list (kind 0x600) only: the velocity and aftertouch lists (0x200) index the audio side's parameter table by code, where a code above 41 is another track's parameter. Each follows its category's last entry (owner name: 0x40007296(0x40006eca(id))) |
 | menu label | 0x4004a7e8 (`jmp`) | the category (at most 4 characters; `MOD` when there is none), a colon and the name, through stock's `%.16s:%.32s` |
 | DST value | 0x400ffab2 (`jmp`) | the short name |
 | randomize | 0x400aa32a (`jmp`) | one parameter's randomize (vtable +28 of every set, and RANDOMIZE PAGE's per knob): a parameter's page knob gets a random value in its range, in the set's sound (its object +24, vtable +40) |
@@ -807,10 +807,9 @@ and 64 give 25400 and 16256. The codes come back after a power-off save and
 a cold boot; stock 1.74 cold-booting the same card shows them as code 0
 (the unused route's META), with the amount kept. Not checked: a sound
 loaded with a code the build lacks (the scrub), kit save and reload,
-SysEx and Overbridge transfers, a unit, listening. The amounts here were
-written into the live sound; the amount is knobs E to H in MODULATION
-SETUP VEL (A to D pick the destination, YES commits). Later, in the
-emulator (1 Nov 2026, lock-check 1.9): knob E sets the amount (60 at
+SysEx and Overbridge transfers, a unit, listening. The amount is knobs E
+to H in MODULATION SETUP VEL (A to D pick the destination, YES commits).
+In the emulator (lock-check 1.9): knob E sets the amount (60 at
 velocity 127 gives C 120000, as predicted); a sound loaded with a code the
 build lacks (a core-only build on that card) has that route back as code 0,
 amount 0; SAVE KIT and RELOAD (KIT menu) keep a route to C; a kit dump over

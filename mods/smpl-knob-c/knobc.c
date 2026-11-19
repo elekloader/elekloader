@@ -15,7 +15,7 @@ CORE_KNOBS;
 const struct smpl_knob_c smpl_knob_c = {CORE_KNOB(0), STORE(smpl_c)};
 
 const struct core_lock_param smpl_c_param =
-    {STORE(smpl_c), CORE_KNOB(0), 0, 127, "SMC", "SMPL Machine C", CORE_LOCK_CATEGORY("SMPL")};
+    {STORE(smpl_c), CORE_KNOB(0), 0, 127, "SMC", "SMPL Machine C", CORE_LOCK_CATEGORY("SAMP")};
 
 /* smpl-machines' */
 const struct core_knob_face *smpl_face(int32_t id, void *sound);

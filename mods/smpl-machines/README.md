@@ -78,7 +78,12 @@ none of these bits, and knob C stays SMP's word.
   MIDI as stock's do. Core's knob faces (core-ar2 README, "Knob faces")
   give them the machine's label, name, look, range and default; core's
   `core_params` entries on the stock ids give their text; and a page
-  function on stock pages 4 and 5 gives the title.
+  function on stock pages 4 and 5 gives the title. A knob with no look
+  whose range differs from the record's under it gets BR's plain dial
+  (42): the record's look draws on its own range (TUN's +-24 stops short). From 0.3 page 5, stock's
+  waveform, is shown only for stock's layer and machines with
+  `SMPL_WAVEFORM` (a `core_view_pages` entry with a shown on the stock
+  page, core-ar2 0.15).
 - **The sound.** At 0x40121134 the render hands the sample layer the trig
   mask (D3) and the stop mask (D5). For each voice whose owner track runs
   a machine, smpl-machines calls the engine with the track's engine words
