@@ -135,26 +135,15 @@ at counts 19, 21 and 53 and empty at 36, 38 and 54; a turn of the shown B
 moved PAN (53 to 54) and hid B, and a turn of the empty B left the count
 at 54.
 
-In rytm-emu's A4 build (22 Oct 2026), core 0.2 alone (A402) drew every
-screen checked (main, AMP, FILTERS, OSC1, an FX track's CHORUS, with
-knobs turned) identical to stock's, pixel for pixel; with pages-check
-(PC56), AMP PAN read its value in hex (centre `40`), the bar counted each
-step, and every other knob was stock's. `core_audio_load` read about 0x7a
-(48%) there, an emulator figure. With the views, A402 drew all 90 screens
-of every page key (pressed one to three times, on synth, FX and CV tracks)
-as stock does; on PC56 the AMP key stepped AMP, then CHECK once PAN had
-turned, with CHECK's title and its knob A working; CHECK came back after a
-power cycle and through a SysEx settings dump. The same project opened on
-MIXER with core alone (the index kept, with no view: stock's own fallback,
-until a page key is pressed) and on PERFORMANCE with stock. The OS uses a
+Core 0.2 alone drew every screen checked identical to stock's, pixel for
+pixel, in rytm-emu's A4 build and on a unit (OS 1.56); the SysEx settings
+round trip and core alone were not run on the unit. The OS uses a
 view's page id only through page_info and to pick the parameter set
 (0x400a647c, which singles out pages 1, 3, 4, 5 and 47), so mod pages from
 48 are safe.
 
-On a unit (OS 1.56) [hw], PA56 (core 0.2 with pages-check) passed the
-emulator's plan, every screen identical. On fast turns the bar grows once
-per accelerated turn update, not per value step. The SysEx settings round
-trip and core alone were not run on the unit.
+On fast turns the bar grows once per accelerated turn update, not per value
+step.
 
 ## Mod storage
 
@@ -267,16 +256,10 @@ upgrade's restart") at 0x4007db24; on the A4 it is unchecked.
 `core_restart()` and `core_restart_now()`: `analog-four-mk2/system.h`,
 `restart.s`.
 
-`core_project_keep()` (0.10, `restart.s`): the working project kept before such a
-reboot. The A4 keeps it as one image in RAM (0x4045c870, 0x1f73dc bytes,
-the project from +0x104) that the boot reads from one of two +Drive copies
-and a power-fail interrupt writes back. Stock repacks the image in a
-background job after each project change; a change no project event
-announces, as a mod's own field, never reaches it, and a reset before the job
-runs loses the last change. The call repacks the whole image (0x40096d90,
-stock's full repack job) and writes it to the next copy (0x40106f04, as
-stock's OS upgrade does before its reboot). [G; emulator-checked with the
-A4 Drive Loader's APPLY & RESTART]
+`core_project_keep()` (0.10, `restart.s`): repacks the working project's RAM
+image (0x4045c870) with stock's full repack job (0x40096d90) and writes it to
+the next +Drive copy (0x40106f04), so a restart after it keeps a mod's own
+fields, which no project event announces.
 
 ## Lockable parameters (0.5)
 
