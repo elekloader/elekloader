@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.14: mod folders in the +Drive file browser (docs/ADAPTING.md, "Mod
- * folders in the +Drive browser (core-ar2 0.14, Analog Rytm MKII)"). A mod lists
+/* core-ar2 0.15: mod folders in the +Drive file browser (docs/ADAPTING.md, "Mod
+ * folders in the +Drive browser (core-ar2 0.15, Analog Rytm MKII)"). A mod lists
  * a folder of its own after the +Drive's root entries in SETTINGS > SAMPLES
  * and the sample slot browser, browsed with the browser's own keys:
  *
@@ -10,7 +10,7 @@
  *     "contribute": [
  *       {"to": "core_drive_folders", "order": 50, "data": "00000000",
  *        "relocs": [[0, "abs32", "sym:my_folder", 0]]}],
- *     "resources": {"core": "0.14"}
+ *     "resources": {"core": "0.15"}
  *
  * Core owns every stock filesystem site this needs, and keeps a mod folder
  * read-only: no CREATE DIR, RENAME, DELETE, MOVE or UPLOAD in it, no path

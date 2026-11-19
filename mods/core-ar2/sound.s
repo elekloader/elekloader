@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-ar2 0.14: the sound a trig plays (sound.c). OS 1.74.
+| core-ar2 0.15: the sound a trig plays (sound.c). OS 1.74.
 |
 | 0x4011f5c4 (item, track) pushes a sound to the engine: a kit's sound on a
 | plain trig or a kit apply, a pool sound on a sound lock. It is called from

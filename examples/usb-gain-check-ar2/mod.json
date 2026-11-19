@@ -14,6 +14,6 @@
   {"event": "ev_draw", "fn": "ug_draw", "order": 60},
   {"event": "ev_key", "fn": "ug_key", "order": 60}
  ],
- "resources": {"core": "0.14"},
+ "resources": {"core": "0.15"},
  "requires": ["core"]
 }

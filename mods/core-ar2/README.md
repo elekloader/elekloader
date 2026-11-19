@@ -415,14 +415,14 @@ A knob on a record that is 14-bit in stock (BD TEST's TUNE2) shows
 whole values but its engine word keeps a fraction: read the high byte for
 the display value.
 
-## TEST slots: knob order and knob looks (0.14)
+## TEST slots: knob order and knob looks (0.15)
 
 The SRC page table `0x40288028 + 0x24 m` (name, ids on A..H) places
 records on knobs: LEV on H, but on A for TEST machines, whose order core
 makes public when a mod fills one (`place_knobs`). Their UI records
 (0x401a7622) are the tests'; `CORE_MACHINE_LOOKS` replaces them (looks.c).
 
-## Stock engines, trig sounds, core_param_set (0.14)
+## Stock engines, trig sounds, core_param_set (0.15)
 
 machines.c (stock engines and knob defaults) and sound.c, sound.s (the
 sound a trig plays, `core_param_set`) carry the 1.74 addresses; machines.h
@@ -1187,16 +1187,16 @@ machines' records keeps their look by setting `look` to the record it used:
 COMP MIX's 94 (the same UI record as 191 and 82 other ids) for duck's and
 fx-sends' knobs, CB TEST's 457, a switch, for voice-dac's POL.
 
-## Knob faces (0.14)
+## Knob faces (0.15)
 
-`core_knob_faces` (docs/ADAPTING.md, "Knob faces (core-ar2 0.14, Analog
+`core_knob_faces` (docs/ADAPTING.md, "Knob faces (core-ar2 0.15, Analog
 Rytm MKII)") gives stock ids 1..468, and a mod's own ids from 555, another
 label, name, look, range and default for the sounds a mod says, on the hooks above: the label and name
 lookups 0x400a9000 and 0x400a9022 (`lock.c`, with the page's sound), and
 `uirec`, `range` (which the setter 0x400a906c clamps to) and the graphic
 (`looks.c`, sound 0: the current track's). No code site of its own.
 
-## Note ends, track mutes and DIN MIDI out (0.14)
+## Note ends, track mutes and DIN MIDI out (0.15)
 
 No new sites; the traces are in `machines.c` and `voiceio.c`.
 

@@ -10,7 +10,7 @@
  "os": "1.74",
  "id_pools": {"smpl_machines": [0, 29]},
  "storage": [{"sym": "smpl_choice", "scope": "sound", "bits": 5}],
- "resources": {"core": "0.14"},
+ "resources": {"core": "0.15"},
  "requires": ["core"],
  "sources": ["smpl.c", "gate.s"],
  "defsym": {"SAMPLE_INTAKE": "0x4011c1e0", "APPLY_BODY": "0x4011f612", "STRING_INIT": "0x401bcff0", "SRC_BODY": "0x400bd1c2"},

@@ -141,7 +141,7 @@ def test_core_ar2_sites():
             # the SampleManager views' tick through their list's vtable (+0x30; 0x401e84f8 and
             # 0x401e71cc, stock's thunk 0x400e4db6), for the mod folders' refill
             ptrs.update({0x401e84f8 + 0x30: 0x400e4db6, 0x401e71cc + 0x30: 0x400e4db6})
-            # (0.14) the SAMPLE view's draw (vtable 0x401e3420 +0x10), for a page that went away
+            # (0.15) the SAMPLE view's draw (vtable 0x401e3420 +0x10), for a page that went away
             ptrs[0x401e3420 + 0x10] = 0x400d2004
             assert a in ptrs and want == ptrs[a].to_bytes(4, 'big'), s
             continue
@@ -207,9 +207,9 @@ def test_core_ar2_sites():
     # router, the kit select and push, the slot clear and paste), and the sequencer clock's two
     # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic), and
     # the pads' three (ev_pad: strike, release, pressure) and the LEDs' two (led_set's and
-    # led_colour's slot colour sends), and the engine push's sound (0.14: core_trig_sound), and
+    # led_colour's slot colour sends), and the engine push's sound (0.15: core_trig_sound), and
     # the mod folders' fourteen (drive.c: ten filesystem routines, LOAD TO PROJ's and CREATE
-    # DIR's calls, and the two SampleManager vtables' tick), and the SAMPLE view's draw (0.14),
+    # DIR's calls, and the two SampleManager vtables' tick), and the SAMPLE view's draw (0.15),
     # and the USB input's shift index (usbin.s)
     assert len(mod['sites']) == 147
     # the sound push's arguments, followed by its PC-relative jsr to 0x4011dace, which stays
@@ -511,7 +511,7 @@ def test_core_ar2_screen():
     assert ('ev_key', 'core_screen_key', -1000000) in sub
     assert ('ev_enc', 'core_screen_enc', 1000000) in sub
     assert ('ev_tick', 'core_screen_tick', 3) in sub
-    assert 'screen.c' in j['sources'] and j['version'] == '0.14'
+    assert 'screen.c' in j['sources'] and j['version'] == '0.15'
 
 
 def test_core_ar2_screen_check_needs_0_12():

@@ -184,7 +184,7 @@ struct core_knob_look {
 /* the stock UI record of id (0..468; record 0 for any other id), to copy */
 const void *core_knob_stock_ui(int32_t id);
 
-/* Stock knob faces (core 0.14). A mod whose own machine takes over stock
+/* Stock knob faces (core 0.15). A mod whose own machine takes over stock
  * parameter records (machines on the SMPL page's records 39..46, say) keeps the records, so the sound's slots, its
  * p-locks, slides, LFO, MIDI and storage stay stock's, and changes how the
  * knob shows for the sound that runs it. An entry in core_knob_faces answers
@@ -274,7 +274,7 @@ struct core_view_page {
     int32_t view;           /* CORE_VIEW_* */
     int32_t page;           /* a page id: a mod's own (core_pages), or a stock one listed again */
     int32_t (*shown)(void *view);   /* 0: always; else non-0 while the key may step to it.
-                                     * (0.14) On one of the view's stock pages it adds no
+                                     * (0.15) On one of the view's stock pages it adds no
                                      * page: it is that page's shown */
 };
 

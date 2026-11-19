@@ -1,7 +1,7 @@
-# drive-check (Analog Rytm MKII, core-ar2 0.14)
+# drive-check (Analog Rytm MKII, core-ar2 0.15)
 
 A test for core-ar2's mod folders in the +Drive browser (`drive.c`,
-docs/ADAPTING.md "Mod folders in the +Drive browser (core-ar2 0.14, Analog
+docs/ADAPTING.md "Mod folders in the +Drive browser (core-ar2 0.15, Analog
 Rytm MKII)"), on screen and in RAM. `check.c`'s header says what it does.
 
 | where | what you see |

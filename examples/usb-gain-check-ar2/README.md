@@ -1,7 +1,7 @@
-# usb-gain-check (Analog Rytm MKII, core-ar2 0.14)
+# usb-gain-check (Analog Rytm MKII, core-ar2 0.15)
 
 A test for core-ar2's held USB input gain (`core_usb_in_gain`, `usbin.s`,
-docs/ADAPTING.md "USB input gain (core-ar2 0.14, Analog Rytm MKII)"), on
+docs/ADAPTING.md "USB input gain (core-ar2 0.15, Analog Rytm MKII)"), on
 screen. `check.c`'s header says what it does.
 
 At the first tick it runs ten checks of the hold's rules and shows how many

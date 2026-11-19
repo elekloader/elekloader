@@ -1,4 +1,4 @@
-# test-looks-check (Analog Rytm MKII, core-ar2 0.14)
+# test-looks-check (Analog Rytm MKII, core-ar2 0.15)
 
 A test for the knob order and knob looks of machines in the TEST slots
 (`machines.h`, `CORE_MACHINE_LOOKS`), on screen. `check.c`'s header says what

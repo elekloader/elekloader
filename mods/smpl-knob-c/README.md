@@ -8,7 +8,7 @@ which imports its record weakly, does the rest (mods/smpl-machines/README.md,
 
 | | |
 |---|---|
-| needs | core-ar2 0.14 or later (knob faces on own ids), smpl-machines |
+| needs | core-ar2 0.15 or later (knob faces on own ids), smpl-machines |
 | sites | none |
 | exports | `smpl_knob_c`: `{id, field}` (`analog-rytm-mk2/smpl.h`) |
 | storage | `smpl_c`, 7 bits a sound, lockable (p-locks, LFO, velocity and aftertouch, a CC) |
