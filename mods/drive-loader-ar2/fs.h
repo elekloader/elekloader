@@ -43,24 +43,15 @@ int dl_fs_rename(const char *from, const char *to);   /* 0, or < 0; delete `to` 
 int dl_fs_file_size(const char *path);   /* the data size of a file, or < 0 */
 int dl_fs_rmdir(const char *path);       /* 0, or < 0: an empty folder only, as SAMPLES' DELETE DIR */
 int dl_fs_mkdir(const char *path);       /* 0, or < 0: one folder, its parent there (route.c makes each level) */
+/* the next read starts at byte `at` of the file's data (past the header). Read mode. stock's file
+ * object holds its read position at +0x0c (the stream state at +8: node, position), which each read
+ * starts from and adds to (0x4007d822 -> 0x4007d28e -> 0x4007cf1a, which reads 16 KB blocks from any
+ * position and returns 0 past the end) [Ghidra, OS 1.74, 2026-11-17] */
+void dl_fs_seek(dl_file *f, unsigned at);
 
-/* A file below DL_DIR read a stretch (32 KB) a call, its CRC-32 taken as it comes, so the
- * MODS page reads one stretch a tick and no tick blocks the UI task in a whole file's read
- * (page.c, read_step: the UI event queue it lets grow refuses keys). The caller holds
- * the staging buffer from the open to the end, and dl_lock during each call. */
-struct dl_reader {
-    dl_file f;
-    unsigned got;                        /* bytes read so far */
-    unsigned crc;                        /* the CRC-32 register; ~crc is the file's at the end */
-    unsigned char open;
-    unsigned char over;                  /* past max: the rest is read for got and crc alone */
-};
-int dl_read_open(struct dl_reader *rd, const char *name);   /* 0, or -1 missing (closed) */
-/* -> 0 more to read, 1 at the end (rd->got bytes in buf), -2 larger than max (read to its end
- * all the same: rd->got is its size and rd->crc its CRC, its bytes not kept), -3 a read
- * error; closed at any answer but 0 */
-int dl_read_more(struct dl_reader *rd, unsigned char *buf, unsigned max);
-void dl_read_close(struct dl_reader *rd);                   /* a read given up */
+/* The MODS page's stepped read of a file below DL_DIR (struct dl_reader) is in skip.h: it stages
+ * as the boot does (drive-loader 0.8). The page reads one stretch a tick so no tick blocks the UI
+ * task in a whole file's read (page.c, read_step: the UI event queue it lets grow refuses keys). */
 
 /* one entry of a folder below DL_DIR (route.c, dl_list_dir) */
 struct dl_ent {

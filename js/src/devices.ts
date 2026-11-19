@@ -364,6 +364,7 @@ export const ANALOG_RYTM_MK2: Device = {
   // core-ar2's knob ids: stock's records are 0..468, core's lockable parameters take 469..554
   // (469 + code - 42, lock.c) and a mod's own ids start at 555 (pages.h CORE_PARAM_LOCK_FIRST)
   paramIds: [555, [469, 554, "core's lockable parameters' ids"], [['core_params', false], ['core_param_locks', true], ['core_knob_looks', true], ['core_knob_faces', false]]],
+  driveKnobs: [0x4000, 0x7fff],
   // the hidden slots a mod's "machine_knobs" are given (core-ar2 0.5: 34..43, 0.13: 34..52), with how many knobs from LEV
   // (sound index 9) on have a record there (stock 1.74's records)
   machineSlots: ['core_machines', [

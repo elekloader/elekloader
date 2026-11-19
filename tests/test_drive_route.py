@@ -235,6 +235,26 @@ class Moves(unittest.TestCase):
                                    'saved ~T A/small.elemod 1000 GUARD ok', 'read 1000 GUARD ok',
                                    'upload dropped: ~T A/over.elemod -1 GUARD ok'])
 
+    def test_a_clear_of_a_file_over_the_stage_zeroes_nothing_outside_it(self):
+        # DTS1 in the emulator (2026-11-11): a Clear of a /mods file over the stage froze the unit.
+        # Stock's Clear (0x4002d0b4) zeroes [addr, addr + size) of a RAM entry before the +0x4c call,
+        # so the entry's size is 0 for such a file (entry_size); the +0x4c call still deletes it.
+        n = 100000
+        tree = self.TREE + ['~T A/big.elemod=@%d' % (n + 1), '~T A/fit.elemod=@%d' % n]
+        got = self.run_('stage %d' % n, 'clear ~T A/big.elemod', 'clear ~T A/fit.elemod', tree=tree)
+        self.assertEqual([a for a, _, _ in got[1:]], ['0 deleted ~T A/big.elemod GUARD ok',
+                                                      '%d deleted ~T A/fit.elemod GUARD ok' % n])
+        self.assertNotIn('~T A/big.elemod', got[1][1])
+        self.assertNotIn('~T A/fit.elemod', got[2][1])
+
+    def test_a_read_of_a_file_over_the_stage_is_still_refused(self):
+        # its entry's size is 0 (entry_size), so dl_pre refuses it from the closure's size
+        n = 100000
+        tree = self.TREE + ['~T A/big.elemod=@%d' % (n + 1), '~T A/fit.elemod=@%d' % n]
+        got = [a for a, _, _ in self.run_('stage %d' % n, 'readpre ~T A/big.elemod',
+                                          'readpre ~T A/fit.elemod', tree=tree)]
+        self.assertEqual(got[1:], [TOO_LARGE + ' GUARD ok', 'ok GUARD ok'])
+
     def test_the_status_names_the_stage(self):
         got = [a for a, _, _ in self.run_('status', 'stage 4000000', 'status')]
         self.assertRegex(got[0], r'^stage: %d bytes at 0x[0-9a-f]{8}, floor$' % FLOOR)

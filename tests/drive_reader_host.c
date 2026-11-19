@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "../mods/drive-loader-ar2/boot.c"
+#include "../mods/drive-loader-ar2/skip.c"
 
 static unsigned char *file;
 static unsigned fsize, fpos;
@@ -24,6 +25,9 @@ int dl_fs_read(dl_file *f, void *buf, unsigned n)
     return (int)n;
 }
 void dl_fs_close(dl_file *f) { (void)f; }
+void dl_fs_seek(dl_file *f, unsigned at) { (void)f; fpos = at < fsize ? at : fsize; }
+int dl_fs_size(dl_file *f) { (void)f; return (int)fsize; }
+void dl_memcpy(void *d, const void *s, u32 n) { memcpy(d, s, n); }
 void dl_memset(void *d, int c, u32 n) { memset(d, c, n); }
 u32 dl_crc32_add(u32 c, const u8 *p, u32 n)
 {
@@ -55,6 +59,6 @@ int main(int argc, char **argv)
         ;
     for (i = 0; i < 4096 && arena[i] == 0xa5 && arena[4096 + max + i] == 0xa5; i++)
         ;
-    printf("RESULT %d GOT %u CRC %08x GUARD %s\n", r, rd.got, ~rd.crc, i == 4096 ? "ok" : "bad");
+    printf("RESULT %d GOT %u CRC %08x GUARD %s\n", r, rd.st.got, ~rd.st.crc, i == 4096 ? "ok" : "bad");
     return 0;
 }

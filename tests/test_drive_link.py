@@ -31,7 +31,8 @@ def build_host(work):
     exe = os.path.join(work, 'drive_link_host')
     subprocess.run(['cc', '-O1', '-Wall', '-DDL_HOST', '-o', exe, os.path.join(HERE, 'drive_link_host.c'),
                     os.path.join(SRC, 'dlink.c'), os.path.join(SRC, 'json.c'),
-                    os.path.join(SRC, 'dstore.c'), os.path.join(SRC, 'sha256.c')], check=True)
+                    os.path.join(SRC, 'dstore.c'), os.path.join(SRC, 'sha256.c'),
+                    os.path.join(SRC, 'skip.c')], check=True)   # payload skip (drive-loader 0.8)
     return exe
 
 
@@ -49,7 +50,8 @@ class Flashed:
         loader = {'elemod': 2, 'id': 'drive-loader', 'version': '0.1', 'target': B.target,
                   'requires': ['core'],
                   'sections': {'.run': {'align': 4, 'len': 4, 'parts': [['hex', '4e754e75']]}},
-                  'symbols': {'dl_fn': ['.run', 0]}, 'exports': ['dl_fn'], 'imports': ['core_desc'],
+                  'symbols': {'dl_fn': ['.run', 0], 'drive_abs16': ['abs', 1]},   # abs16 (drive-loader 0.9)
+                  'exports': ['dl_fn', 'drive_abs16'], 'imports': ['core_desc'],
                   'relocs': [[".run", 0, "abs32", "sym:core_desc", 0]],
                   'resources': {'names': ['settings:MODS']}}
         loader['sections']['.run'] = {'align': 4, 'len': 8, 'parts': [['hex', '0000000000000000']]}
@@ -256,7 +258,8 @@ def main():
         refused('another device', drive_mod(B, 'tg', target=dict(B.target, device='digitakt-mk1')), 6)
         refused('a site over its stock bytes', drive_mod(B, 'st', sites=[dict(B.site(B.at(0x1000)), stock_sha256='0' * 64)]),
                 30, detail='%08x' % B.at(0x1000))
-        refused('collections', drive_mod(B, 'co', collections={'ev_mine': {'entry': 4}}), 7, detail='collections')
+        refused('a DSP collection', drive_mod(B, 'co', collections={'ev_mine': {'entry': 4, 'space': 'dsp'}}), 7,
+                detail='collections')   # +Drive collections (drive-loader 0.8): test_drive_collections.py
         refused('.fast', drive_mod(B, 'fa', sections={'.run': {'len': 2, 'parts': [['hex', '4e75']]},
                                                       '.fast': {'len': 2, 'parts': [['hex', '4e75']]}}), 7, detail='.fast')
         refused('storage', drive_mod(B, 'sg', storage=[{'sym': 'x', 'scope': 'kit', 'bits': 1}]), 7, detail='storage')

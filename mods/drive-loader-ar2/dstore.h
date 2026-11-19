@@ -20,6 +20,11 @@
 #define DS_MAX_FIELDS 512                /* fields, and again parked fields */
 #define DS_MAX_TAGS 256                  /* codes, freed codes, CCs, freed CCs: each */
 #define DS_MAX_FILE 0x10000              /* /mods/.store's most bytes */
+#define DS_FORMAT 1
+#define DS_FORMAT_KNOBS 4                /* format 1 and the +Drive mods' knob runs (written only when it has
+                                          * any): the Rytm's, as format 3 is the A4's format 2 with them */
+#define DS_MAX_KNOBS 512                 /* knob runs, and again freed runs, a .store keeps */
+#define DS_KNOB_TOP 0xFFFF               /* store.KNOB_TOP */
 
 /* core_lock_codes' flags */
 #define DS_LFO_FLAG 0x100
@@ -85,6 +90,10 @@ struct ds_tag {                          /* a code or a CC and its field */
     const char *mod, *sym;
     u8 v;
 };
+struct ds_knob {                         /* a mod's run of knob ids (store.knobs) */
+    const char *mod;
+    u32 first, count;
+};
 struct ds_state {
     u32 flashed_id, id;
     u8 next_code;
@@ -95,8 +104,18 @@ struct ds_state {
     u32 nf, npk, ncd, nfcd, ncc, nfcc;
     struct ds_field f[DS_MAX_FIELDS], pk[DS_MAX_FIELDS];
     struct ds_tag cd[DS_MAX_TAGS], fcd[DS_MAX_TAGS], cc[DS_MAX_TAGS], fcc[DS_MAX_TAGS];
+    u32 nkn, nfkn, next_knob;            /* format 4: the knob runs, the freed runs, the next id */
+    struct ds_knob kn[DS_MAX_KNOBS], fkn[DS_MAX_KNOBS];
     char *names;                         /* the decoded names (dl_alloc), 0 for none */
 };
+
+/* The knob runs the boot link gives (dlink.c knob_runs): ds_allocate writes them into the new
+ * .store in place of the old one's; 0 keeps the old one's (a link that loads nothing). */
+struct ds_knobset {
+    u32 n, nf, next;
+    const struct ds_knob *kn, *fkn;
+};
+extern const struct ds_knobset *ds_knobs_in;
 
 /* .store bytes -> a state from the heap, 0 for a file the allocator does not take (missing, cut
  * short, another format, a wrong CRC, a bad record, past the loader's room) or no memory. */
