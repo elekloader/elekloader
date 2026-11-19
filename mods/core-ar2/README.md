@@ -1186,6 +1186,9 @@ different graphics; `examples/look-check-ar2` draws one of each. A mod that kept
 machines' records keeps their look by setting `look` to the record it used:
 COMP MIX's 94 (the same UI record as 191 and 82 other ids) for duck's and
 fx-sends' knobs, CB TEST's 457, a switch, for voice-dac's POL.
+## Skips and submenus (0.16)
+
+[SKIPS.md](SKIPS.md).
 
 ## +Drive storage at boot (0.14)
 
@@ -1246,11 +1249,11 @@ sites, the boot copier and every event, with
 [hello-marker-ar2](../../examples/hello-marker-ar2) and
 [hooks-check-ar2](../../examples/hooks-check-ar2).
 
-Statically, against the stock image (python, no toolchain): every site's
-stock bytes, and that each covers whole instructions.
+Statically: every site's stock bytes, and that each covers whole
+instructions.
 
-- **Mod storage (0.2)**, in an emulator (OS 1.74 and 1.73, 19 Oct 2026) and
-  on a unit (19 Oct 2026), with [store-check-ar2](../../examples/store-check-ar2):
+- **Mod storage (0.2)**, in an emulator (OS 1.74, 1.73) and on a unit (19 Oct
+  2026), with [store-check-ar2](../../examples/store-check-ar2):
   every field of every item kept through save, another project's load, the
   load back, a power cycle, .arprj export and import, and a Total Recall
   sync; an ancestor layout read all of it, a bumped kit generation read

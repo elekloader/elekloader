@@ -210,13 +210,34 @@ def test_core_ar2_sites():
     # led_colour's slot colour sends), and the engine push's sound (0.15: core_trig_sound), and
     # the mod folders' fourteen (drive.c: ten filesystem routines, LOAD TO PROJ's and CREATE
     # DIR's calls, and the two SampleManager vtables' tick), and the SAMPLE view's draw (0.15),
-    # and the USB input's shift index (usbin.s), and main()'s call at 0x401009e0 (0.14, ev_boot_drive)
-    assert len(mod['sites']) == 148
+    # and the USB input's shift index (usbin.s), and main()'s call at 0x401009e0 (0.14, ev_boot_drive), and the silent-voice skip's,
+    # the sample-layer skip's two, the UI skip's and the FX skip's three (0.16)
+    assert len(mod['sites']) == 155
     # the sound push's arguments, followed by its PC-relative jsr to 0x4011dace, which stays
     x = [x for x in mod['sites'] if x.get('target') == 'core_trig_sound'][0]
     assert x['op'] == 'jsr' and x['addr'] == '0x4011f5f6', x
     o = 0x4011f5f6 - DEV.main_load
     assert img[o:o + 12].hex() == '2f02486a00144ebae4d0508f', x
+    # 0.16: the UI skip's site is __dynamic_cast's link and movem, 8 bytes; its stock
+    # copy in cast.s rejoins right after them
+    x = [x for x in mod['sites'] if x.get('target') == 'core_cast_site'][0]
+    assert (x['addr'], x['op'], x['stock']) == ('0x401b82f2', 'jmp', '4e56ffd848d7043c'), x
+    assert img[0x401b82f2 - DEV.main_load:0x401b82fa - DEV.main_load].hex() == '4e56ffd848d7043c'
+    cast = open(os.path.join(ROOT, 'mods', 'core-ar2', 'cast.s')).read()
+    assert 'CAST_REST, 0x401b82fa' in cast and 'link.w  %a6,#-40' in cast
+    # 0.16: the FX skip's send site, and its delay and reverb sites, each a 4-byte
+    # `jsr (pc)` with the instruction after it (10 bytes)
+    for addr, want in (('0x4010e75e', '22032003ed89'), ('0x4010e7c4', '4ebaf25e36398000fbb6'),
+                        ('0x4010e81e', '4ebaec14283c00001000')):
+        x = [x for x in mod['sites'] if x['addr'] == addr][0]
+        assert x['stock'] == want, x
+        a = int(addr, 16) - DEV.main_load
+        assert img[a:a + len(want) // 2].hex() == want, addr
+    # 0.16: the voice skip's site is the slot loop's pointer load and test, 6 bytes, and
+    # returns to stock's beq, which takes the skip when the site leaves %a1 at 0
+    x = [x for x in mod['sites'] if x.get('target') == 'core_voice_site'][0]
+    assert (x['addr'], x['op'], x['stock']) == ('0x40121208', 'jsr', '227548004a89'), x
+    assert img[0x40121208 - DEV.main_load:0x40121210 - DEV.main_load].hex() == '227548004a896738'
     for addr in ('0x400c0ba2', '0x400c0c8c', '0x400ab8d0', '0x400aba02', '0x400aba7e', '0x400ab096'):
         assert [x for x in mod['sites'] if x['addr'] == addr and x['op'] == 'jmp'], addr
     # each moment's site is its routine's first whole instructions, and the body in moments.s
@@ -324,7 +345,9 @@ def test_core_ar2_sites():
         assert img[a - DEV.main_load:a - DEV.main_load + 8] == bytes.fromhex(b), hex(a)
     # the audio load (0.4): core times its own render events, first in and last out
     sub = {x['event']: x for x in mod['subscribe']}
-    assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0
+    ins = sorted((x['order'], x['fn']) for x in mod['subscribe'] if x['event'] == 'ev_render_in')
+    # and (0.16) the voice skip's boot snapshot just after it
+    assert ins == [(0, 'core_load_in'), (1, 'core_voice_boot')], ins
     assert sub['ev_render_out']['fn'] == 'core_load_out' and sub['ev_render_out']['order'] == 100
     # mod storage's own sites, with the FX and sound edits' writes into the stored kit (0.9)
     # and the project save (0.10)
@@ -639,7 +662,7 @@ def test_core_ar2_usb_in_gain():
     sites = [x for x in j['sites'] if x.get('target') == 'core_usb_in_site']
     assert sites == [{'addr': '0x4011fc98', 'stock': '20398000ee7c', 'op': 'jsr',
                       'target': 'core_usb_in_site'}], sites
-    assert j['sources'][-1] == 'usbin.s'
+    assert 'usbin.s' in j['sources']
     _r, _s, img = stock()
     if REL.version != '1.74':
         raise Skip('core-ar2 usbin is for 1.74')
