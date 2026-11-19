@@ -32,7 +32,7 @@
  *     47 BT TEST   9..13                 52 CB TEST   10..12, 16 (no LEV)
  *     48 LT TEST   9..12
  *
- * From core 0.14 a filled TEST slot shows its knobs in the public order,
+ * From core 0.15 a filled TEST slot shows its knobs in the public order,
  * knobs[1..7] on A..G and LEV on H (stock's TEST pages put LEV on A and the
  * rest in each test's own order), and CORE_MACHINE_LOOKS (below) gives a
  * knob a stock knob's look in place of the test machine's.
@@ -101,17 +101,17 @@ struct core_machine {
                                1 SD, 4 BT, -1 none (as XT CLASSIC) */
     uint8_t voices;         /* bit v: physical voice v may run it (0 BD, 1 BT,
                                2 SD, 3 LT, 4 CH/OH, 5 MT/HT, 6 CY/CB, 7 RS/CP) */
-    uint16_t flags;         /* CORE_MACHINE_*; 0 before core 0.14 */
+    uint16_t flags;         /* CORE_MACHINE_*; 0 before core 0.15 */
     const char *name;       /* "BD TX-9"; 0: the slot's stock name */
     const char *label;      /* four letters: "BDT9"; 0: the slot's stock label */
     struct core_machine_knob knobs[8];  /* sound indices 9..16: LEV, then A..H's order */
     const struct core_machine_look *looks;  /* CORE_MACHINE_LOOKS: 8, knobs[]' order */
 };
 
-/* flags (core 0.14) */
+/* flags (core 0.15) */
 #define CORE_MACHINE_LOOKS 0x0002   /* looks follows knobs[] */
 
-/* core 0.14: a knob's look (docs/ADAPTING.md, "Machines (core-ar2 0.5,
+/* core 0.15: a knob's look (docs/ADAPTING.md, "Machines (core-ar2 0.5,
  * Analog Rytm MKII)"). A slot's records keep the UI record stock built for
  * them at boot (a TEST record's is its test machine's: a dial where the
  * machine wants a switch, a switch where it wants a dial). With
@@ -133,7 +133,7 @@ struct core_machine_look {
     const void *(*ui)(int32_t id);
 };
 
-/* flags (core 0.14) */
+/* flags (core 0.15) */
 #define CORE_MACHINE_DESTS 0x0001   /* slots 44..52: the knobs are LFO, velocity
                                        and aftertouch destinations */
 
@@ -172,7 +172,7 @@ struct core_machine_look {
 int core_voice_trigged(int32_t voice);
 int core_voice_velocity(int32_t voice);
 
-/* core 0.14: stock engines for any machine. Plain reads, for the
+/* core 0.15: stock engines for any machine. Plain reads, for the
  * audio interrupt as well as the UI.
  *
  *     core_track_default_machine(t)  track t's default machine (0..52), -1 out
@@ -202,7 +202,7 @@ int core_machine_knob(int32_t m, int32_t k, int32_t *min, int32_t *max, int32_t 
 int core_machine_defaults(int32_t m, uint16_t *blk);
 void core_voice_engine_reset(int32_t voice);
 
-/* core 0.14: the sound a trig plays. The sound item stock last pushed
+/* core 0.15: the sound a trig plays. The sound item stock last pushed
  * to track t's engine (tracks 0..11): the track's sound in a live kit (a
  * plain trig, a kit apply; the item core_current_sound_item gives) or a pool
  * sound (a sound lock), 0 before the first push. Plain reads, from the audio
@@ -214,7 +214,7 @@ void core_voice_engine_reset(int32_t voice);
 void *core_track_sound(int32_t track);
 int core_track_pool_sound(int32_t track);
 
-/* core 0.14: set sound index i (0..41) of track t's sound (0..11) in
+/* core 0.15: set sound index i (0..41) of track t's sound (0..11) in
  * the current kit as a knob turn does: value is the sound's 16-bit word
  * (display value << 8, the fine part in the low byte), clamped to the
  * record's range; the live value, the kit word, a lock while live recording,
@@ -223,7 +223,7 @@ int core_track_pool_sound(int32_t track);
  * the sound's machine has no such parameter. UI task only. */
 int core_param_set(int32_t track, int32_t index, int32_t value, int32_t out);
 
-/* core 0.14 */
+/* core 0.15 */
 int core_voice_released(int32_t voice);
 
 #endif

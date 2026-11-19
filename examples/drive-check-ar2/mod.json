@@ -16,6 +16,6 @@
  "subscribe": [
   {"event": "ev_tick", "fn": "dc_tick", "order": 60}
  ],
- "resources": {"core": "0.14"},
+ "resources": {"core": "0.15"},
  "requires": ["core"]
 }

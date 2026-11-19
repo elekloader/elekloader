@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.14: a view whose page went away. pages.s gives a page key's
+/* core-ar2 0.15: a view whose page went away. pages.s gives a page key's
  * view its list (stock's pages, then core_view_pages'), each page with a
  * shown; the key steps over a page while its shown answers 0. A page can be
  * hidden while the view is on it (a mod's machine with one page hides the

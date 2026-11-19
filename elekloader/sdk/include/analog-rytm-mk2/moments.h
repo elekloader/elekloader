@@ -27,7 +27,7 @@ int core_midi_try_send(int len, const unsigned char *msg);
  * first thing core_midi_try_send checks). Any task or interrupt. */
 int core_usb_midi_up(void);
 
-/* core 0.14: DIN MIDI out and the track mutes */
+/* core 0.15: DIN MIDI out and the track mutes */
 
 /* DIN MIDI out: a whole message (1..256 bytes) into stock's DIN ring, now
  * or never: 1 when it went in, 0 when the ring had no room for it or the

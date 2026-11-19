@@ -27,7 +27,7 @@
  * taken from look: only how the knob is drawn. An id without an entry is
  * unchanged (record 0).
  *
- * (0.14) A stock id whose record a core_machines slot fills (machines.c)
+ * (0.15) A stock id whose record a core_machines slot fills (machines.c)
  * takes the look its knob entry names (machines.h, CORE_MACHINE_LOOKS):
  * uirec answers look's UI record (or the entry's ui), the range stays the
  * record's own (core wrote the knob's min..max into it), and the graphic
@@ -51,7 +51,7 @@ struct core_knob_look {                 /* pages.h */
 
 extern const struct core_knob_look *const core_knob_looks[];   /* zero-terminated */
 
-/* (0.14) a stock knob's face, per call (pages.h). A stock id
+/* (0.15) a stock knob's face, per call (pages.h). A stock id
  * (1..468) a core_knob_faces entry answers for is drawn, labelled, named and
  * ranged as the face its function returns for the sound: a framework mod
  * whose own machine takes over stock records (machines on the SMPL page's
@@ -73,7 +73,7 @@ struct core_knob_faces {
 extern const struct core_knob_faces *const core_knob_faces[];   /* zero-terminated */
 
 /* the face of id for sound (a live sound item; 0: the current track's), or
- * 0 for stock's. lock.c asks it for the label and the name. (0.14) An own
+ * 0 for stock's. lock.c asks it for the label and the name. (0.15) An own
  * id (555 up) takes a face too: a framework mod's knob whose value it keeps
  * itself shows the machine's label, name, look and
  * range, as a stock id under a face does. */
@@ -120,7 +120,7 @@ uint32_t core_uirec(int32_t id)
             return (uint32_t)f->ui;
         return (uint32_t)core_knob_stock_ui(f->look ? f->look : id);
     }
-    if ((uint32_t)id < STOCK_IDS) {     /* (0.14) a machine knob's look, under a face */
+    if ((uint32_t)id < STOCK_IDS) {     /* (0.15) a machine knob's look, under a face */
         if (!(ml = core_machine_look_of(id)))
             return (uint32_t)core_knob_stock_ui(id);
         if (ml->ui && (p = ml->ui(id)) != 0)
@@ -178,7 +178,7 @@ int32_t core_knob_dial(int32_t id, int32_t value)
         min = f->min;
         max = f->max;
         look = f->look ? f->look : id;
-    } else if (ml && ml->look && ml->look != id) {  /* (0.14) a machine knob's look: its own range onto look's */
+    } else if (ml && ml->look && ml->look != id) {  /* (0.15) a machine knob's look: its own range onto look's */
         r = (const int32_t *)(PARAMS + 8 + PARAM_SIZE * id);
         min = r[0];
         max = r[1];

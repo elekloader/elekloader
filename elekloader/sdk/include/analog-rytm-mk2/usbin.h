@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.14: the USB input's gain, held by a mod (docs/ADAPTING.md,
- * "USB input gain (core-ar2 0.14, Analog Rytm MKII)"; mods/core-ar2/usbin.s).
- * A mod that uses it asks for "core": "0.14".
+/* core-ar2 0.15: the USB input's gain, held by a mod (docs/ADAPTING.md,
+ * "USB input gain (core-ar2 0.15, Analog Rytm MKII)"; mods/core-ar2/usbin.s).
+ * A mod that uses it asks for "core": "0.15".
  *
  * Stock cuts the USB input before it mixes it in, by the step AUDIO
  * ROUTING's USB TO MAIN [dB] sets. While a mod holds a step, that step is

@@ -14,6 +14,6 @@
   {"event": "ev_leds", "fn": "pc_leds", "order": 60},
   {"event": "ev_draw", "fn": "pc_draw", "order": 60}
  ],
- "resources": {"core": "0.14"},
+ "resources": {"core": "0.15"},
  "requires": ["core"]
 }

@@ -2372,7 +2372,7 @@ declares, a reference to a pool the mod asks nothing from, more ids asked
 for than a pool has, and a mod that defines a `__pool_` symbol itself are
 refused.
 
-### Knob faces (core-ar2 0.14, Analog Rytm MKII)
+### Knob faces (core-ar2 0.15, Analog Rytm MKII)
 
 A mod that gives a stock page a different meaning for some sounds, but
 wants the values to stay the sound's own (stored, p-locked, slid, on the
@@ -2523,12 +2523,12 @@ sites, with `analog-rytm-mk2/moments.h`:
   it, else it is queued (1,024 bytes, at most 128 a message) and sent at
   the next sequencer tick or `ev_tick`, in order. `core_usb_midi_up()`
   says whether USB is on and the host has configured the MIDI port.
-- `core_midi_din_try_send(len, msg)` (core 0.14): the same for the DIN MIDI OUT port,
+- `core_midi_din_try_send(len, msg)` (core 0.15): the same for the DIN MIDI OUT port,
   a whole message of up to 256 bytes into stock's DIN sender, 1 sent or 0
   not now (no room, or OUT PORT FUNC is DIN24 or DIN48); it never waits,
   from any task or interrupt. `core_midi_din_up()` says whether the port
   is a MIDI port.
-- `core_track_mutes()` and `core_set_track_mutes(mask)` (core 0.14), bit t for track
+- `core_track_mutes()` and `core_set_track_mutes(mask)` (core 0.15), bit t for track
   t (0..12): the mutes as the mute screens show them, set the way
   Overbridge's settings write sets them (the engine and the screens follow,
   no MIDI goes out). UI task.
@@ -2709,7 +2709,7 @@ they call. `examples/screen-check-ar2` uses each of them.
   fills its bar and `core_progress_close(h)` takes it away. The box takes
   no keys: catch NO in your `ev_key` and close it.
 
-### Mod folders in the +Drive browser (core-ar2 0.14, Analog Rytm MKII)
+### Mod folders in the +Drive browser (core-ar2 0.15, Analog Rytm MKII)
 
 A folder of a mod's own after the +Drive's root entries in SETTINGS >
 SAMPLES and the sample slot browser, browsed with the browser's own keys
@@ -2734,10 +2734,10 @@ header). `examples/drive-check-ar2` uses each part.
   folder. At most 8 show; a name is 1..23 characters, never `mods`, and a
   real root entry of the same name hides the mod's.
 
-### Pads and LEDs (core-ar2 0.14, Analog Rytm MKII)
+### Pads and LEDs (core-ar2 0.15, Analog Rytm MKII)
 
 A pad strike before stock plays it, and pad and key LEDs a mod colours
-(`analog-rytm-mk2/pads.h`; ask for `"core": "0.14"` in `resources`; the
+(`analog-rytm-mk2/pads.h`; ask for `"core": "0.15"` in `resources`; the
 internals in `mods/core-ar2/pads.c`'s header). Both run in the UI task. `examples/pad-check-ar2` uses each.
 
 - **`ev_pad`**, `int32_t f(int32_t pad, int32_t value, int32_t flags)`:
@@ -2757,7 +2757,7 @@ internals in `mods/core-ar2/pads.c`'s header). Both run in the UI task. `example
   back. `led` is stock's LED number: `CORE_LED_TRIG(k)` the trig keys,
   `CORE_LED_PAD(p)` the pads.
 
-### USB input gain (core-ar2 0.14, Analog Rytm MKII)
+### USB input gain (core-ar2 0.15, Analog Rytm MKII)
 
 Stock cuts the USB input before it mixes it in, by the step AUDIO
 ROUTING's USB TO MAIN [dB] sets: four steps 6 dB apart, from the most cut
@@ -3191,9 +3191,9 @@ for this core; one that still uses a slot's records declares `"machine:<n>"` in
 its resources, and the linker refuses it next to a machine in that slot.
 
 A filled TEST slot's SRC page shows the knobs in the public machines'
-order (core-ar2 0.14), `knobs[1..7]` on A..G and LEV on H (stock's TEST
+order (core-ar2 0.15), `knobs[1..7]` on A..G and LEV on H (stock's TEST
 pages put LEV on A, mods/core-ar2/README.md "TEST slots: knob order and
-knob looks (0.14)"). A TEST record keeps the test machine's look (some draw
+knob looks (0.15)"). A TEST record keeps the test machine's look (some draw
 as switches, or as ERR above 7); set `CORE_MACHINE_LOOKS` in the entry's
 `flags` and point `looks` at eight `{look, ui}`, one per knob, to draw one
 as any stock knob (`look`, a stock id; 0 keeps the record's) or with a UI
@@ -3226,7 +3226,7 @@ In the engine, `core_voice_trigged(voice)` is 1 when the voice's track
 trigged this block (sequencer, pad, chromatic, MIDI in, a retrig of a
 sounding voice alike) and `core_voice_velocity(voice)` is the track's
 velocity, `velocity << 8` (a MIDI note at 64 gives `0x4000`), before
-accent. `core_voice_released(voice)` (core 0.14) is 1 when the track's note
+accent. `core_voice_released(voice)` (core 0.15) is 1 when the track's note
 ended this block (a pad, key or MIDI note-off, the note's length, the
 sequencer) and 2 when stock cut every track at once (the kit and project
 loads), else 0. It mirrors stock: the stop and the loads send every track a

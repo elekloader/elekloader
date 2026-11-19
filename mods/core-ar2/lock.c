@@ -277,7 +277,7 @@ static int same_category(const char *a, const char *b)
     return 1;
 }
 
-/* (0.14) an id's category: a stock id's owner's name (SAMP, FILT, AMP,
+/* (0.15) an id's category: a stock id's owner's name (SAMP, FILT, AMP,
  * as the menu's label: 0x40007296 of 0x40006eca), a pseudo id's own; 0 for
  * a machine's parameters and a pseudo id with none */
 static const char *category_of(int id)
@@ -292,7 +292,7 @@ static const char *category_of(int id)
     return owner >= FIRST_OWNER && owner <= LAST_OWNER ? (const char *)OWNER_NAME(owner) : 0;
 }
 
-/* (0.14) the id just appended moves to after the list's last entry of its
+/* (0.15) the id just appended moves to after the list's last entry of its
  * category, so SAMP: SMPL Machine C sits after SAMP's own; one whose
  * category no entry has stays at the end. The list holds ids, and what a
  * pick stores is the id's slot (0x400aa32a, 0x400aa546), never an index. */
@@ -583,7 +583,7 @@ int core_reload(void *view, int track, int **ids, int d)
 unsigned core_param_lock_label(int id);         /* rows.c (0.11) */
 unsigned core_param_lock_name(int id);
 
-/* (0.14) a stock id's face for the set's sound (looks.c) */
+/* (0.15) a stock id's face for the set's sound (looks.c) */
 struct core_knob_face {
     const char *label, *name;
 };
@@ -593,7 +593,7 @@ static const struct core_knob_face *set_face(void *set, int id)
 {
     int fx;
     unsigned char *s;
-    if (id <= 0 || (id >= 469 && id < 555))    /* (0.14) own ids take faces too */
+    if (id <= 0 || (id >= 469 && id < 555))    /* (0.15) own ids take faces too */
         return 0;
     s = core_lock_item(set, &fx);
     return core_knob_face(id, fx ? 0 : s);
@@ -607,7 +607,7 @@ unsigned core_knob_label(void *set, int id)
     unsigned char *s;
     const struct core_lock_param *p = core_lock_knob_param(set, id, &code, &s);
     const struct core_knob_face *f = set_face(set, id);
-    if (f && f->label)                  /* (0.14) a face first: a framework's machine names its knob */
+    if (f && f->label)                  /* (0.15) a face first: a framework's machine names its knob */
         return (unsigned)f->label;
     if (p && p->short_name)
         return (unsigned)shorts[code - FIRST_CODE];
@@ -664,7 +664,7 @@ unsigned core_knob_name(void *set, int id)
     unsigned char *s;
     const struct core_lock_param *p = core_lock_knob_param(set, id, &code, &s);
     const struct core_knob_face *f = set_face(set, id);
-    if (f && f->name)                   /* (0.14) a face first, as core_knob_label */
+    if (f && f->name)                   /* (0.15) a face first, as core_knob_label */
         return (unsigned)f->name;
     if (p && p->name)
         return (unsigned)names[code - FIRST_CODE];

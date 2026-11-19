@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.14: the sound a trig plays (README, "Stock engines, trig
- * sounds, core_param_set (0.14)"). sound.s files, for each track, the
+/* core-ar2 0.15: the sound a trig plays (README, "Stock engines, trig
+ * sounds, core_param_set (0.15)"). sound.s files, for each track, the
  * sound item stock pushed to the engine last: the track's sound in a live kit (a plain trig, a kit
  * apply) or a pool sound (a sound lock). Plain reads, from the audio
  * interrupt or the UI task. */

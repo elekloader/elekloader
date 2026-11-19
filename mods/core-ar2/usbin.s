@@ -1,6 +1,6 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-ar2 0.14: the USB input's gain, held by a mod (docs/ADAPTING.md,
-| "USB input gain (core-ar2 0.14, Analog Rytm MKII)";
+| core-ar2 0.15: the USB input's gain, held by a mod (docs/ADAPTING.md,
+| "USB input gain (core-ar2 0.15, Analog Rytm MKII)";
 | elekloader/sdk/include/analog-rytm-mk2/usbin.h). Every address is OS
 | 1.74's; nothing of stock's code or tables is copied.
 |
