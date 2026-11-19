@@ -96,9 +96,11 @@ static int locked, guard_off;
 void dl_lock(void) { locked++; }
 void dl_unlock(void) { locked--; }
 void dl_guard_off(void) { guard_off = 1; }
+static int kept;
+void core_project_keep(void) { kept = !locked && !guard_off; }   /* before any lock */
 void core_restart(void)                  /* never returns: the script ends here */
 {
-    printf("RESTART locked=%d guard_off=%d box=%s\n", locked, guard_off, box);
+    printf("RESTART kept=%d locked=%d guard_off=%d box=%s\n", kept, locked, guard_off, box);
     exit(0);
 }
 int dl_staging_take_idle(unsigned now, unsigned stall) { (void)now, (void)stall; if (staging) return 0; staging = 1; return 1; }

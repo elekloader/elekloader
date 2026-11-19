@@ -1918,9 +1918,8 @@ static void act_yes(int i)
         pending = P_CLEAR;
         confirm("CLEAR THE BUILD?");
     } else if (i == NACT && mode == M_BUILD && set_differs()) {
-        pending = P_RESTART;             /* a reboot drops what the project hasn't saved, and core
-                                          * can't tell whether it has: the window always says so */
-        confirm("RESTART NOW?\nUNSAVED PROJECT\nCHANGES ARE LOST");
+        pending = P_RESTART;             /* the working project is kept (restart_tick) */
+        confirm("RESTART NOW?");
     } else if (i == 4 && mode == M_DRIVE) {
         if (delete_dir_now()) {          /* as SAMPLES: "DELETE DIR?" over CONFIRM Y/N */
             copy_str(rmdir_name, lrows[cursor_row()].name, sizeof rmdir_name);
@@ -2431,6 +2430,8 @@ static u32 rest_until;                   /* the tick the background may work aga
 /* APPLY & RESTART, RESTART_TICKS after its YES: the box shows that long (as stock's SUCCESS!
  * REBOOTING), and YES's release, and a remote key's status after it, are answered before the
  * reset (the emulator gate's first try reset inside the remote tap, 2026-11-16). Then the
+ * working project is kept as it is now (core_project_keep: its image repacked and written to
+ * the +Drive, which the boot reads back; decided 2026-11-16), before any lock is held. Then the
  * crash guard comes off first, since the restart is the user's and the running set got this far
  * (boot.c keeps it on while the page shows after a boot that applied sites), then dl_lock, held
  * for good, so no route upload or page write is cut between its store calls, then core_restart,
@@ -2444,6 +2445,7 @@ static void restart_tick(void)
 {
     if (!restarting || ticks - restart_asked < RESTART_TICKS)
         return;
+    core_project_keep();
     dl_lock();
     dl_guard_off();
     core_restart();
