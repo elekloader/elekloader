@@ -2290,7 +2290,7 @@ def test_core_ar2_0_17_std_map():
     """core-ar2 0.17 serves std1 at the sites it owns: each map entry is a std1.h event and one of
     core's tables, the native table for the same prototype or its first part, a std_ table of its
     own for the thunks (std.c) that core's own handlers, .boot and pages.s call, and for the UI and
-    system events at new sites (ui.c); ev_enc has its prototype in std1.h (decided 2026-11-19)."""
+    system events (ui.c) and the MIDI events (stdmidi.c) at new sites; ev_enc has its prototype in std1.h (decided 2026-11-19)."""
     import re
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     mdir = os.path.join(root, 'mods', 'core-ar2')
@@ -2306,6 +2306,8 @@ def test_core_ar2_0_17_std_map():
     # the UI and system events at new sites (ui.c, ui.s)
     thunks |= {'ev_boot_done', 'ev_idle', 'ev_crash', 'ev_usb', 'ev_key_leds', 'ev_mode', 'ev_param_set',
                'ev_clip', 'ev_pattern', 'ev_mute', 'ev_view'}
+    # the MIDI events at new sites (stdmidi.c, stdmidi.s)
+    thunks |= {'ev_midi_in', 'ev_midi_cc', 'ev_midi_pc', 'ev_midi_out', 'ev_seq_midi'}
     assert set(std) == native | thunks and set(std) <= events
     assert {e for e, t in std.items() if t == e} == native
     for e in native:
@@ -2328,6 +2330,46 @@ def test_core_ar2_0_17_std_map():
     assert 'core_std_boot();' in csrc and 'std.c' in doc['sources'] and 'stdui.s' in doc['sources']
     with open(os.path.join(mdir, 'pages.s'), encoding='utf-8') as fh:
         assert 'jsr     core_std_param_turn' in fh.read()
+
+
+def test_core_ar2_0_17_midi_sites():
+    """core-ar2 0.17's std1 MIDI events (stdmidi.c, stdmidi.s), core-a4mk2's stdmidi at the Rytm's
+    addresses: eight sites, each "len" and "stock_sha256" and a global of stdmidi.s; the two
+    dispatch sites are jsr (their stubs end in the handler's jmp or an rts), the others jmp and
+    resume right after the bytes they displaced; each std table is walked in stdmidi.c."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-ar2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(mdir, 'stdmidi.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    with open(os.path.join(mdir, 'stdmidi.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    globs = set(re.findall(r'^\s*\.globl\s+(.+)$', asm, re.M))
+    globs = {g.strip() for line in globs for g in line.split(',')}
+    sites = [x for x in doc['sites'] if x.get('target') in globs]
+    want = {'core_std_in_din_site': ('0x40082e18', 6, 'jsr'), 'core_std_in_usb_site': ('0x40082e9e', 6, 'jsr'),
+            'core_std_cc_site': ('0x40085652', 6, 'jmp'), 'core_std_pc_site': ('0x40083384', 10, 'jmp'),
+            'core_std_send_site': ('0x400857ca', 8, 'jmp'), 'core_std_bits_site': ('0x400856b8', 8, 'jmp'),
+            'core_std_rt_site': ('0x40085724', 10, 'jmp'), 'core_std_seq_midi_site': ('0x401200b2', 8, 'jmp')}
+    assert {x['target']: (x['addr'], x['len'], x['op']) for x in sites} == want
+    for x in sites:
+        assert 'stock' not in x and len(x['stock_sha256']) == 64, x
+        if x['op'] == 'jmp':
+            assert 'jmp     0x%08x' % (int(x['addr'], 16) + x['len']) in asm, x
+    # the sequencer note's stub, when taken, skips the post and its addq (0x401200ba..0x401200c1)
+    assert 'jmp     0x401200c2' in asm and 'jmp     0x401200ba' in asm
+    for t in ('std_midi_in', 'std_midi_cc', 'std_midi_pc', 'std_midi_out', 'std_seq_midi'):
+        assert re.search(r'^extern const \w+ %s\[\];' % t, src, re.M), t
+        assert doc['std']['ev' + t[3:]] == t
+    assert 'stdmidi.c' in doc['sources'] and 'stdmidi.s' in doc['sources']
+    with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-rytm-mk2', 'ports.h'), encoding='utf-8') as fh:
+        ports = fh.read()
+    for f in ('CORE_MIDI_CC_AUTO  0x01u', 'CORE_MIDI_PC_STOCK 0x02u', 'CORE_MIDI_CC_PERF  0x04u'):
+        assert f in ports, f
 
 
 def test_core_a4mk2_0_7_std_map():

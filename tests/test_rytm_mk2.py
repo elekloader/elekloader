@@ -219,11 +219,13 @@ def test_core_ar2_sites():
     # and the USB input's shift index (usbin.s), and main()'s call at 0x401009e0 (0.14, ev_boot_drive), and the silent-voice skip's,
     # the sample-layer skip's two, the UI skip's and the FX skip's three (0.16), and std1's UI
     # and system events' 23 (0.17, ui.s: boot done and idle, USB, LEDs, pattern, mute, the
-    # parameter set, six view stack sites, eleven clipboard calls)
-    assert len(mod['sites']) == 178
-    # (0.17) the UI events' sites give "len" and "stock_sha256", no stock bytes
+    # parameter set, six view stack sites, eleven clipboard calls), and std1's MIDI events' 8
+    # (0.17, stdmidi.s: the DIN and USB dispatch, the CC apply, program change, the three senders
+    # and the sequencer's note post)
+    assert len(mod['sites']) == 186
+    # (0.17) the UI and MIDI events' sites give "len" and "stock_sha256", no stock bytes
     ui = [x for x in mod['sites'] if 'stock_sha256' in x]
-    assert len(ui) == 23 and all('stock' not in x for x in ui)
+    assert len(ui) == 31 and all('stock' not in x for x in ui)
     # the sound push's arguments, followed by its PC-relative jsr to 0x4011dace, which stays
     x = [x for x in mod['sites'] if x.get('target') == 'core_trig_sound'][0]
     assert x['op'] == 'jsr' and x['addr'] == '0x4011f5f6', x

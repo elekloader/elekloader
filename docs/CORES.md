@@ -243,8 +243,8 @@ the one a mod that uses it names in `resources.core`.
   CPU and changes nothing it does or shows: off at boot, on while a mod asks
   for it and none holds it off (0.16; `analog-rytm-mk2/ui.h`;
   mods/core-ar2/SKIPS.md, "The UI skip (0.16)"). The standard events, std1,
-  at the sites core already owns and the UI and system events at new sites
-  (0.17; ADAPTING.md, "Standard events (std1)"; the core's README,
+  at the sites core already owns and the UI, system and MIDI events at new
+  sites (0.17; ADAPTING.md, "Standard events (std1)"; the core's README,
   "Standard events (0.17)").
 - **Analog Four MKII** ([mods/core-a4mk2](../mods/core-a4mk2), a proof of
   concept): core-ar2's events and mod storage at the A4's addresses

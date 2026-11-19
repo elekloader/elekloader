@@ -1241,7 +1241,7 @@ No new sites; the traces are in `machines.c` and `voiceio.c`.
 
 ## Standard events (0.17)
 
-std1: `std.c` and `ui.c` (their first comments name the rest);
+std1: `std.c`, `ui.c`, `stdmidi.c` (see their first comments);
 [std-check](../../examples/std-check-ar2), [ui-check](../../examples/ui-check-ar2).
 
 ## Checked so far
