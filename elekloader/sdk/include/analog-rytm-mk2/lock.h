@@ -45,7 +45,8 @@ struct core_lock_param {
     const char *name;           /* the destination menu and the knob's pop-up: up to 32, in
                                  * proper case as stock's */
     const char *category;       /* before the colon in the menu: up to 4 characters, upper
-                                 * case as stock's (SAMP, FILT, AMP), or 0 for MOD */
+                                 * case as stock's (SAMP, FILT, AMP), or 0 for MOD; (0.15)
+                                 * stock's own puts it after that category's entries */
 };
 
 /* core-ar2 0.11: a lockable parameter narrower than the dial, shown on its

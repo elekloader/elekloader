@@ -141,6 +141,8 @@ def test_core_ar2_sites():
             # the SampleManager views' tick through their list's vtable (+0x30; 0x401e84f8 and
             # 0x401e71cc, stock's thunk 0x400e4db6), for the mod folders' refill
             ptrs.update({0x401e84f8 + 0x30: 0x400e4db6, 0x401e71cc + 0x30: 0x400e4db6})
+            # (0.15) the SAMPLE view's draw (vtable 0x401e3420 +0x10), for a page that went away
+            ptrs[0x401e3420 + 0x10] = 0x400d2004
             assert a in ptrs and want == ptrs[a].to_bytes(4, 'big'), s
             continue
         ok, note = elemod.insn_check(img, a, len(want), DEV)
@@ -207,8 +209,8 @@ def test_core_ar2_sites():
     # the pads' three (ev_pad: strike, release, pressure) and the LEDs' two (led_set's and
     # led_colour's slot colour sends), and the engine push's sound (0.15+: core_trig_sound), and
     # the mod folders' fourteen (drive.c: ten filesystem routines, LOAD TO PROJ's and CREATE
-    # DIR's calls, and the two SampleManager vtables' tick)
-    assert len(mod['sites']) == 145
+    # DIR's calls, and the two SampleManager vtables' tick), and the SAMPLE view's draw (0.15)
+    assert len(mod['sites']) == 146
     # the sound push's arguments, followed by its PC-relative jsr to 0x4011dace, which stays
     x = [x for x in mod['sites'] if x.get('target') == 'core_trig_sound'][0]
     assert x['op'] == 'jsr' and x['addr'] == '0x4011f5f6', x

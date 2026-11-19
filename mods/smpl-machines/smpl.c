@@ -37,6 +37,9 @@
 #define WORDS(t) ((const int16_t *)(0x8000f7a8 + 0x54 * (t)))   /* a track's engine words, by sound index */
 #define STOCK_PAGE_SAMPLE 4             /* the SAMPLE view's pages: 4, and 5 (the same ids) */
 #define STOCK_PAGE_SAMPLE2 5
+#define PLAIN_DIAL 42                   /* BR's record: a plain 0..127 dial, the look of a knob
+                                         * with its own range and no look (the record under it
+                                         * may draw on another range: TUN's is +-24) */
 
 STORE_FIELD(smpl_choice);
 
@@ -149,6 +152,17 @@ static const struct smpl_machine *current_machine(void)
     return machine_of(core_current_sound_item(), core_current_track());
 }
 
+/* a knob whose own range differs from the record's under it: the record's
+ * look draws on the record's range (TUN's +-24 stops short at 127), so
+ * it takes a plain dial; one with the record's range keeps the record's look
+ * (LEV's bar) */
+#define RECORD_RANGE(id) ((const int32_t *)(0x401bfbc8 + 0x34 * (id) + 8))
+static int misdrawn(int32_t id, const struct smpl_knob *n)
+{
+    const int32_t *r = RECORD_RANGE(id);
+    return n->min < n->max && (n->min != r[0] || n->max != r[1]);
+}
+
 static void build(void)
 {
     int i, k;
@@ -163,7 +177,7 @@ static void build(void)
             pages[i].ids[k] = !n->label ? 0 : k == KNOB_C && own_c(m) ? KNOB_C_ID : FIRST_REC + k;  /* 0: an empty cell */
             f->label = n->label ? n->label : "";
             f->name = n->name ? n->name : f->label;
-            f->look = n->look;
+            f->look = n->look || (k == KNOB_C && own_c(m)) || !misdrawn(FIRST_REC + k, n) ? n->look : PLAIN_DIAL;
             f->ui = 0;
             f->min = n->min;
             f->max = n->max;
@@ -251,6 +265,17 @@ static const struct core_page *smpl_info(int32_t page)
 
 const struct core_page_fn smpl_page_fn4 = {STOCK_PAGE_SAMPLE, smpl_info};
 const struct core_page_fn smpl_page_fn5 = {STOCK_PAGE_SAMPLE2, smpl_info};
+
+/* the SAMPLE view's page 2 (core_view_pages, a stock page's shown): stock's,
+ * or a machine that keeps stock's waveform (SMPL_WAVEFORM) */
+static int32_t smpl_page2_shown(void *view)
+{
+    const struct smpl_machine *m = current_machine();
+    (void)view;
+    return !m || (m->flags & SMPL_WAVEFORM);
+}
+
+const struct core_view_page smpl_view_page2 = {CORE_VIEW_SAMPLE, STOCK_PAGE_SAMPLE2, smpl_page2_shown};
 
 /* also smpl-knob-c's, for its knob id: the face of the machine's knob C */
 const struct core_knob_face *smpl_face(int32_t id, void *sound)

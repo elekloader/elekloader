@@ -1,6 +1,6 @@
 {
  "id": "smpl-machines",
- "version": "0.2",
+ "version": "0.3",
  "title": "SMPL machines",
  "category": "Framework",
  "license": "GPL-2.0-or-later",
@@ -27,6 +27,7 @@
  "contribute": [
   {"to": "core_page_fns", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:smpl_page_fn4", 0]]},
   {"to": "core_page_fns", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:smpl_page_fn5", 0]]},
+  {"to": "core_view_pages", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:smpl_view_page2", 0]]},
   {"to": "core_knob_faces", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:smpl_faces", 0]]},
   {"to": "core_params", "order": 40, "data": "00000000", "relocs": [[0, "abs32", "sym:smpl_params", 0]]}
  ]
