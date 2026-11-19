@@ -122,7 +122,7 @@ were never bounded by a stage here: `/mods` takes a file up to the largest free 
 
 `dlink.c` takes `abs16` relocations as the build's linker does (two big-endian bytes, -32768..65535;
 `__knobs + k` is one), in `.run`, contributions and sites; out of range is `range`. The descriptor's
-`F_ABS16` (`drive_abs16` in `route.s`) tells host tools; drive-loader-ar2 takes none
+`F_ABS16` (`drive_abs16` in `route.s`) tells host tools; drive-loader-ar2 takes them from 0.9
 (tests/test_drive_abs16.py).
 
 ## std1
@@ -150,7 +150,7 @@ are checked as sites are: against the site map, the pre-link ranges and the othe
 claims; nothing is written for one. The loader exports `drive_claims` (`route.s`, `F_CLAIMS`), so
 the build lists the flashed contributions' claims in the site map (kind 7); `dlink.c`
 (`scan_claims`) reads them (DRIVE.md, "Claims"). `resources.regions` stays refused (DRIVE.md,
-"Regions on the A4"). drive-loader-ar2 takes no claims (tests/test_drive_claims.py).
+"Regions on the A4"). drive-loader-ar2 takes them from 0.9 (tests/test_drive_claims.py).
 
 ## Stock parts
 

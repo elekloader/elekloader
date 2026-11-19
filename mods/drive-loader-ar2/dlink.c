@@ -24,10 +24,11 @@
  * and go back when it returns. The merge's room is the descriptor's biggest table. */
 
 enum { SEC_ABS, SEC_RUN, SEC_BSS, SEC_TABLE, SEC_COUNT, SEC_STORE, SEC_DTABLE, SEC_DCOUNT };
-enum { R_ABS32, R_PC32, R_PC16 };
+enum { R_ABS32, R_PC32, R_PC16, R_ABS16 };   /* abs16: two big-endian bytes (link.py put_reloc) */
 #define FLASHED 0xFFFF
-/* A relocation kind's size in bytes, or 0 for one this loader doesn't take (no abs16: the A4's, D3) */
-#define rsize(s, n) (js_eq(s, n, "abs32") || js_eq(s, n, "pc32") ? 4 : js_eq(s, n, "pc16") ? 2 : 0)
+/* A relocation kind's size in bytes, or 0 for one this loader doesn't take */
+#define rsize(s, n) (js_eq(s, n, "abs32") || js_eq(s, n, "pc32") ? 4 \
+                     : js_eq(s, n, "pc16") || js_eq(s, n, "abs16") ? 2 : 0)
 #define NONE 0xFFFF
 
 struct sym {
@@ -65,6 +66,7 @@ struct dmod {
     u8 init_sec;                         /* drive_init, if it has one */
     u32 init_off;
     u16 site_first, site_n;              /* its sites and copied blocks */
+    u16 claim_n;                         /* its contributions' claims, in L.site after them */
     u32 sdata_first;                     /* where its sites' bytes start in sdata */
     u16 fld_first, fld_n;                /* its storage fields */
 #ifdef DL_COLLECTIONS
@@ -110,7 +112,7 @@ struct fld {                             /* a +Drive storage field a mod declare
     u32 init;
 };
 
-struct dsite {                           /* a site, or a copied block (data NONE32) */
+struct dsite {                           /* a site, or a copied block or a claim (data NONE32) */
     u32 lo, hi;
     u32 data;                            /* a site's bytes in sdata */
 };
@@ -403,9 +405,12 @@ static u32 n_map(void) { return D16(4 + 2) >= 2 ? D16(0x50) : 0; }
 static u32 o_map(u32 i) { return D32(0x4c) + 12 * i; }
 static u32 n_pre(void) { return D16(4 + 2) >= 2 ? D16(0x52) : 0; }
 static u32 o_pre(u32 i) { return D32(0x54) + 12 * i; }
-/* ABI 1.3: the flags */
+/* ABI 1.3: the flags; bit 5, F_CLAIMS: contributions' claims are taken, and the site map has the
+ * flashed ones (kind 7) */
 static u32 d_flags(void) { return D16(4 + 2) >= 3 ? D32(0x60) : 0; }
+#define F_CLAIMS 32
 #define F_KNOBS 128                      /* bit 7: +Drive mods' knob ids (knob_start) */
+#define MAP_CLAIM 7
 /* An entry's order: ABI 1.1's orders array, else (1.0) the key's, 0xFFFF the linker's own */
 static s32 table_order(u32 i, u32 k)
 {
@@ -1108,7 +1113,7 @@ static int sha_is(const char *p, const u8 *buf, u32 len, u32 r, const u8 *h)
 }
 
 /* Pass 1's part for "sites" and "copied", after the rest of the file: each site's form (addr,
- * len, new, kind, stock_sha256, relocations of the three kinds inside it) and each copied
+ * len, new, kind, stock_sha256, relocations of the four kinds inside it) and each copied
  * block's (lo < hi, to), inside the main OS; then each site against the flashed build's site
  * map, the pre-link ranges and its stock bytes, and each copied block against the flashed
  * sites. -> 0, or a refusal code (DL_R_CLASH's argument in L.scan_arg). */
@@ -1194,7 +1199,7 @@ static int scan_sites(struct dmod *m, const char **k, const u8 *buf, u32 len, co
                     return DL_R_FORMAT;
                 lo = addr;
                 hi = addr + n_;
-                if (relp) {              /* [off, abs32 | pc32 | pc16, target, addend] */
+                if (relp) {              /* [off, abs32 | pc32 | pc16 | abs16, target, addend] */
                     js_t q;
                     int f3 = 1;
                     at(&q, relp, buf, len);
@@ -1206,7 +1211,7 @@ static int scan_sites(struct dmod *m, const char **k, const u8 *buf, u32 len, co
                         if (!js_open(&q, '[') || !js_next(&q, ']', &f4) || !js_int(&q, &off)
                             || !js_next(&q, ']', &f4) || !js_str(&q, &s, &n))
                             return DL_R_FORMAT;
-                        sz = js_eq(s, n, "abs32") || js_eq(s, n, "pc32") ? 4 : js_eq(s, n, "pc16") ? 2 : 0;
+                        sz = rsize(s, n);
                         if (!sz || off < 0 || off + sz > n_ || !js_next(&q, ']', &f4) || !js_str(&q, &s, &n)
                             || !js_next(&q, ']', &f4) || !js_int(&q, &add) || js_next(&q, ']', &f4))
                             return DL_R_FORMAT;
@@ -1240,7 +1245,8 @@ static int scan_sites(struct dmod *m, const char **k, const u8 *buf, u32 len, co
         for (i = 0; i < n_map(); i++)
             if (overlap(d->lo, d->hi, D32(o_map(i)), D32(o_map(i) + 4))) {
                 u32 kd = D16(o_map(i) + 8), mi = D16(o_map(i) + 10);
-                *what = site_detail(d->lo, (kd == 1 || kd == 2) && mi < n_modules() ? module_name(mi) : 0);
+                *what = site_detail(d->lo, (kd == 1 || kd == 2 || kd == MAP_CLAIM) && mi < n_modules()
+                                    ? module_name(mi) : 0);
                 L.scan_arg = DL_SITE_CORE << 8;
                 return DL_R_CLASH;
             }
@@ -1279,6 +1285,86 @@ static int scan_sites(struct dmod *m, const char **k, const u8 *buf, u32 len, co
             }
     }
     return 0;
+}
+
+/* Pass 1's part for the contributions' "claims" (F_CLAIMS), after the sites: each claim's form,
+ * [lo, hi] with lo < hi inside the main OS (as a copied block's), kept in L.site after the mod's
+ * sites and copied blocks (data NONE32, claim_n of them); then each against the flashed build's
+ * site map (every kind, the flashed claims too) and the pre-link ranges. Nothing is written for a
+ * claim: it keeps other mods' sites and claims off those bytes. -> 0, or a refusal code. */
+static int scan_claims(struct dmod *m, const char *p, const u8 *buf, u32 len, const char **what)
+{
+    js_t j;
+    const char *s;
+    u32 n, i, r;
+    int first = 1;
+
+    m->claim_n = 0;
+    if (!p || !L.main_hi || !(d_flags() & F_CLAIMS))
+        return 0;
+    at(&j, p, buf, len);
+    if (!js_open(&j, '['))
+        return DL_R_FORMAT;
+    while (js_next(&j, ']', &first)) {
+        int f2 = 1;
+        if (!js_open(&j, '{'))
+            return DL_R_FORMAT;
+        while (js_next(&j, '}', &f2)) {
+            int f3 = 1;
+            if (!js_key(&j, &s, &n))
+                return DL_R_FORMAT;
+            if (!js_eq(s, n, "claims") || empty(j.p, buf, len)) {
+                if (!js_skip(&j))
+                    return DL_R_FORMAT;
+                continue;
+            }
+            if (!js_open(&j, '['))
+                return DL_R_FORMAT;
+            while (js_next(&j, ']', &f3)) {
+                int f4 = 1;
+                s32 lo, hi;
+                struct dsite *d;
+                if (!js_open(&j, '[') || !js_next(&j, ']', &f4) || !js_int(&j, &lo)
+                    || !js_next(&j, ']', &f4) || !js_int(&j, &hi) || js_next(&j, ']', &f4))
+                    return DL_R_FORMAT;
+                if ((u32)lo < DL_MAIN_LO || (u32)hi > L.main_hi || (u32)lo >= (u32)hi)
+                    return DL_R_FORMAT;
+                if (L.nsite >= L.SITES)
+                    return DL_R_LIMIT;
+                d = &L.site[L.nsite++];
+                d->lo = (u32)lo;
+                d->hi = (u32)hi;
+                d->data = NONE32;
+                m->claim_n++;
+            }
+        }
+    }
+    if (j.err)
+        return DL_R_FORMAT;
+    for (r = 0; r < m->claim_n; r++) {
+        const struct dsite *d = &L.site[m->site_first + m->site_n + r];
+        for (i = 0; i < n_map(); i++)
+            if (overlap(d->lo, d->hi, D32(o_map(i)), D32(o_map(i) + 4))) {
+                u32 kd = D16(o_map(i) + 8), mi = D16(o_map(i) + 10);
+                *what = site_detail(d->lo, (kd == 1 || kd == 2 || kd == MAP_CLAIM) && mi < n_modules()
+                                    ? module_name(mi) : 0);
+                L.scan_arg = DL_SITE_CORE << 8;
+                return DL_R_CLASH;
+            }
+        for (i = 0; i < n_pre(); i++)
+            if (overlap(d->lo, d->hi, D32(o_pre(i)), D32(o_pre(i) + 4))) {
+                *what = site_detail(d->lo, 0);
+                L.scan_arg = DL_SITE_PRELINK << 8;
+                return DL_R_CLASH;
+            }
+    }
+    return 0;
+}
+
+/* A mod's range a (its sites, copied blocks, then claims): 1 a site, 0 a copied block, 2 a claim */
+static int range_kind(const struct dmod *m, u32 a)
+{
+    return a >= m->site_n ? 2 : L.site[m->site_first + a].data != NONE32;
 }
 
 #if defined(DL_SITES) || defined(DL_REGIONS)
@@ -1469,7 +1555,7 @@ static int place_sites(struct dmod *m, const char *p, const u8 *buf, u32 len, co
                     js_int(&j, &off);
                     js_next(&j, ']', &f4);
                     js_str(&j, &s, &n);
-                    if (!js_eq(s, n, "abs32") && !js_eq(s, n, "pc32") && !js_eq(s, n, "pc16"))
+                    if (!rsize(s, n))
                         return DL_R_FORMAT;
                     type = rtype(s, n);
                     js_next(&j, ']', &f4);
@@ -1485,7 +1571,7 @@ static int place_sites(struct dmod *m, const char *p, const u8 *buf, u32 len, co
                     js_next(&j, ']', &f4);
                     js_int(&j, &add);
                     js_next(&j, ']', &f4);
-                    if (off < 0 || (u32)off + (type == R_PC16 ? 2 : 4) > x->len)
+                    if (off < 0 || (u32)off + (type == R_PC16 || type == R_ABS16 ? 2 : 4) > x->len)
                         return DL_R_FORMAT;
                     if (!put(L.tsdata + x->data + off, type, sv + (u32)add, x->addr + (u32)off))
                         return DL_R_RANGE;
@@ -1791,7 +1877,7 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
         return DL_R_FEATURE;
     }
 #endif
-    /* relocations: in .run, of the three kinds, inside it */
+    /* relocations: in .run, of the four kinds, inside it */
     if (k[K_RELOCS]) {
         at(&j, k[K_RELOCS], buf, len);
         first = 1;
@@ -1807,7 +1893,7 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
             }
             if (!js_next(&j, ']', &f2) || !js_int(&j, &v) || !js_next(&j, ']', &f2) || !js_str(&j, &s, &n))
                 return DL_R_FORMAT;
-            sz = js_eq(s, n, "abs32") || js_eq(s, n, "pc32") ? 4 : js_eq(s, n, "pc16") ? 2 : 0;
+            sz = rsize(s, n);
             if (!sz || v < 0 || (u32)v + sz > m->run_len)
                 return DL_R_FORMAT;
             if (!js_next(&j, ']', &f2) || !js_skip(&j) || !js_next(&j, ']', &f2) || !js_skip(&j)
@@ -1818,7 +1904,7 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
             return DL_R_FORMAT;
     }
 
-    /* contributions: to a table that takes more, whole entries, no claims */
+    /* contributions: to a table that takes more, whole entries, claims only with F_CLAIMS */
     m->ctr_first = (u16)L.nctr;
     m->ctr_n = 0;
     if (k[K_CONTRIBUTE]) {
@@ -1866,8 +1952,8 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
                     if (!js_hex(&j, 0, 0, &dlen))
                         return DL_R_FORMAT;
                     had_data = 1;
-                } else if (js_eq(s, n, "claims")) {
-                    if (!empty(j.p, buf, len)) {
+                } else if (js_eq(s, n, "claims")) {   /* read after the sites (scan_claims) */
+                    if (!empty(j.p, buf, len) && (!L.main_hi || !(d_flags() & F_CLAIMS))) {
                         *what = "claims";
                         return DL_R_FEATURE;
                     }
@@ -1955,6 +2041,8 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
 #endif
     {
         int code = scan_sites(m, k, buf, len, what);
+        if (!code)
+            code = scan_claims(m, k[K_CONTRIBUTE], buf, len, what);
         if (code)
             return code;
     }
@@ -2766,20 +2854,24 @@ static int check_round(void)
             continue;
         }
 #endif
-        {                                /* sites against earlier living mods' sites and copied
-                                          * blocks (two copied blocks may share bytes) */
+        {                                /* sites and claims against earlier living mods' sites,
+                                          * copied blocks and claims: a site clashes with any, a
+                                          * claim with a claim (copied blocks share bytes with
+                                          * copied blocks and claims) */
             u32 a, b;
             const struct dmod *with = 0;
             const struct dsite *x = 0;
-            for (a = 0; a < m->site_n && !with; a++) {
+            for (a = 0; a < (u32)m->site_n + m->claim_n && !with; a++) {
+                int ka = range_kind(m, a);
                 x = &L.site[m->site_first + a];
                 for (k = 0; k < i && !with; k++) {
                     const struct dmod *o = &L.mods[L.order[k]];
                     if (!o->alive)
                         continue;
-                    for (b = 0; b < o->site_n; b++) {
+                    for (b = 0; b < (u32)o->site_n + o->claim_n; b++) {
                         const struct dsite *y = &L.site[o->site_first + b];
-                        if ((x->data != NONE32 || y->data != NONE32) && overlap(x->lo, x->hi, y->lo, y->hi)) {
+                        int kb = range_kind(o, b);
+                        if ((ka == 1 || kb == 1 || (ka == 2 && kb == 2)) && overlap(x->lo, x->hi, y->lo, y->hi)) {
                             with = o;
                             break;
                         }
@@ -2974,6 +3066,10 @@ static int put(u8 *at_, int type, u32 value, u32 p)
         dl_wr32(at_, value);
     } else if (type == R_PC32) {
         dl_wr32(at_, value - p);
+    } else if (type == R_ABS16) {        /* link.put_reloc: two bytes, -0x8000 to 0xFFFF */
+        if (value > 0xFFFF && value < 0xFFFF8000u)
+            return 0;
+        dl_wr16(at_, value);
     } else {
         s32 d = (s32)(value - p);
         if (d < -0x8000 || d >= 0x8000)
@@ -2985,7 +3081,7 @@ static int put(u8 *at_, int type, u32 value, u32 p)
 
 static int rtype(const char *s, u32 n)
 {
-    return js_eq(s, n, "abs32") ? R_ABS32 : js_eq(s, n, "pc32") ? R_PC32 : R_PC16;
+    return js_eq(s, n, "abs32") ? R_ABS32 : js_eq(s, n, "pc32") ? R_PC32 : js_eq(s, n, "abs16") ? R_ABS16 : R_PC16;
 }
 
 /* Pass 2 for one mod, its file in buf. -> 0, or a refusal code. */
@@ -3147,7 +3243,7 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
                             return DL_R_LIMIT;
                         r = &L.erel[L.nerel];
                         r->type = (u8)rtype(s, n);
-                        if (!js_eq(s, n, "abs32") && !js_eq(s, n, "pc32") && !js_eq(s, n, "pc16"))
+                        if (!rsize(s, n))
                             return DL_R_FORMAT;
                         js_next(&j, ']', &f4);
                         js_str(&j, &s, &n);
@@ -3162,7 +3258,7 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
                         js_next(&j, ']', &f4);
                         js_int(&j, &add);
                         js_next(&j, ']', &f4);
-                        if (off < 0 || (u32)off + (r->type == R_PC16 ? 2 : 4)
+                        if (off < 0 || (u32)off + (r->type == R_PC16 || r->type == R_ABS16 ? 2 : 4)
                                            > (u32)c->nent * ctr_entry(c))
                             return DL_R_FORMAT;
                         r->off = (u16)off;
@@ -3350,6 +3446,8 @@ static int bind(int write)
                 if (write)
                     put(DL_MEM(at_), r->type, r->value, at_);
                 else if (r->type == R_PC16 && ((s32)(r->value - at_) < -0x8000 || (s32)(r->value - at_) >= 0x8000))
+                    return 0;
+                else if (r->type == R_ABS16 && r->value > 0xFFFF && r->value < 0xFFFF8000u)
                     return 0;
             }
         }

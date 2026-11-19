@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Contributions' claims on the +Drive: the A4's boot linker (mods/drive-loader-a4mk2/dlink.c) takes
+"""Contributions' claims on the +Drive: the A4's and the Rytm's boot linkers (mods/drive-loader-a4mk2/
+dlink.c, and drive-loader-ar2's from 0.9) take
 a contribution's "claims" ([[lo, hi], ...], byte ranges of the main OS) on a build whose descriptor
 has F_CLAIMS (the loader's export drive_claims), and the descriptor's site map then carries the
 flashed contributions' claims (kind 7, SITE_CLAIM). A claim writes nothing; it is refused `clash`
@@ -7,8 +8,9 @@ as a site is (link.py check(): claims and sites must not share a byte): over the
 site map (any kind, the flashed claims too) or a pre-link range, and the later in id order of a
 claim and another mod's site or claim. A copied block may share bytes with a claim.
 
-Built for the computer and run against its twin (elekloader/drive.py) on tests/test_drive.py's
-made-up build with a flashed claim: the same states, refusals, details, area bytes and tables.
+Each loader is built for the computer and run against the twin (elekloader/drive.py) on
+tests/test_drive.py's made-up build with a flashed claim: the same states, refusals, details, area
+bytes and tables.
 
     python tests/test_drive_claims.py
 
@@ -27,6 +29,7 @@ from elekloader import desc, drive                                  # noqa: E402
 from test_link_refusals import Bench                               # noqa: E402
 import test_drive as TD                                            # noqa: E402
 from test_drive_std import Std, boot, build_host, compare, raw     # noqa: E402
+from test_drive_abs16 import AR2, build_host as build_host_at      # noqa: E402
 
 C = drive.CODE['clash']
 CORE, MOD, PRE = drive.SITE_CORE << 8, drive.SITE_MOD << 8, drive.SITE_PRELINK << 8
@@ -98,7 +101,7 @@ def main():
             print('ok     ', name)
 
     with Bench('analog-rytm-mk2') as B, tempfile.TemporaryDirectory() as work:
-        exe = build_host(work)
+        exes = (('', build_host(work)), ('drive-loader-ar2: ', build_host_at(work, AR2, 'drive_link_host_ar2')))
         B.dev.releases['SYN'] = B.rel = dataclasses.replace(
             B.rel, prelink=((B.at(0x3000), B.at(0x3010), desc.PRE_CODE, 'test'),))
         F = Std(B, 'claims')
@@ -108,36 +111,37 @@ def main():
               and (B.at(0x2800), B.at(0x2810), desc.SITE_CLAIM, 2) in d['sites'] else [d['flags'], d['sites']])
         check('the descriptor\'s text names them',
               [] if 'claims taken' in desc.dump(d) and 'claim by module 2' in desc.dump(d) else [desc.dump(d)])
-        for name, mods, want in sets(B):
-            sm, ram = boot(exe, F, mods, work)
-            r = drive.link(F.build, [(m['id'] + '.elemod', raw(m)) for m in mods])
-            bad = compare(F, sm, ram, r)
-            got = [(x['state'], x['code'], x['arg'], x.get('detail', '')) for x in sm['status']]
-            if got != want:
-                bad.append('got %s, want %s' % (got, want))
-            check(name, bad)
-        # a claim writes nothing: the area and tables match the same mod without it
-        m = cm(B, 'a-mod', [[B.at(0x1000), B.at(0x1010)]])
-        plain = dict(m, contribute=[dict(m['contribute'][0], claims=[])])
-        _sm, ram1 = boot(exe, F, [m], work)
-        _sm, ram0 = boot(exe, F, [plain], work)
-        check('a claim writes nothing', [] if ram1 == ram0 else ['RAM differs'])
-        # without F_CLAIMS (the Rytm's loader, or an older A4 build): refused as a feature, the flashed
-        # claim not in the site map
         G = Std(B, None)
-        sm, ram = boot(exe, G, [m], work)
-        r = drive.link(G.build, [('a-mod.elemod', raw(m))])
-        bad = compare(G, sm, ram, r)
-        if [(x['code'], x.get('detail', '')) for x in sm['status']] != [(7, 'claims')]:
-            bad.append(sm['status'])
-        if G.build.d['flags'] & desc.F_CLAIMS or any(k == desc.SITE_CLAIM for _a, _b, k, _m in G.build.d['sites']):
-            bad.append('flag or map')
-        check('without F_CLAIMS: refused as the feature claims', bad)
+        for who, exe in exes:
+            for name, mods, want in sets(B):
+                sm, ram = boot(exe, F, mods, work)
+                r = drive.link(F.build, [(m['id'] + '.elemod', raw(m)) for m in mods])
+                bad = compare(F, sm, ram, r)
+                got = [(x['state'], x['code'], x['arg'], x.get('detail', '')) for x in sm['status']]
+                if got != want:
+                    bad.append('got %s, want %s' % (got, want))
+                check(who + name, bad)
+            # a claim writes nothing: the area and tables match the same mod without it
+            m = cm(B, 'a-mod', [[B.at(0x1000), B.at(0x1010)]])
+            plain = dict(m, contribute=[dict(m['contribute'][0], claims=[])])
+            _sm, ram1 = boot(exe, F, [m], work)
+            _sm, ram0 = boot(exe, F, [plain], work)
+            check(who + 'a claim writes nothing', [] if ram1 == ram0 else ['RAM differs'])
+            # without F_CLAIMS (an older build, drive-loader-ar2 0.8's): refused as a feature, the
+            # flashed claim not in the site map
+            sm, ram = boot(exe, G, [m], work)
+            r = drive.link(G.build, [('a-mod.elemod', raw(m))])
+            bad = compare(G, sm, ram, r)
+            if [(x['code'], x.get('detail', '')) for x in sm['status']] != [(7, 'claims')]:
+                bad.append(sm['status'])
+            if G.build.d['flags'] & desc.F_CLAIMS or any(k == desc.SITE_CLAIM for _a, _b, k, _m in G.build.d['sites']):
+                bad.append('flag or map')
+            check(who + 'without F_CLAIMS: refused as the feature claims', bad)
     print('%d passed, %d failed' % (ok, failed))
     return 1 if failed else 0
 
 
-def test_the_a4_boot_linker_takes_claims_as_its_twin():
+def test_the_boot_linkers_take_claims_as_their_twin():
     assert main() == 0
 
 

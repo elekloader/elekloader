@@ -50,7 +50,8 @@ class Flashed:
         loader = {'elemod': 2, 'id': 'drive-loader', 'version': '0.1', 'target': B.target,
                   'requires': ['core'],
                   'sections': {'.run': {'align': 4, 'len': 4, 'parts': [['hex', '4e754e75']]}},
-                  'symbols': {'dl_fn': ['.run', 0]}, 'exports': ['dl_fn'], 'imports': ['core_desc'],
+                  'symbols': {'dl_fn': ['.run', 0], 'drive_abs16': ['abs', 1]},   # abs16 (drive-loader 0.9)
+                  'exports': ['dl_fn', 'drive_abs16'], 'imports': ['core_desc'],
                   'relocs': [[".run", 0, "abs32", "sym:core_desc", 0]],
                   'resources': {'names': ['settings:MODS']}}
         loader['sections']['.run'] = {'align': 4, 'len': 8, 'parts': [['hex', '0000000000000000']]}

@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""abs16 relocations on the +Drive: the A4 loader's boot linker (mods/drive-loader-a4mk2/dlink.c)
-takes them as the build's linker does (link.put_reloc: two big-endian bytes, -0x8000 to 0xFFFF),
-and its descriptor says so (F_ABS16, the loader's export drive_abs16), so the host twin
-(elekloader/drive.py, Build.rsize) takes them on that build only.
+"""abs16 relocations on the +Drive: the A4's and the Rytm's boot linkers (mods/drive-loader-a4mk2/
+dlink.c, and drive-loader-ar2's from 0.9) take them as the build's linker does (link.put_reloc: two
+big-endian bytes, -0x8000 to 0xFFFF), and their descriptors say so (F_ABS16, the loader's export
+drive_abs16), so the host twin (elekloader/drive.py, Build.rsize) takes them on such a build only.
 
-Built for the computer and run against the twin: abs16 in .run and in a contribution places the
-same bytes in C and twin; one out of range is refused alike, in .run and at the merge; the Rytm's
-loader (drive-loader-ar2, no F_ABS16) refuses them as a format error, and so does the twin on its
-build.
+Built for the computer and run against the twin, for each loader: abs16 in .run and in a
+contribution places the same bytes in C and twin; one out of range is refused alike, in .run and
+at the merge. On a build without F_ABS16 (drive-loader-ar2 0.8's) the loader refuses them as a
+format error, and so does the twin.
 
     python tests/test_drive_abs16.py
 
@@ -79,32 +79,36 @@ def main():
             fails.append(name)
 
     with Bench('analog-rytm-mk2') as B:
-        F = Built(B)
-        check('a loader exporting drive_abs16 sets the descriptor\'s F_ABS16 (bit 2)',
+      for kind, exe, who in (('a4', a4_exe, ''), ('ar2', ar2_exe, 'drive-loader-ar2: ')):
+        F = Built(B, kind=kind)
+
+        def check_(name, cond, info=''):
+            check(who + name, cond, info)
+        check_('a loader exporting drive_abs16 sets the descriptor\'s F_ABS16 (bit 2)',
               F.build.d['flags'] & 7 == desc.F_STAGE_TOP | desc.F_PAYLOAD_SKIP | desc.F_ABS16 == 7
               and 'abs16' in F.build.rsize, F.build.d['flags'])
-        check('the descriptor\'s text names it', 'abs16 relocations' in desc.dump(F.build.d))
+        check_('the descriptor\'s text names it', 'abs16 relocations' in desc.dump(F.build.d))
 
         def alike(name, mods, want_states):
-            sm, ram = boot(a4_exe, F, mods, work)
+            sm, ram = boot(exe, F, mods, work)
             r = twin(F, mods)
-            check(name + ': ' + str(want_states), states(sm) == want_states, sm['status'])
+            check_(name + ': ' + str(want_states), states(sm) == want_states, sm['status'])
             bad = compare(F, sm, ram, r)
-            check(name + ': C and twin agree', not bad, bad)
+            check_(name + ': C and twin agree', not bad, bad)
             return sm, ram, r
 
         # abs16 in .run: an abs symbol + addend, and a negative value
         m = mod(B, 'k16', relocs=[['.run', 12, 'abs16', 'sym:k', 0x1000], ['.run', 14, 'abs16', 'abs', -2]])
         sm, ram, r = alike('abs16 in .run', [m], [(1, 0, 0)])
         run = ram[F.build.lo - F.ram_base:F.build.lo - F.ram_base + 16]
-        check('abs16 in .run: 0x1020 and 0xfffe, big-endian', struct.unpack('>HH', run[12:16]) == (0x1020, 0xFFFE),
+        check_('abs16 in .run: 0x1020 and 0xfffe, big-endian', struct.unpack('>HH', run[12:16]) == (0x1020, 0xFFFE),
               run.hex())
 
         # abs16 in a contribution: placed at the merge
         m = mod(B, 'k16c', contrib=[[2, 'abs16', 'sym:k', 0x7F00]])
         sm, ram, r = alike('abs16 in a contribution', [m], [(1, 0, 0)])
         t = r.tables['ev_tick']
-        check('abs16 in a contribution: the entry\'s low half is 0x7f20',
+        check_('abs16 in a contribution: the entry\'s low half is 0x7f20',
               any(t['bytes'][i:i + 4][2:] == b'\x7f\x20' for i in range(0, len(t['bytes']), 4)))
 
         # out of range: a .run address (the area is far above 0xFFFF), a value past 0xFFFF, one below -0x8000
@@ -122,17 +126,16 @@ def main():
         alike('abs16 past the end of .run is refused', [mod(B, 'end', relocs=[['.run', 15, 'abs16', 'abs', 0]])],
               [(2, 5, 0)])
 
-        # the Rytm's loader takes no abs16: the twin on its build refuses it as its dlink.c does
-        R = Built(B, abs16=False)
-        check('without drive_abs16: no F_ABS16, no abs16', not R.build.d['flags'] & desc.F_ABS16
-              and 'abs16' not in R.build.rsize)
-        for name, m in (('in .run', mod(B, 'r16', relocs=[['.run', 12, 'abs16', 'sym:k', 0]])),
-                        ('in a contribution', mod(B, 'r16c', contrib=[[2, 'abs16', 'sym:k', 0]]))):
-            sm, ram = boot(ar2_exe, R, [m], work)
-            r = twin(R, [m])
-            check('drive-loader-ar2: abs16 %s refused (format)' % name, states(sm) == [(2, 5, 0)], sm['status'])
-            check('drive-loader-ar2: abs16 %s, C and twin agree' % name, not compare(R, sm, ram, r),
-                  compare(R, sm, ram, r))
+      # a build without drive_abs16 (an older loader, drive-loader-ar2 0.8's, whose dlink.c had no abs16):
+      # the twin refuses it as that loader did, a format error
+      R = Built(B, abs16=False)
+      check('without drive_abs16: no F_ABS16, no abs16', not R.build.d['flags'] & desc.F_ABS16
+          and 'abs16' not in R.build.rsize)
+      for name, m in (('in .run', mod(B, 'r16', relocs=[['.run', 12, 'abs16', 'sym:k', 0]])),
+                    ('in a contribution', mod(B, 'r16c', contrib=[[2, 'abs16', 'sym:k', 0]]))):
+        r = twin(R, [m])
+        got = [(c.state, c.code, c.arg) for c in r.choices]
+        check('without F_ABS16: abs16 %s refused (format)' % name, got == [(2, 5, 0)], got)
 
     print('all passed' if not fails else '%d failed' % len(fails))
     return 1 if fails else 0

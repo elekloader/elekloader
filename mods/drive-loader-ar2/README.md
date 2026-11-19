@@ -9,19 +9,20 @@ and `drive_stage_top`, which sets the descriptor's `F_STAGE_TOP` (ABI 1.3). The 
 each file into the +Drive area itself, and after it the route and the MODS page use the
 area's free tail (STAGE.md), so a mod file may be as large as the area.
 
-From 0.8 (decided 2026-11-17, the A4 loader's features, so a flashed mod loads from the +Drive
-unchanged) it also exports `drive_payload_skip`, `drive_collections` and `drive_knobs`, which set
-the descriptor's `F_PAYLOAD_SKIP`, `F_COLLECTIONS` and `F_KNOBS` (docs/DRIVE.md, "Payloads on the
-+Drive", "+Drive collections", "Knob ids on the +Drive"): the boot stages each file without its
-`.payload`'s hex and keeps the loaded mods' payloads in `drive_payloads` for sidecar-core, the
-linker links tables +Drive mods declare, and +Drive mods get knob ids from 0x4000..0x7FFF, kept in
-`/mods/.store` (format 4). `skip.c`, `skip.h` and `payload.c` are the A4 loader's, `payload.c`
-reading ekFS; `dlink.c` has the A4's `DL_COLLECTIONS` and `DL_KNOBS` blocks with the Rytm's id rules
-in `dl.h`. It also exports `drive_stock_shadow` (`F_STOCK_SHADOW`): the descriptor carries stock's bytes
-of every range the flashed build wrote, and the boot lays them over a +Drive mod's stock parts,
-so a part on a core site copies stock's instructions, not the site's jump (sidecar 0.7 from the
-+Drive hung the boot without it). abs16, claims and the std map are the A4's alone until the
-shared linker core.
+It also carries the A4 loader's features, so a flashed mod loads from the +Drive unchanged
+(decided 2026-11-17 and 2026-11-19). Its exports set the descriptor's flags (docs/DRIVE.md, "The
+build descriptor"):
+
+- `drive_payload_skip` (`F_PAYLOAD_SKIP`): files are staged without their `.payload`'s hex, and the
+  loaded mods' payloads are kept in `drive_payloads` for sidecar-core (`skip.c`, `payload.c`).
+- `drive_collections`, `drive_knobs` (`F_COLLECTIONS`, `F_KNOBS`): +Drive tables, and knob ids from
+  0x4000..0x7FFF kept in `/mods/.store` (format 4), with the Rytm's id rules in `dl.h`.
+- `drive_stock_shadow` (`F_STOCK_SHADOW`): stock's bytes laid over a +Drive mod's stock parts, so a
+  part on a core site copies stock's instructions, not the site's jump.
+- `drive_abs16`, `drive_claims` (`F_ABS16`, `F_CLAIMS`): `abs16` relocations (code 18 out of range)
+  and contributions' `claims` (`scan_claims`; docs/DRIVE.md, "Claims").
+
+The std map stays the A4's alone until core-ar2 has one.
 
 It holds the `/mods` route, links the mods `/mods/active` names into the +Drive
 mods' area at boot, and adds the MODS page in SETTINGS > GLOBAL, which writes `/mods/active`.
@@ -230,5 +231,5 @@ emulator through its `--usb-midi-tcp` port.
 ```bash
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build mods/drive-loader-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
-python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.14.elemod --mod drive-loader-0.8.elemod --out drive-loader.syx --version 1.74
+python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.14.elemod --mod drive-loader-0.9.elemod --out drive-loader.syx --version 1.74
 ```
