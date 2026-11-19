@@ -511,7 +511,7 @@ def test_core_ar2_screen():
     assert ('ev_key', 'core_screen_key', -1000000) in sub
     assert ('ev_enc', 'core_screen_enc', 1000000) in sub
     assert ('ev_tick', 'core_screen_tick', 3) in sub
-    assert 'screen.c' in j['sources'] and j['version'] == '0.13'
+    assert 'screen.c' in j['sources'] and j['version'] == '0.14'
 
 
 def test_core_ar2_screen_check_needs_0_12():
