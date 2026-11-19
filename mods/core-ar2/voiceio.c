@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 (0.15 or later): track mutes and DIN MIDI out for mods
+/* core-ar2 (0.14): track mutes and DIN MIDI out for mods
  * (OS 1.74). The voice note-off getter, core_voice_released, is beside
  * the trig latch in machines.c.
  *

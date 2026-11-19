@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* test-looks-check-ar2: the knob looks and knob order of a TEST slot
- * (core-ar2 0.15; machines.h, CORE_MACHINE_LOOKS). Two silent machines with
+ * (core-ar2 0.14; machines.h, CORE_MACHINE_LOOKS). Two silent machines with
  * the knob tables of two Sidecar voices:
  *
  *   TL PLAITS, slot 44 (BD TEST's records): A ENG, B HRM, C TIM, D MOR,

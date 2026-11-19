@@ -45,7 +45,7 @@ struct core_lock_param {
     const char *name;           /* the destination menu and the knob's pop-up: up to 32, in
                                  * proper case as stock's */
     const char *category;       /* before the colon in the menu: up to 4 characters, upper
-                                 * case as stock's (SAMP, FILT, AMP), or 0 for MOD; (0.15)
+                                 * case as stock's (SAMP, FILT, AMP), or 0 for MOD; (0.14)
                                  * stock's own puts it after that category's entries */
 };
 

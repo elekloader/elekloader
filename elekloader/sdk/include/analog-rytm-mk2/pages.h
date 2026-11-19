@@ -275,7 +275,7 @@ struct core_view_page {
     int32_t view;           /* CORE_VIEW_* */
     int32_t page;           /* a page id: a mod's own (core_pages), or a stock one listed again */
     int32_t (*shown)(void *view);   /* 0: always; else non-0 while the key may step to it.
-                                     * (0.15) On one of the view's stock pages it adds no
+                                     * (0.14) On one of the view's stock pages it adds no
                                      * page: it is that page's shown */
 };
 

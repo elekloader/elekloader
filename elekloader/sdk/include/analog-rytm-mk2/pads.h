@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.15: pad strikes before stock plays them (ev_pad) and pad and key
+/* core-ar2 0.14: pad strikes before stock plays them (ev_pad) and pad and key
  * LEDs from mods (ev_leds, core_led) (docs/ADAPTING.md, "Pads and LEDs
- * (core-ar2 0.15, Analog Rytm MKII)"). A mod that uses them asks for
- * "core": "0.15". Subscribe in mod.json,
+ * (core-ar2 0.14, Analog Rytm MKII)"). A mod that uses them asks for
+ * "core": "0.14". Subscribe in mod.json,
  * {"event": "ev_pad", "fn": "my_pad"}. Everything here runs in the UI task.
  */
 #ifndef ELEKLOADER_AR2_PADS_H

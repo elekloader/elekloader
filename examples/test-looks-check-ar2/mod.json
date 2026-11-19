@@ -4,7 +4,7 @@
  "title": "TEST slot looks check",
  "category": "Examples",
  "license": "GPL-2.0-or-later",
- "description": "Two silent machines in the TEST slots 44 and 45 with their knobs' looks named in core_machines (core-ar2 0.15): TL PLAITS and TL SAMPLE. Checks that a TEST slot's knobs sit in the public order (LEV on H) and draw as their entries' looks.",
+ "description": "Two silent machines in the TEST slots 44 and 45 with their knobs' looks named in core_machines (core-ar2 0.14): TL PLAITS and TL SAMPLE. Checks that a TEST slot's knobs sit in the public order (LEV on H) and draw as their entries' looks.",
  "device": "analog-rytm-mk2",
  "os": "1.74",
  "sources": ["check.c"],
@@ -14,6 +14,6 @@
   {"to": "core_machines", "order": 51, "data": "00000000",
    "relocs": [[0, "abs32", "sym:tl_sample", 0]]}
  ],
- "resources": {"core": "0.13"},
+ "resources": {"core": "0.14"},
  "requires": ["core"]
 }

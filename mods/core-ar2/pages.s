@@ -222,7 +222,7 @@ core_param_text:
 | {view, page, shown}: shown, when not 0, is `int shown(void *view)`, asked
 | on each press of the page key, and the key steps over the page while it
 | answers 0.
-| (0.15) An entry naming one of the view's stock pages with a shown adds no
+| (0.14) An entry naming one of the view's stock pages with a shown adds no
 | page: it gives that stock page its shown (stock's SAMPLE view's page 5,
 | say). One with no shown lists the stock page again, as before.
         .equ    VIEW_MAX, 16
@@ -280,7 +280,7 @@ view_list:
         move.l  %d0,%a0
         cmp.l   (%a0),%d2
         bne.s   3b
-        tst.l   8(%a0)                    | (0.15) a stock page of the view's own
+        tst.l   8(%a0)                    | (0.14) a stock page of the view's own
         beq.s   4f                        | with a shown: that page's shown, no
         move.l  4(%a0),%d4                | page added
         moveq   #0,%d0
@@ -409,7 +409,7 @@ view_stock:
         .long   VIEW6_LIST, VIEW6_N, VIEW7_LIST, VIEW7_N, VIEW8_LIST, VIEW8_N
         .long   VIEW9_LIST, VIEW9_N
 
-| (0.15) The SAMPLE view's draw (vtable 0x401e3420 +0x10, 0x400d2004; the
+| (0.14) The SAMPLE view's draw (vtable 0x401e3420 +0x10, 0x400d2004; the
 | pointer at 0x401e3430): a page whose shown answers 0 is not drawn, the
 | view moves on to the next page that is (core_view_settle, pages.c), as the
 | page key would, before stock's draw: a machine change can hide the page

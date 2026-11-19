@@ -1,8 +1,8 @@
-# pad-check (Analog Rytm MKII, core-ar2 0.15)
+# pad-check (Analog Rytm MKII, core-ar2 0.14)
 
 A test for core-ar2's pad strikes before stock (`ev_pad`) and LEDs from mods
 (`ev_leds`, `core_led`) (`pads.c`, docs/ADAPTING.md "Pads and LEDs
-(core-ar2 0.15, Analog Rytm MKII)"), on screen. `check.c`'s header says what it
+(core-ar2 0.14, Analog Rytm MKII)"), on screen. `check.c`'s header says what it
 does.
 
 | pad | what the mod answers | what you see |

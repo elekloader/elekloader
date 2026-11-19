@@ -45,7 +45,7 @@
 #define SLOT_TEST 44                /* 44..52: the TEST machines (0.13) */
 #define SLOT_REF 35                 /* a hidden machine with all eight records */
 #define NSLOTS (SLOT_LAST - SLOT_FIRST + 1)
-#define SRC_PAGES ((uint8_t *)0x40288028)   /* (0.15) per machine 0x24: name, ids A..H */
+#define SRC_PAGES ((uint8_t *)0x40288028)   /* (0.14) per machine 0x24: name, ids A..H */
 #define SRC_PAGE_SIZE 0x24
 
 /* (0.13) the per-voice trig getters' sources (README, "Trig getters") */
@@ -137,7 +137,7 @@ static uint8_t *ref_record(int32_t k)
     return 0;
 }
 
-/* (0.15) looks.c: the look core_machines gives stock record id, while a
+/* (0.14) looks.c: the look core_machines gives stock record id, while a
  * mod fills its slot (CORE_MACHINE_LOOKS; machines.h), else 0 */
 const struct core_machine_look *core_machine_look_of(int32_t id)
 {
@@ -159,7 +159,7 @@ const struct core_machine_look *core_machine_look_of(int32_t id)
     return l->look || l->ui ? l : 0;
 }
 
-/* (0.15) Which knob of the SRC page shows a record is not in the record:
+/* (0.14) Which knob of the SRC page shows a record is not in the record:
  * the machine's entry in the SRC page table (0x40288028 + 0x24m: the
  * page's name, then the ids on A..H; read through 0x400ff606, for the
  * knobs' draw and turn, 0x400d35b0) lists them. Every public machine and
@@ -198,7 +198,7 @@ static void place_knobs(int32_t s)
     ids[7] = at[0];
 }
 
-/* (0.15+) Stock engines for any machine. The default machine of
+/* (0.14) Stock engines for any machine. The default machine of
  * track t is the signed long at 0x401bf3fc + 4t (stock's accessor
  * 0x40007130). A machine's knob records are filed by param_tables_build
  * (0x40006cd8) by id only; their range and default live in the static
