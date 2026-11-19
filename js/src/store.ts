@@ -68,13 +68,17 @@ export type Lock = {
   codes?: Code[]; freed_codes?: Code[]; next_code?: number | Record<string, number>
   ccs?: Cc[]; freed_ccs?: Cc[]
   knobs?: Knob[]; freed_knobs?: Knob[]; next_knob?: number
+  machines?: Machine[]; freed_machines?: Machine[]
+  pool_ids?: PoolId[]; freed_pool_ids?: PoolId[]
   drive?: Drive
 }
+export type PoolId = { pool: string; mod: string; index: number; id: number }
 /** What the unit's +Drive keeps (store.py, "drive"; drivestore.reserve): its live layout ID, each scope's low mark,
  * and the codes and CCs its fields and parked fields hold. Not stored data: not part of the layout ID. */
 export type Drive = { id: string; low: Record<string, number>; codes: number[] | Record<string, number[]>; ccs: number[] }
 export const DRIVE_KEY = 'drive'
 export type Knob = { mod: string; first: number; count: number }
+export type Machine = { mod: string; index: number; slot: number; knobs: number }
 export type Code = { mod: string; sym: string; code: number; kind?: string }
 export type Cc = { mod: string; sym: string; cc: number }
 export type Decl = [string, string, string, number]          // mod id, sym, scope, bits
@@ -433,6 +437,162 @@ export function checkLock(lock: unknown, devKey: string): asserts lock is Lock {
   }
   if (Object.hasOwn(lock, DRIVE_KEY)) checkDrive(lock[DRIVE_KEY], devKey)
   checkKnobs(lock)
+  checkMachines(lock)
+  checkPoolIds(lock)
+}
+
+function checkPoolIds(lock: Record<string, any>): void {
+  if (!['pool_ids', 'freed_pool_ids'].some(k => Object.hasOwn(lock, k))) return
+  const seen = new Set<string>(), ids = new Set<string>()
+  for (const k of ['pool_ids', 'freed_pool_ids']) {
+    const rs = lock[k]
+    if (!Array.isArray(rs)) throw new ModError(`lockfile: "${k}" is a list`)
+    for (const r of rs) {
+      if (!isDict(r) || !sameKeys(r, ['pool', 'mod', 'index', 'id']) || typeof r.pool !== 'string' || typeof r.mod !== 'string'
+        || !['index', 'id'].every(x => whole(r[x]))
+        || (k === 'pool_ids' && (seen.has(r.pool + '\0' + r.mod + '\0' + r.index) || ids.has(r.pool + '\0' + r.id))))
+        throw new ModError(`lockfile: a bad entry in "${k}"`)
+      if (k === 'pool_ids') { seen.add(r.pool + '\0' + r.mod + '\0' + r.index); ids.add(r.pool + '\0' + r.id) }
+    }
+  }
+}
+
+/** Give each mod in want (mod id -> n) n ids of the pool named pool, span = [first, last], in lock (changed in place;
+ * {} for a build without a lockfile). -> [mod id -> [id, ...], notes]. Throws ModError. store.pool_ids. */
+export function poolIds(lock: Partial<Lock>, pool: string, want: Map<string, number>, span: [number, number]): [Map<string, number[]>, string[]] {
+  const [first, last] = span
+  const mine = (lock.pool_ids ?? []).filter(r => r.pool === pool)
+  const freed0 = (lock.freed_pool_ids ?? []).filter(r => r.pool === pool)
+  if (!want.size && !mine.length && !freed0.length) return [new Map(), []]
+  const notes: string[] = [], held: PoolId[] = []
+  let freed: PoolId[] = []
+  for (const r of mine) {
+    if (r.index < (want.get(r.mod) ?? 0) && first <= r.id && r.id <= last) held.push({ ...r })
+    else {
+      freed.push({ ...r })
+      notes.push(`${r.mod}: id ${r.id} of pool ${pool} freed, kept for it until the unused ids run out`)
+    }
+  }
+  freed.push(...freed0.filter(r => first <= r.id && r.id <= last).map(r => ({ ...r })))
+  const kept = new Set(held.map(r => r.mod + '\0' + r.index))
+  for (const mod of [...want.keys()].sort(cmpStr)) {
+    for (let i = 0; i < want.get(mod)!; i++) {
+      if (kept.has(mod + '\0' + i)) continue
+      const taken = new Set(held.map(r => r.id))
+      const back = freed.filter(r => r.mod === mod && r.index === i && !taken.has(r.id))
+      freed = freed.filter(r => !(r.mod === mod && r.index === i))
+      let at: number
+      if (back.length) {
+        at = back[back.length - 1].id
+        notes.push(`${mod}: id ${at} of pool ${pool} back`)
+      } else {
+        const busy = new Set([...taken, ...freed.map(r => r.id)])
+        let fit: number[] = []
+        for (let v = first; v <= last; v++) if (!busy.has(v)) fit.push(v)
+        if (!fit.length && freed.length) {
+          notes.push(`pool ${pool}: ids freed by ${[...new Set(freed.map(r => r.mod))].sort(cmpStr).join(', ')} given out again`)
+          freed = []
+          fit = []
+          for (let v = first; v <= last; v++) if (!taken.has(v)) fit.push(v)
+        }
+        if (!fit.length) throw new ModError(`${mod} asks for more ids from the pool ${pool} than it has free (${first}..${last})`)
+        at = fit[0]
+        notes.push(`${mod}: id ${at} of pool ${pool}`)
+      }
+      held.push({ pool, mod, index: i, id: at })
+    }
+  }
+  lock.pool_ids = [...(lock.pool_ids ?? []).filter(r => r.pool !== pool), ...held]
+    .sort((a, b) => cmpStr(a.pool, b.pool) || a.id - b.id)
+  lock.freed_pool_ids = [...(lock.freed_pool_ids ?? []).filter(r => r.pool !== pool), ...freed]
+  const out = new Map<string, number[]>()
+  for (const r of [...held].sort((a, b) => cmpStr(a.mod, b.mod) || a.index - b.index)) {
+    if (!out.has(r.mod)) out.set(r.mod, [])
+    out.get(r.mod)!.push(r.id)
+  }
+  return [out, notes]
+}
+
+function checkMachines(lock: Record<string, any>): void {
+  if (!['machines', 'freed_machines'].some(k => Object.hasOwn(lock, k))) return
+  const seen = new Set<string>(), slots = new Set<number>()
+  for (const k of ['machines', 'freed_machines']) {
+    const ms = lock[k]
+    if (!Array.isArray(ms)) throw new ModError(`lockfile: "${k}" is a list`)
+    for (const r of ms) {
+      if (!isDict(r) || !sameKeys(r, ['mod', 'index', 'slot', 'knobs']) || typeof r.mod !== 'string'
+        || !['index', 'slot', 'knobs'].every(x => whole(r[x]))
+        || (k === 'machines' && (seen.has(r.mod + '\0' + r.index) || slots.has(r.slot))))
+        throw new ModError(`lockfile: a bad entry in "${k}"`)
+      if (k === 'machines') { seen.add(r.mod + '\0' + r.index); slots.add(r.slot) }
+    }
+  }
+}
+
+/** Give each machine a mod asks for (want: mod id -> [knobs, ...]) a slot of slots (slot -> the knobs it has records
+ * for) in lock (changed in place; {} for a build without a lockfile), never one of direct (slots mods claim by
+ * number). -> [mod id -> [slot, ...], notes]. Throws ModError. store.machines. */
+export function machines(lock: Partial<Lock>, want: Map<string, number[]>, slots: Map<number, number>,
+  direct0: Iterable<number> = []): [Map<string, number[]>, string[]] {
+  const had = lock.machines ?? [], freed0 = lock.freed_machines ?? []
+  if (!want.size && !had.length && !freed0.length) return [new Map(), []]
+  const direct = new Set(direct0)
+  const notes: string[] = [], held: Machine[] = []
+  let freed: Machine[] = []
+  const asked = (r: Machine) => r.index < (want.get(r.mod) ?? []).length
+  for (const r of had) {
+    if (asked(r) && direct.has(r.slot))
+      throw new ModError(`machine slot ${r.slot} is claimed by number, and the lockfile gives it to ${r.mod}'s machine ${r.index} `
+        + '(saved sounds name the slot): give the claim another slot')
+    const k = asked(r) ? want.get(r.mod)![r.index] : null
+    if (k === null && direct.has(r.slot)) { notes.push(`slot ${r.slot}, freed by ${r.mod}, is claimed by number`); continue }
+    if (k !== null && slots.has(r.slot) && slots.get(r.slot)! >= k) { held.push({ ...r, knobs: k }); continue }
+    freed.push({ ...r })
+    if (k !== null)
+      notes.push(`${r.mod}: machine ${r.index} needs ${k} knobs, which slot ${r.slot} has not: it moves, and sounds saved `
+        + 'with it load another machine')
+    else notes.push(`${r.mod}: machine ${r.index} freed slot ${r.slot}, kept for it until the unused slots run out`)
+  }
+  for (const r of freed0) {
+    if (direct.has(r.slot)) notes.push(`slot ${r.slot}, freed by ${r.mod}, is claimed by number`)
+    else freed.push({ ...r })
+  }
+  const kept = new Set(held.map(r => r.mod + '\0' + r.index))
+  for (const mod of [...want.keys()].sort(cmpStr)) {
+    want.get(mod)!.forEach((k, i) => {
+      if (kept.has(mod + '\0' + i)) return
+      const taken = new Set([...direct, ...held.map(r => r.slot)])
+      const back = freed.filter(r => r.mod === mod && r.index === i && !taken.has(r.slot) && (slots.get(r.slot) ?? -1) >= k)
+      freed = freed.filter(r => !(r.mod === mod && r.index === i))
+      let at: number | null = null
+      if (back.length) {
+        at = back[back.length - 1].slot
+        notes.push(`${mod}: machine ${i} back in slot ${at}`)
+      } else {
+        for (const again of [false, true]) {
+          if (again) {
+            if (!freed.length) break
+            notes.push(`machine slots freed by ${[...new Set(freed.map(r => r.mod))].sort(cmpStr).join(', ')} given out again`)
+            freed = []
+          }
+          const busy = new Set([...taken, ...freed.map(r => r.slot)])
+          const fit = [...slots].filter(([s, n]) => !busy.has(s) && n >= k).sort((a, b) => a[1] - b[1] || a[0] - b[0])
+          if (fit.length) { at = fit[0][0]; break }
+        }
+        if (at === null) throw new ModError(`${mod} asks for a machine with ${k} knobs, and no machine slot with that many is free`)
+        notes.push(`${mod}: machine ${i} in slot ${at}`)
+      }
+      held.push({ mod, index: i, slot: at, knobs: k })
+    })
+  }
+  lock.machines = [...held].sort((a, b) => a.slot - b.slot)
+  lock.freed_machines = freed
+  const out = new Map<string, number[]>()
+  for (const r of [...held].sort((a, b) => cmpStr(a.mod, b.mod) || a.index - b.index)) {
+    if (!out.has(r.mod)) out.set(r.mod, [])
+    out.get(r.mod)!.push(r.slot)
+  }
+  return [out, notes]
 }
 
 /** Validate what the +Drive keeps (the lockfile's "drive"). Throws ModError. store.check_drive. */

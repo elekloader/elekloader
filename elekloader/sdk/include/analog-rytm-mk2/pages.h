@@ -134,6 +134,21 @@ struct core_param {
 #define CORE_KNOBS extern char __knobs[]
 #define CORE_KNOB(k) ((int32_t)__knobs + (k))
 
+/* Page ids by count. A mod that declares "pages": n in its mod.json gets n
+ * page ids in a row from 12 up (stock's are 0..11), past the ids other mods'
+ * core_pages, core_page_fns and core_view_pages entries name themselves; the
+ * linker defines __pages, the mod's own, as the first. CORE_PAGE(k) is page
+ * k's id, 0..n-1, as CORE_KNOB(k):
+ *
+ *     CORE_PAGES;
+ *     const struct core_page my_page = {CORE_PAGE(0), "MY PAGE", {CORE_KNOB(0), 0, 0, 0, 0, 0, 0, 0}};
+ *     const struct core_view_page my_view_page = {CORE_VIEW_COMP, CORE_PAGE(0), 0};
+ *
+ * Page ids are not saved, so they are not kept in the lockfile: they can
+ * differ from one build to the next. */
+#define CORE_PAGES extern char __pages[]
+#define CORE_PAGE(k) ((int32_t)__pages + (k))
+
 /* core-ar2 0.13: knob looks. A mod's own id (555 up) has no stock records,
  * so stock draws its knob as record 0's dial on record 0's range. An entry
  * in core_knob_looks gives the ids the look of any stock knob, or a UI
@@ -168,6 +183,44 @@ struct core_knob_look {
 
 /* the stock UI record of id (0..468; record 0 for any other id), to copy */
 const void *core_knob_stock_ui(int32_t id);
+
+/* Stock knob faces (core 0.15). A mod whose own machine takes over stock
+ * parameter records (machines on the SMPL page's records 39..46, say) keeps the records, so the sound's slots, its
+ * p-locks, slides, LFO, MIDI and storage stay stock's, and changes how the
+ * knob shows for the sound that runs it. An entry in core_knob_faces answers
+ * for stock ids (1..468):
+ *
+ *     {"to": "core_knob_faces", "order": 50, "data": "00000000",
+ *      "relocs": [[0, "abs32", "sym:my_faces", 0]]}
+ *
+ *     static const struct core_knob_face *my_face(int32_t id, void *sound);
+ *     const struct core_knob_faces my_faces = {39, 46, my_face};
+ *
+ * face(id, sound) is asked whenever stock reads the knob's label (+0x30) or
+ * name (+0x28), its UI record or its range: sound is the live sound item the
+ * page's knob set edits (core_current_sound_item's kind), or 0 where stock
+ * passes only the id (the UI record, the range, the graphic), meaning the
+ * current track's. It answers a face, or 0 for stock's. A face's label and
+ * name replace the record's (0: the record's); look, when not 0, is the
+ * stock id whose UI record draws the knob, and ui, when not 0, an 84-byte UI
+ * record of the mod's own (core_knob_looks' rules); min < max replace the
+ * range and the default (8.8), which stock's setter (0x400a906c) clamps a
+ * turn, a lock and MIDI to, and the graphic spans them as core_knob_looks'
+ * do. The value's text stays core_params' (a core_params entry may answer
+ * stock ids). Called in the UI task, often: answer from RAM. The linker
+ * refuses an entry whose ids take 469..554. */
+struct core_knob_face {
+    const char *label;      /* up to 4 characters; 0: the record's */
+    const char *name;       /* up to 32; 0: the record's */
+    int32_t look;           /* a stock id (1..468) whose knob it looks like; 0: its own */
+    const void *ui;         /* an 84-byte UI record of the mod's own; 0: look's */
+    int32_t min, max, def;  /* min < max: the range and default (8.8); else the record's */
+};
+
+struct core_knob_faces {
+    int32_t first, last;    /* the stock ids this entry answers for */
+    const struct core_knob_face *(*face)(int32_t id, void *sound);
+};
 
 struct core_param_lock {
     int32_t first, last;    /* the ids this entry answers for */
@@ -220,7 +273,9 @@ int core_held_kind(void *view);
 struct core_view_page {
     int32_t view;           /* CORE_VIEW_* */
     int32_t page;           /* a page id: a mod's own (core_pages), or a stock one listed again */
-    int32_t (*shown)(void *view);   /* 0: always; else non-0 while the key may step to it */
+    int32_t (*shown)(void *view);   /* 0: always; else non-0 while the key may step to it.
+                                     * (0.15) On one of the view's stock pages it adds no
+                                     * page: it is that page's shown */
 };
 
 #endif

@@ -397,6 +397,63 @@ def test_knob_lockfiles_it_refuses():
         assert refused(store.check_lock, bad, DEV).startswith('lockfile: ')
 
 
+SLOTS = {34: 3, 35: 8, 36: 8, 43: 5, 45: 4}
+
+
+def test_machine_slots_follow_their_mods_and_run_out_then_freed_ones_are_given_again():
+    lock = {}
+    got, notes = store.machines(lock, {'a': [8, 4], 'b': [5]}, SLOTS, {36})
+    assert got == {'a': [35, 45], 'b': [43]}
+    assert notes == ['a: machine 0 in slot 35', 'a: machine 1 in slot 45', 'b: machine 0 in slot 43']
+    got, notes = store.machines(lock, {'b': [5], 'c': [3]}, SLOTS, {36})      # a out: its slots kept for it
+    assert got == {'b': [43], 'c': [34]} and len(lock['freed_machines']) == 2
+    got, notes = store.machines(lock, {'b': [5], 'c': [3], 'd': [8]}, SLOTS, {36})  # 35 is all that is left
+    assert got == {'b': [43], 'c': [34], 'd': [35]}
+    assert notes == ['machine slots freed by a given out again', 'd: machine 0 in slot 35']
+    got, notes = store.machines(lock, {'b': [8]}, SLOTS, ())    # b needs more knobs: it moves, and says so
+    assert got == {'b': [36]} and any(n.startswith('b: machine 0 needs 8 knobs, which slot 43 has not') for n in notes)
+    assert refused(store.machines, {}, {'e': [9]}, SLOTS, ()) == \
+        'e asks for a machine with 9 knobs, and no machine slot with that many is free'
+
+
+def test_machine_lockfiles_it_refuses():
+    lock = store.fresh(DEV)
+    store.machines(lock, {'a': [8, 8]}, SLOTS)
+    store.check_lock(json.loads(json.dumps(lock)), DEV)
+    for edit in (lambda l: l['machines'][1].update(slot=35), lambda l: l['machines'][1].update(index=0),
+                 lambda l: l['machines'][0].pop('knobs'), lambda l: l.update(freed_machines={}),
+                 lambda l: l['machines'][0].update(slot='35')):
+        bad = json.loads(json.dumps(lock))
+        edit(bad)
+        assert refused(store.check_lock, bad, DEV).startswith('lockfile: ')
+
+
+def test_pool_ids_follow_their_mods_and_run_out_then_freed_ones_are_given_again():
+    lock = {}
+    got, notes = store.pool_ids(lock, 'smpl', {'a': 2, 'b': 1}, [1, 4])
+    assert got == {'a': [1, 2], 'b': [3]}
+    got, notes = store.pool_ids(lock, 'other', {'a': 1}, [10, 10])           # pools are apart
+    assert got == {'a': [10]}
+    got, notes = store.pool_ids(lock, 'smpl', {'b': 1, 'c': 1}, [1, 4])       # a out: 1, 2 kept for it
+    assert got == {'b': [3], 'c': [4]} and len(lock['freed_pool_ids']) == 2
+    got, notes = store.pool_ids(lock, 'smpl', {'b': 1, 'c': 1, 'd': 1}, [1, 4])
+    assert got == {'b': [3], 'c': [4], 'd': [1]} and notes[0] == 'pool smpl: ids freed by a given out again'
+    assert refused(store.pool_ids, {}, 'smpl', {'e': 5}, [1, 4]) == \
+        'e asks for more ids from the pool smpl than it has free (1..4)'
+
+
+def test_pool_lockfiles_it_refuses():
+    lock = store.fresh(DEV)
+    store.pool_ids(lock, 'smpl', {'a': 2}, [1, 4])
+    store.check_lock(json.loads(json.dumps(lock)), DEV)
+    for edit in (lambda l: l['pool_ids'][1].update(id=1), lambda l: l['pool_ids'][1].update(index=0),
+                 lambda l: l['pool_ids'][0].pop('pool'), lambda l: l.update(freed_pool_ids={}),
+                 lambda l: l['pool_ids'][0].update(id='1')):
+        bad = json.loads(json.dumps(lock))
+        edit(bad)
+        assert refused(store.check_lock, bad, DEV).startswith('lockfile: ')
+
+
 if __name__ == '__main__':
     for name, fn in sorted(globals().items()):
         if name.startswith('test_'):

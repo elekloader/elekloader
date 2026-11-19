@@ -1,0 +1,19 @@
+{
+ "id": "pad-check",
+ "version": "0.1",
+ "title": "Pad check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for core-ar2's ev_pad and LEDs on the Analog Rytm MKII, on screen. BD's strikes are taken (no sound, no note, no track select); RS's releases are answered 1 but stock keeps them, since it played the strike; after an odd number of BD strikes the BD pad and trig key 1 show the mod's colours, after an even number stock's again. A bottom bar shows each pad's strike, release and pressure counts, the current track, the last strike's flags and velocity, and the pads taken.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": ["check.c"],
+ "subscribe": [
+  {"event": "ev_pad", "fn": "pc_pad", "order": 60},
+  {"event": "ev_leds", "fn": "pc_leds", "order": 60},
+  {"event": "ev_draw", "fn": "pc_draw", "order": 60}
+ ],
+ "resources": {"core": "0.15"},
+ "requires": ["core"]
+}

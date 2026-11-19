@@ -123,6 +123,11 @@ export async function build(stock: File, modFiles: File[], version: string | nul
     }
     if (linked.knobs.size) man.knobs = Object.fromEntries(linked.knobs)
     for (const n of linked.knobNotes) log('knobs: ' + n)
+    if (linked.machines.size) man.machines = Object.fromEntries(linked.machines)
+    for (const n of linked.machineNotes) log('machines: ' + n)
+    if (linked.poolIds.size) man.pool_ids = Object.fromEntries([...linked.poolIds].map(([p, got]) => [p, Object.fromEntries(got)]))
+    for (const n of linked.poolNotes) log('id pools: ' + n)
+    if (linked.pages.size) man.pages = Object.fromEntries(linked.pages)
   }
   if (mods.length === 1 && !v2.length) {
     const b = get(mods[0].doc, 'build')

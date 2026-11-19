@@ -78,6 +78,13 @@ class Device:
                                  # uses itself; ids from `own` up are a mod's own, so two mods' entries
                                  # may not share one; an own_only table's entries take only those
                                  # (link.Mod2.id_ranges, link.check)
+    machine_slots: tuple = ()    # (table, ((core version, {slot: knobs}), ...)): the slots a mod's
+                                 # "machine_knobs" are given from (link.py, store.machines), from that core
+                                 # version on (the last that applies); knobs: how many knobs from the
+                                 # first have a record there. `table`'s entries name their slot at the
+                                 # offset its slot_claims gives
+    page_ids: tuple = ()         # (first, ((table, at), ...)): a mod's "pages" are ids from `first` up,
+                                 # past those a contribution to `table` names itself at +`at` (link.py)
     drive_knobs: tuple = ()      # (lo, hi): with param_ids, the knob ids +Drive mods' "knobs" runs
                                  # take (the boot linker's, desc.py's knob record); a flashed build's
                                  # runs stay below lo and no flashed entry may name them (link.check)
@@ -132,6 +139,15 @@ class Device:
             if version_key(core_version) >= version_key(v):
                 area = a
         return area
+
+    def machine_slots_for(self, core_version):
+        """{slot: knobs} a mod's "machine_knobs" are given from with a core of this version ({}: none)."""
+        from ..elemod import version_key
+        out = {}
+        for v, slots in (self.machine_slots[1] if self.machine_slots else ()):
+            if version_key(core_version) >= version_key(v):
+                out = slots
+        return dict(out)
 
     def image_end(self, release):
         """Where an appended blob loads: the stock main OS's end."""

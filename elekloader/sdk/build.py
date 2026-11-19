@@ -46,6 +46,15 @@ mod.json:
                                                      the mod 4 ids from 555 up; __knobs is the
                                                      first (`.short __knobs + 2` in a const
                                                      table is an abs16)
+     "machine_knobs": [8, 4],                         machine slots by count (core-ar2): the
+                                                     linker gives each machine a slot with that
+                                                     many knobs; __machines + i is the i-th slot
+     "pages": 2,                                      page ids by count (core-ar2): ids from 12
+                                                     up; __pages is the first
+     "id_pools": {"smpl": [1, 30]},                   ids this mod hands out to others (any device
+                                                     with a lockfile), kept in the lockfile
+     "pool_ids": {"smpl": 2},                         2 ids from another mod's pool; __pool_smpl + i
+                                                     is the i-th
      "ports": {"1.54": {"defsym": {...}, "sites": [...]}}}   optional: other OS versions
 
 A port builds the same mod for another release of the device: for that OS,
@@ -685,6 +694,13 @@ def build(mdir, stock_path, out_dir=None, extra=None):
         doc['storage'] = mod['storage']
     if mod.get('knobs'):                    # knob ids the linker gives out (link.py, store.knobs)
         doc['knobs'] = mod['knobs']
+    if mod.get('machine_knobs'):            # machine slots the linker gives out (link.py, store.machines)
+        doc['machine_knobs'] = mod['machine_knobs']
+    if mod.get('pages'):                    # page ids the linker gives out (link.py)
+        doc['pages'] = mod['pages']
+    for k in ('id_pools', 'pool_ids'):      # id pools: a mod's to hand out, a mod's ids from one (link.py)
+        if mod.get(k):
+            doc[k] = mod[k]
     if mod.get('events') is not None:       # the standard event set its subscriptions name
         doc['events'] = mod['events']
     if mod.get('std'):                      # a core's map: standard event -> its table

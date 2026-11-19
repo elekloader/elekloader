@@ -1,0 +1,23 @@
+{
+ "id": "voiceio-check",
+ "version": "0.1",
+ "title": "Voice I/O check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for core-ar2's note ends, track mutes and DIN MIDI out on the Analog Rytm MKII, on screen. BD VIO (slot 44, BD voice) plays as BD CLASSIC and counts core_voice_trigged and core_voice_released per block; on each release its engine sends a DIN note-off from the audio interrupt. PLAYMODE shows or hides a bar: T trigs, R releases, C cuts, M the track mutes (core_track_mutes, hex), D DIN sends from the UI task as sent/refused, I those from the engine, U core_midi_din_up. QPER toggles the BD track's mute through core_set_track_mutes; FLTR sends a DIN note-on on press and a note-off on release.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": ["check.c"],
+ "contribute": [
+  {"to": "core_machines", "order": 50, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:vio_machine", 0]]}
+ ],
+ "subscribe": [
+  {"event": "ev_tick", "fn": "vio_tick", "order": 60},
+  {"event": "ev_draw", "fn": "vio_draw", "order": 60},
+  {"event": "ev_key", "fn": "vio_key", "order": 60}
+ ],
+ "resources": {"core": "0.15"},
+ "requires": ["core"]
+}

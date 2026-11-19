@@ -212,10 +212,19 @@ DEVICE = Device(
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx over MIDI DIN (not USB)'),
     slot_claims=(('core_machines', 0, 53, 'machine'),),   # a machine's descriptor names its slot at +0
+    # the hidden slots a mod's "machine_knobs" are given (core-ar2 0.5: 34..43, 0.13: 34..52), with how many
+    # knobs from LEV (sound index 9) on have a record there (stock 1.74's records; test_rytm_mk2)
+    machine_slots=('core_machines', (
+        ('0.5', {34: 3, 35: 8, 36: 8, 37: 8, 38: 8, 39: 8, 40: 8, 41: 8, 42: 8, 43: 5}),
+        ('0.13', {34: 3, 35: 8, 36: 8, 37: 8, 38: 8, 39: 8, 40: 8, 41: 8, 42: 8, 43: 5,
+                  44: 8, 45: 4, 46: 8, 47: 5, 48: 4, 49: 4, 50: 5, 51: 8, 52: 0}))),
+    # a mod's "pages": ids from 12 up (stock's are 0..11), past the ids entries of these tables name
+    page_ids=(12, (('core_pages', 0), ('core_page_fns', 0), ('core_view_pages', 4))),
     # core-ar2's knob ids: stock's records are 0..468, core's lockable parameters take 469..554
     # (469 + code - 42, lock.c) and a mod's own ids start at 555 (pages.h CORE_PARAM_LOCK_FIRST)
     param_ids=(555, (469, 554, "core's lockable parameters' ids"),
-               (('core_params', False), ('core_param_locks', True), ('core_knob_looks', True))),
+               (('core_params', False), ('core_param_locks', True), ('core_knob_looks', True),
+                ('core_knob_faces', False))),
     # +Drive mods' knob ids (drive-loader 0.8, dl.h DL_KNOB_LO/HI): far past any flashed build's runs from
     # 555, as the A4's
     drive_knobs=(0x4000, 0x7FFF),

@@ -1,0 +1,21 @@
+{
+ "id": "drive-check",
+ "version": "0.1",
+ "title": "Drive check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for core-ar2's mod folders in the +Drive browser on the Analog Rytm MKII, checked on screen and in RAM. A folder DRIVE CHECK after the +Drive root's entries in SETTINGS > SAMPLES and the slot browser, whose listings arrive a second after they are asked for (core_drive_refill), as a mod waiting on another device's answer: the folder holds a subfolder SUB and two files, SUB three files and a way back up. LOAD TO PROJ takes the files with an even index and refuses the others. Its record after the magic DRV1 counts the calls, the asks, the refills and the loads.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": ["check.c"],
+ "contribute": [
+  {"to": "core_drive_folders", "order": 50, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dc_folder", 0]]}
+ ],
+ "subscribe": [
+  {"event": "ev_tick", "fn": "dc_tick", "order": 60}
+ ],
+ "resources": {"core": "0.15"},
+ "requires": ["core"]
+}

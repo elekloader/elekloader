@@ -360,10 +360,49 @@ KNOB_LOCKS = {
              'freed_knobs': [{'mod': 'b', 'first': 557, 'count': 3}]},
 }
 
+# machine slots (store.machines): each run is steps of [want ({mod: [knobs, ...]}), slots ({slot: knobs}), direct]
+SL = {'34': 3, '35': 8, '36': 8, '43': 5, '45': 4}
+MACHINE_RUNS = {
+    'best fit past direct claims, kept, freed, back and given again': [
+        [{'a': [8, 4], 'b': [5]}, SL, [36]], [{'b': [5], 'c': [3]}, SL, [36]],
+        [{'b': [5], 'c': [3], 'd': [8]}, SL, [36]], [{'b': [8]}, SL, []], [{'b': [8], 'a': [8, 4]}, SL, [43]],
+        [{'e': [9]}, SL, []]],
+    'a claim by number on a held slot': [[{'a': [8]}, SL, []], [{'a': [8]}, SL, [35]]],
+}
+MACHINE_LOCKS = {
+    'one slot twice': {'machines': [{'mod': 'a', 'index': 0, 'slot': 35, 'knobs': 8},
+                                    {'mod': 'b', 'index': 0, 'slot': 35, 'knobs': 8}], 'freed_machines': []},
+    'one machine twice': {'machines': [{'mod': 'a', 'index': 0, 'slot': 35, 'knobs': 8},
+                                       {'mod': 'a', 'index': 0, 'slot': 36, 'knobs': 8}], 'freed_machines': []},
+    'freed not a list': {'machines': [], 'freed_machines': {}},
+    'no knobs': {'machines': [{'mod': 'a', 'index': 0, 'slot': 35}], 'freed_machines': []},
+    'good': {'machines': [{'mod': 'a', 'index': 0, 'slot': 35, 'knobs': 8}],
+             'freed_machines': [{'mod': 'b', 'index': 1, 'slot': 36, 'knobs': 2}]},
+}
+
+# id pools (store.pool_ids): each run is steps of [pool, want ({mod: n}), [first, last]]
+POOL_RUNS = {
+    'lowest ids, kept, freed, back and given again': [
+        ['smpl', {'a': 2, 'b': 1}, [1, 4]], ['other', {'a': 1}, [10, 10]], ['smpl', {'b': 1, 'c': 1}, [1, 4]],
+        ['smpl', {'b': 1, 'c': 1, 'a': 2}, [1, 4]], ['smpl', {'b': 1, 'c': 1, 'd': 1}, [1, 4]],
+        ['smpl', {'e': 5}, [1, 4]]],
+}
+POOL_LOCKS = {
+    'one id twice': {'pool_ids': [{'pool': 's', 'mod': 'a', 'index': 0, 'id': 1},
+                                  {'pool': 's', 'mod': 'b', 'index': 0, 'id': 1}], 'freed_pool_ids': []},
+    'one index twice': {'pool_ids': [{'pool': 's', 'mod': 'a', 'index': 0, 'id': 1},
+                                     {'pool': 's', 'mod': 'a', 'index': 0, 'id': 2}], 'freed_pool_ids': []},
+    'freed not a list': {'pool_ids': [], 'freed_pool_ids': {}},
+    'no pool': {'pool_ids': [{'mod': 'a', 'index': 0, 'id': 1}], 'freed_pool_ids': []},
+    'good': {'pool_ids': [{'pool': 's', 'mod': 'a', 'index': 0, 'id': 1}, {'pool': 't', 'mod': 'a', 'index': 0, 'id': 1}],
+             'freed_pool_ids': [{'pool': 's', 'mod': 'b', 'index': 1, 'id': 2}]},
+}
+
 
 def main():
     out = {'runs': {}, 'lock_runs': {}, 'cc_runs': {}, 'init_runs': {}, 'handle_runs': {}, 'kind_runs': {},
-           'locks': {}, 'kind_locks': {}, 'flags': {}, 'decls': {}, 'knob_runs': {}, 'knob_locks': {}}
+           'locks': {}, 'kind_locks': {}, 'flags': {}, 'decls': {}, 'knob_runs': {}, 'knob_locks': {},
+           'machine_runs': {}, 'machine_locks': {}, 'pool_runs': {}, 'pool_locks': {}}
     def run(lock, steps, core, dev=DEV):
         res = []
         for decls in steps:
@@ -496,6 +535,42 @@ def main():
             out['knob_locks'][name] = {'lock': lock, 'error': None}
         except ModError as e:
             out['knob_locks'][name] = {'lock': lock, 'error': str(e)}
+    for name, steps in MACHINE_RUNS.items():
+        for start in ('none', 'fresh'):
+            lock, res = ({} if start == 'none' else store.fresh(DEV)), []
+            for want, slots, direct in steps:
+                try:
+                    got, notes = store.machines(lock, want, {int(k): v for k, v in slots.items()}, direct)
+                    res.append({'lock': json.loads(json.dumps(lock)), 'slots': got, 'notes': notes,
+                                'layout_id': store.layout_id(lock) if start == 'fresh' else None})
+                except ModError as e:
+                    res.append({'error': str(e)})
+            out['machine_runs']['%s (%s)' % (name, start)] = {'start': start, 'steps': steps, 'results': res}
+    for name, extra in MACHINE_LOCKS.items():
+        lock = dict(store.fresh(DEV), **extra)
+        try:
+            store.check_lock(lock, DEV)
+            out['machine_locks'][name] = {'lock': lock, 'error': None}
+        except ModError as e:
+            out['machine_locks'][name] = {'lock': lock, 'error': str(e)}
+    for name, steps in POOL_RUNS.items():
+        for start in ('none', 'fresh'):
+            lock, res = ({} if start == 'none' else store.fresh(DEV)), []
+            for pool, want, span in steps:
+                try:
+                    got, notes = store.pool_ids(lock, pool, want, span)
+                    res.append({'lock': json.loads(json.dumps(lock)), 'ids': got, 'notes': notes,
+                                'layout_id': store.layout_id(lock) if start == 'fresh' else None})
+                except ModError as e:
+                    res.append({'error': str(e)})
+            out['pool_runs']['%s (%s)' % (name, start)] = {'start': start, 'steps': steps, 'results': res}
+    for name, extra in POOL_LOCKS.items():
+        lock = dict(store.fresh(DEV), **extra)
+        try:
+            store.check_lock(lock, DEV)
+            out['pool_locks'][name] = {'lock': lock, 'error': None}
+        except ModError as e:
+            out['pool_locks'][name] = {'lock': lock, 'error': str(e)}
     path = os.path.join(ROOT, 'js', 'test', 'store-vectors.json')
     with open(path, 'w') as fh:
         json.dump(out, fh, indent=1)

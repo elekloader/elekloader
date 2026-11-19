@@ -74,7 +74,10 @@ A format-2 mod is a relocatable object:
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}`; `"std": true` makes `to` a standard event |
 | `events`, `std` | a mod's `"std1"`; a core's map of standard events to its tables (ADAPTING.md, "Standard events (std1)") |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
-| `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII, core-ar2 0.13; "Knob ids" below) |
+| `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII, core-ar2 0.13; ADAPTING.md, "Knob ids") |
+| `machine_knobs` | machines this mod adds by count, each the knobs it needs: up to 64, 0..16 each (ADAPTING.md, "Machine slots and page ids") |
+| `pages` | a count of page ids, 0..256 (ADAPTING.md, "Machine slots and page ids") |
+| `id_pools`, `pool_ids` | ids this mod hands out, `{"name": [first, last]}` (0..65535, at most 4096), and ids it asks for from another mod's pool, `{"name": n}` (ADAPTING.md, "Id pools") |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4mk2 0.1; "Mod storage" below) |
 | `sharc` | Digitone II 1.12 only: compiled code for the DSP ("Digitone II SHARC mod" below) |
 | `sharc_raw` | Digitakt II 1.17 only: raw additions to the DSP's boot stream ("Digitakt II raw SHARC payload" below) |
@@ -267,7 +270,8 @@ each program on its own.
    When a mod declares `storage`, the linker places the fields from the
    build's lockfile ("Mod storage" below) and defines each field's `sym`
    as an absolute symbol, its descriptor. When a mod declares `knobs`, the
-   linker gives it its run of ids ("Knob ids" below).
+   linker gives it its run of ids, and likewise for `machine_knobs`, `pages`
+   and `pool_ids` (ADAPTING.md, "Knob ids" and after).
    When a mod imports `core_desc`, the linker also writes the build
    descriptor and gives tables spare entries (DRIVE.md, "The build descriptor").
 4. **Relocates** the sections, the table entries and the sites.
@@ -487,29 +491,6 @@ imports `core_fx_lfo_dst` gets that as a kit field (7 bits); in a build
 without one the symbol is 0 and the field is not placed. docs/ADAPTING.md ("Mod storage
 (core-ar2 0.2, Analog Rytm MKII)" and "Mod storage (core-a4mk2 0.1, Analog
 Four MKII)") has the rest.
-
-### Knob ids
-
-On a device whose profile gives mods knob ids (`param_ids`: the Analog Rytm
-MKII's start at 555, the Analog Four MKII's 0x200), a mod declares
-`"knobs": n` and the linker gives it n ids in a row, the first its own
-symbol `__knobs`. A relocation to `__knobs` is an `abs32` or an `abs16` with
-an addend of 0..n-1, else refused, as is `"knobs"` on a device without
-`param_ids` or a mod that defines `__knobs` itself.
-
-The linker (`store.knobs`) gives the runs from
-the first id up, by mod id, past every id a mod's `core_params` or
-`core_param_locks` entry names in its own bytes, and checks the linked
-entries again with their runs. The lockfile keeps them in `knobs` and
-`freed_knobs` (`mod`, `first`, `count`) and `next_knob`, none of them in
-the layout ID. A mod keeps its run while its count holds; one that leaves
-keeps it in `freed_knobs` and gets it back when it returns; one whose count
-changes keeps its first id when the new run has room there; any other takes
-never-used ids from `next_knob` up. Only when those run out (past 65535,
-which an `abs16` holds; the A4's 0x3fff) are freed runs
-given out again. A build whose core keeps no lockfile gets the same ids for
-the same mods. The build's manifest carries the runs as `knobs` (`{mod:
-[first, count]}`).
 
 ### DSP code
 

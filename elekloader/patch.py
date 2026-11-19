@@ -137,6 +137,16 @@ def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock
             man['knobs'] = linked.knobs
         for n in linked.knob_notes:
             log('knobs: ' + n)
+        if linked.machines:
+            man['machines'] = linked.machines
+        for n in linked.machine_notes:
+            log('machines: ' + n)
+        if linked.pool_ids:
+            man['pool_ids'] = linked.pool_ids
+        for n in linked.pool_notes:
+            log('id pools: ' + n)
+        if linked.pages:
+            man['pages'] = linked.pages
     if len(mods) == 1 and not v2 and (mods[0].doc.get('build') or {}).get('section3_sha256'):
         want = mods[0].doc['build'].get('section3_sha256')
         man['bundle_matches_build'] = want == sha(img)

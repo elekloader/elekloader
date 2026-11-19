@@ -177,6 +177,42 @@ out are the freed runs given out again. A core that keeps no lockfile still
 gets the same ids for the same mods: they are given out from the first id in
 the order of the mods' ids.
 
+Machine slots (core-ar2, from this branch's core on). A mod that declares
+`"machine_knobs": [k0, k1, ...]` gets one machine slot for each entry, a slot with
+records for at least that many knobs (from the first), and the symbol
+`__machines` + i is its i-th slot (a relocation, not a sum: the linker writes
+the slot). Unlike knob ids, a slot is stored data: every sound and kit saves
+its machine's number, so an assignment must not move. The lockfile keeps it
+in two more keys, written once a build has such a mod, outside the layout ID:
+
+     "machines": [{"mod", "index", "slot", "knobs"}],
+     "freed_machines": [{"mod", "index", "slot", "knobs"}]
+
+A machine keeps its slot while the slot has its knobs. One whose mod leaves
+the build, or that the mod no longer asks for, moves to "freed_machines" and
+gets its slot back when it returns. New machines take never-used slots first,
+the slot with the fewest knobs that has enough, then the lowest; only when
+none is left are freed slots given out again. Slots a mod claims by number
+(`machine:<n>`, a core_machines entry that names its slot) are never given
+out, and a claim on a slot the lockfile gives a mod's machine in this build is
+refused rather than moving that machine. Without a lockfile the slots are
+given out the same way, in the order of the mods' ids.
+
+Id pools (any device with a lockfile). A mod that declares `"id_pools":
+{"name": [first, last]}` hands those ids out; a mod that declares
+`"pool_ids": {"name": n}` gets n of them, and `__pool_<name>` + i is its i-th
+(a relocation, not a sum). A pool's ids are stored data (a framework mod's
+machine number in each sound, say), so an id must not move. The lockfile
+keeps them outside the layout ID:
+
+     "pool_ids": [{"pool", "mod", "index", "id"}],
+     "freed_pool_ids": [{"pool", "mod", "index", "id"}]
+
+An id stays with its mod while the mod asks for it. One the mod no longer
+asks for (or whose mod leaves the build) moves to "freed_pool_ids" and comes
+back when it returns; new ones take the lowest never-used id of the pool, and
+only when none is left are freed ids given out again (lowest first). Without
+a lockfile the ids are given out the same way, in the order of the mods' ids.
 What the +Drive keeps (docs/DRIVE.md, "+Drive storage"). The Drive Loader
 places +Drive mods' fields in the bits, lock codes and CCs the flashed build
 leaves free, from the top down, and keeps where in the unit's /mods/.store. A
@@ -613,6 +649,175 @@ def check_lock(lock, dev_key):
     if DRIVE_KEY in lock:
         check_drive(lock[DRIVE_KEY], dev_key)
     _check_knobs(lock)
+    _check_machines(lock)
+    _check_pool_ids(lock)
+
+
+def _check_machines(lock):
+    if not any(k in lock for k in ('machines', 'freed_machines')):
+        return
+    seen, slots = set(), set()
+    for k in ('machines', 'freed_machines'):
+        ms = lock.get(k)
+        if not isinstance(ms, list):
+            raise ModError('lockfile: "%s" is a list' % k)
+        for r in ms:
+            if not isinstance(r, dict) or set(r) != {'mod', 'index', 'slot', 'knobs'} \
+                    or not isinstance(r['mod'], str) or not all(_whole(r[x]) for x in ('index', 'slot', 'knobs')) \
+                    or k == 'machines' and ((r['mod'], r['index']) in seen or r['slot'] in slots):
+                raise ModError('lockfile: a bad entry in "%s"' % k)
+            if k == 'machines':
+                seen.add((r['mod'], r['index']))
+                slots.add(r['slot'])
+
+
+def _check_pool_ids(lock):
+    if not any(k in lock for k in ('pool_ids', 'freed_pool_ids')):
+        return
+    seen, ids = set(), set()
+    for k in ('pool_ids', 'freed_pool_ids'):
+        rs = lock.get(k)
+        if not isinstance(rs, list):
+            raise ModError('lockfile: "%s" is a list' % k)
+        for r in rs:
+            if not isinstance(r, dict) or set(r) != {'pool', 'mod', 'index', 'id'} \
+                    or not isinstance(r['pool'], str) or not isinstance(r['mod'], str) \
+                    or not all(_whole(r[x]) for x in ('index', 'id')) \
+                    or k == 'pool_ids' and ((r['pool'], r['mod'], r['index']) in seen
+                                            or (r['pool'], r['id']) in ids):
+                raise ModError('lockfile: a bad entry in "%s"' % k)
+            if k == 'pool_ids':
+                seen.add((r['pool'], r['mod'], r['index']))
+                ids.add((r['pool'], r['id']))
+
+
+def pool_ids(lock, pool, want, span):
+    """Give each mod in want ({mod id: n}) n ids of the pool named pool, span = [first, last],
+    in lock (changed in place; {} for a build without a lockfile). -> ({mod id: [id, ...]},
+    [notes]). Raises ModError."""
+    first, last = span
+    mine = [r for r in lock.get('pool_ids', []) if r['pool'] == pool]
+    freed0 = [r for r in lock.get('freed_pool_ids', []) if r['pool'] == pool]
+    if not want and not mine and not freed0:
+        return {}, []
+    notes, held, freed = [], [], []
+    for r in mine:
+        if r['index'] < want.get(r['mod'], 0) and first <= r['id'] <= last:
+            held.append(dict(r))
+        else:
+            freed.append(dict(r))
+            notes.append('%s: id %d of pool %s freed, kept for it until the unused ids run out'
+                         % (r['mod'], r['id'], pool))
+    freed += [dict(r) for r in freed0 if first <= r['id'] <= last]
+    kept = {(r['mod'], r['index']) for r in held}
+    for mod in sorted(want):
+        for i in range(want[mod]):
+            if (mod, i) in kept:
+                continue
+            taken = {r['id'] for r in held}
+            back = [r for r in freed if (r['mod'], r['index']) == (mod, i) and r['id'] not in taken]
+            freed = [r for r in freed if (r['mod'], r['index']) != (mod, i)]
+            if back:
+                at = back[-1]['id']
+                notes.append('%s: id %d of pool %s back' % (mod, at, pool))
+            else:
+                busy = taken | {r['id'] for r in freed}
+                fit = [v for v in range(first, last + 1) if v not in busy]
+                if not fit and freed:
+                    notes.append('pool %s: ids freed by %s given out again'
+                                 % (pool, ', '.join(sorted({r['mod'] for r in freed}))))
+                    freed = []
+                    fit = [v for v in range(first, last + 1) if v not in taken]
+                if not fit:
+                    raise ModError('%s asks for more ids from the pool %s than it has free (%d..%d)'
+                                   % (mod, pool, first, last))
+                at = fit[0]
+                notes.append('%s: id %d of pool %s' % (mod, at, pool))
+            held.append({'pool': pool, 'mod': mod, 'index': i, 'id': at})
+    lock['pool_ids'] = sorted([r for r in lock.get('pool_ids', []) if r['pool'] != pool] + held,
+                              key=lambda r: (r['pool'], r['id']))
+    lock['freed_pool_ids'] = [r for r in lock.get('freed_pool_ids', []) if r['pool'] != pool] + freed
+    out = {}
+    for r in sorted(held, key=lambda r: (r['mod'], r['index'])):
+        out.setdefault(r['mod'], []).append(r['id'])
+    return out, notes
+
+
+def machines(lock, want, slots, direct=()):
+    """Give each machine a mod asks for (want: {mod id: [knobs, ...]}) a slot of slots
+    ({slot: the knobs it has records for}) in lock (changed in place; {} for a build without a
+    lockfile), never one of direct (slots mods claim by number). -> ({mod id: [slot, ...]},
+    [notes]). Raises ModError."""
+    had, freed0 = lock.get('machines', []), lock.get('freed_machines', [])
+    if not want and not had and not freed0:
+        return {}, []
+    direct = set(direct)
+    notes, held, freed = [], [], []
+
+    def asked(r):
+        ks = want.get(r['mod'], [])
+        return r['index'] < len(ks)
+    for r in had:
+        if asked(r) and r['slot'] in direct:
+            raise ModError('machine slot %d is claimed by number, and the lockfile gives it to %s\'s machine %d '
+                           '(saved sounds name the slot): give the claim another slot'
+                           % (r['slot'], r['mod'], r['index']))
+        k = want[r['mod']][r['index']] if asked(r) else None
+        if k is None and r['slot'] in direct:
+            notes.append('slot %d, freed by %s, is claimed by number' % (r['slot'], r['mod']))
+            continue
+        if k is not None and r['slot'] in slots and slots[r['slot']] >= k:
+            held.append(dict(r, knobs=k))
+            continue
+        freed.append(dict(r))
+        if k is not None:
+            notes.append('%s: machine %d needs %d knobs, which slot %d has not: it moves, and sounds saved '
+                         'with it load another machine' % (r['mod'], r['index'], k, r['slot']))
+        else:
+            notes.append('%s: machine %d freed slot %d, kept for it until the unused slots run out'
+                         % (r['mod'], r['index'], r['slot']))
+    for r in freed0:
+        if r['slot'] in direct:
+            notes.append('slot %d, freed by %s, is claimed by number' % (r['slot'], r['mod']))
+        else:
+            freed.append(dict(r))
+    kept = {(r['mod'], r['index']) for r in held}
+    for mod in sorted(want):
+        for i, k in enumerate(want[mod]):
+            if (mod, i) in kept:
+                continue
+            taken = direct | {r['slot'] for r in held}
+            back = [r for r in freed if (r['mod'], r['index']) == (mod, i)
+                    and r['slot'] not in taken and slots.get(r['slot'], -1) >= k]
+            freed = [r for r in freed if (r['mod'], r['index']) != (mod, i)]
+            if back:
+                at = back[-1]['slot']
+                notes.append('%s: machine %d back in slot %d' % (mod, i, at))
+            else:
+                at = None
+                for again in (False, True):
+                    if again:
+                        if not freed:
+                            break
+                        notes.append('machine slots freed by %s given out again'
+                                     % ', '.join(sorted({r['mod'] for r in freed})))
+                        freed = []
+                    busy = taken | {r['slot'] for r in freed}
+                    fit = sorted((slots[s], s) for s in slots if s not in busy and slots[s] >= k)
+                    if fit:
+                        at = fit[0][1]
+                        break
+                if at is None:
+                    raise ModError('%s asks for a machine with %d knobs, and no machine slot with that many is free'
+                                   % (mod, k))
+                notes.append('%s: machine %d in slot %d' % (mod, i, at))
+            held.append({'mod': mod, 'index': i, 'slot': at, 'knobs': k})
+    lock['machines'] = sorted(held, key=lambda r: r['slot'])
+    lock['freed_machines'] = freed
+    out = {}
+    for r in sorted(held, key=lambda r: (r['mod'], r['index'])):
+        out.setdefault(r['mod'], []).append(r['slot'])
+    return out, notes
 
 
 def check_drive(d, dev_key):

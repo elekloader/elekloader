@@ -27,6 +27,24 @@ int core_midi_try_send(int len, const unsigned char *msg);
  * first thing core_midi_try_send checks). Any task or interrupt. */
 int core_usb_midi_up(void);
 
+/* core 0.15: DIN MIDI out and the track mutes */
+
+/* DIN MIDI out: a whole message (1..256 bytes) into stock's DIN ring, now
+ * or never: 1 when it went in, 0 when the ring had no room for it or the
+ * MIDI OUT port is not a MIDI port (OUT PORT FUNC DIN24 or DIN48). Never
+ * waits; any task or interrupt. Messages go out whole and in order, each
+ * between two of stock's own (clock, notes). */
+int core_midi_din_try_send(int len, const unsigned char *msg);
+/* 1 while OUT PORT FUNC is MIDI (read at each ev_tick), else 0 */
+int core_midi_din_up(void);
+
+/* the track mutes, bit t for track t (0..12, 12 the FX track), as the mute
+ * screens show them; core_set_track_mutes sets them as Overbridge's settings
+ * write does (the engine and the screens follow, no MIDI goes out). UI
+ * task. */
+unsigned core_track_mutes(void);
+void core_set_track_mutes(unsigned mask);
+
 /* the UI's current kit (0..127), track (0..12, 12 the FX track) and pattern
  * (0..127), -1 for none; and their items for core_store_get/set: the live
  * kit, the current track's sound in it (0 on the FX track), the live

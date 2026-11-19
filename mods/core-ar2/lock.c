@@ -53,6 +53,10 @@
 #define FX_TRACK 12
 #define LIST_APPEND ((void (*)(void *, int *))0x40197a94)   /* (vector, &id) */
 #define RANDOM ((unsigned (*)(void))0x4002a6e0)   /* as stock's randomize uses */
+#define ID_OWNER ((int (*)(int))0x40006eca)        /* a stock id's owner: its record's +0 */
+#define OWNER_NAME ((uintptr_t (*)(int))0x40007296)  /* an owner's short name (in %d0) */
+#define FIRST_OWNER 0x35                      /* the owners named by category: AMP, SAMP, FILT, */
+#define LAST_OWNER 0x3e                       /* REV, DEL, COMP, DIST, LFO, TRIG, META */
 
 struct core_lock_param {
     unsigned field;
@@ -80,6 +84,8 @@ static const struct core_lock_param *by_code[LAST_CODE + 1];
 static unsigned char lfo_ok[LAST_CODE + 1];
 static unsigned char route_ok[LAST_CODE + 1];
 static unsigned char kit_ok[LAST_CODE + 1];      /* a kit field: the FX track's */
+static unsigned char used[LAST_CODE + 1 - FIRST_CODE];   /* the codes with a parameter */
+static int n_used;
 static volatile int made;
 
 /* and its strings, cut to what stock shows: stock draws a short name with a
@@ -110,6 +116,8 @@ static void make(void)
         if ((code = c[1] & 0xff) >= FIRST_CODE && code <= LAST_CODE)
             for (p = core_lock_params; *p; p++)
                 if ((*p)->field == c[0]) {
+                    if (!by_code[code])
+                        used[n_used++] = code;
                     by_code[code] = *p;
                     lfo_ok[code] = !!(c[1] & LFO);
                     route_ok[code] = !!(c[1] & ROUTE);
@@ -257,6 +265,53 @@ int core_pseudo_slot(int id)
  * parameters, by code; the LFO's list (kind 0x600, 0x400 set) those with
  * LFO, the velocity and aftertouch lists (kind 0x200) those with ROUTE.
  * For the FX set (fx): the FX LFO's list, the kit parameters with LFO. */
+static int same_category(const char *a, const char *b)
+{
+    int i;
+    for (i = 0; i < CATEGORY_MAX; i++) {
+        if (a[i] != b[i])
+            return 0;
+        if (!a[i])
+            return 1;
+    }
+    return 1;
+}
+
+/* (0.15) an id's category: a stock id's owner's name (SAMP, FILT, AMP,
+ * as the menu's label: 0x40007296 of 0x40006eca), a pseudo id's own; 0 for
+ * a machine's parameters and a pseudo id with none */
+static const char *category_of(int id)
+{
+    unsigned code;
+    int owner;
+    if (id >= PSEUDO)
+        return (code = pseudo_code(id)) != 0 && categories[code - FIRST_CODE][0] ? categories[code - FIRST_CODE] : 0;
+    if (id <= 0)
+        return 0;
+    owner = ID_OWNER(id);
+    return owner >= FIRST_OWNER && owner <= LAST_OWNER ? (const char *)OWNER_NAME(owner) : 0;
+}
+
+/* (0.15) the id just appended moves to after the list's last entry of its
+ * category, so SAMP: SMPL Machine C sits after SAMP's own; one whose
+ * category no entry has stays at the end. The list holds ids, and what a
+ * pick stores is the id's slot (0x400aa32a, 0x400aa546), never an index. */
+static void place(void *vector, int id)
+{
+    int *b = ((int **)vector)[0], n = (int)(((int **)vector)[1] - b), i, at = -1;
+    const char *cat = category_of(id), *c;
+    if (!cat || n < 2 || b[n - 1] != id)
+        return;
+    for (i = 0; i < n - 1; i++)
+        if ((c = category_of(b[i])) != 0 && same_category(c, cat))
+            at = i;
+    if (at < 0)
+        return;
+    for (i = n - 1; i > at + 1; i--)
+        b[i] = b[i - 1];
+    b[at + 1] = id;
+}
+
 void core_dst_append(void **list, unsigned kind, int fx)
 {
     int code, id;
@@ -265,6 +320,7 @@ void core_dst_append(void **list, unsigned kind, int fx)
                : !is_kit(code) && (kind & 0x400 ? lfo_param(code) != 0 : route_param(code) != 0)) {
             id = PSEUDO + code - FIRST_CODE;
             LIST_APPEND(*list, &id);
+            place(*list, id);
         }
 }
 
@@ -301,14 +357,21 @@ const struct core_lock_param *core_lock_by_id(int id, unsigned *code)
 }
 
 /* (0.9) the same among the sound's parameters (kit 0) or the FX track's
- * (kit 1): a sound's page and a FX page may give the same id */
+ * (kit 1): a sound's page and a FX page may give the same id. Only the
+ * codes a parameter has are searched: stock asks this for every knob it
+ * draws with a trig held, about a hundred times a screen */
 const struct core_lock_param *core_lock_by_id_in(int id, unsigned *code, int kit)
 {
+    int i;
     if (!id)
         return 0;
-    for (*code = FIRST_CODE; *code <= LAST_CODE; ++*code)
-        if (param(*code) && param(*code)->id == id && (kit < 0 || kit == is_kit(*code)))
-            return param(*code);
+    if (!made)
+        make();
+    for (i = 0; i < n_used; i++) {
+        *code = used[i];
+        if (by_code[*code]->id == id && (kit < 0 || kit == kit_ok[*code]))
+            return by_code[*code];
+    }
     return 0;
 }
 
@@ -444,6 +507,9 @@ const struct core_lock_param *core_lock_set_param(void *set, int id, unsigned *c
 {
     int fx;
     const struct core_lock_param *p;
+    *item = 0;
+    if (!core_lock_by_id_in(id, code, -1))   /* no parameter has the id: before the item's stock calls */
+        return 0;
     if (!(*item = core_lock_item(set, &fx)) || !(p = core_lock_by_id_in(id, code, fx)) ||
         (fx ? core_lock_fx_takes(id) : core_lock_stock_takes(id, *item)))
         return 0;
@@ -456,6 +522,9 @@ static const struct core_lock_param *core_lock_knob_param(void *set, int id, uns
 {
     int fx;
     const struct core_lock_param *p;
+    *s = 0;
+    if (!core_lock_by_id_in(id, code, -1))
+        return 0;
     *s = core_lock_item(set, &fx);
     if (!(p = core_lock_by_id_in(id, code, fx)) ||
         (fx ? core_lock_fx_takes(id) : *s && core_lock_stock_takes(id, *s)))
@@ -514,6 +583,22 @@ int core_reload(void *view, int track, int **ids, int d)
 unsigned core_param_lock_label(int id);         /* rows.c (0.11) */
 unsigned core_param_lock_name(int id);
 
+/* (0.15) a stock id's face for the set's sound (looks.c) */
+struct core_knob_face {
+    const char *label, *name;
+};
+const struct core_knob_face *core_knob_face(int id, void *sound);
+
+static const struct core_knob_face *set_face(void *set, int id)
+{
+    int fx;
+    unsigned char *s;
+    if (id <= 0 || (id >= 469 && id < 555))    /* (0.15) own ids take faces too */
+        return 0;
+    s = core_lock_item(set, &fx);
+    return core_knob_face(id, fx ? 0 : s);
+}
+
 /* (0.11) a mod's own id (core_param_locks, from 555) shows the label and
  * name its entry gives, for any set: stock would read record 0 (ERR) */
 unsigned core_knob_label(void *set, int id)
@@ -521,6 +606,9 @@ unsigned core_knob_label(void *set, int id)
     unsigned code, l;
     unsigned char *s;
     const struct core_lock_param *p = core_lock_knob_param(set, id, &code, &s);
+    const struct core_knob_face *f = set_face(set, id);
+    if (f && f->label)                  /* (0.15) a face first: a framework's machine names its knob */
+        return (unsigned)f->label;
     if (p && p->short_name)
         return (unsigned)shorts[code - FIRST_CODE];
     if ((l = core_param_lock_label(id)) != 0)
@@ -575,6 +663,9 @@ unsigned core_knob_name(void *set, int id)
     unsigned code, l;
     unsigned char *s;
     const struct core_lock_param *p = core_lock_knob_param(set, id, &code, &s);
+    const struct core_knob_face *f = set_face(set, id);
+    if (f && f->name)                   /* (0.15) a face first, as core_knob_label */
+        return (unsigned)f->name;
     if (p && p->name)
         return (unsigned)names[code - FIRST_CODE];
     if ((l = core_param_lock_name(id)) != 0)
