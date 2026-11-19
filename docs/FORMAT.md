@@ -551,8 +551,7 @@ next. The manifest carries them as `pages` (`{mod: [first, count]}`).
 ### Id pools
 
 A mod may hand out ids of its own to the other mods of a build: a framework
-mod's machines, say, whose number each sound saves (smpl-machines' SMPL
-machines on the Analog Rytm MKII). It declares the pool,
+mod's machines, say, whose number each sound saves. It declares the pool,
 `"id_pools": {"smpl_machines": [1, 30]}`, and a mod that adds to it asks
 for a count, `"pool_ids": {"smpl_machines": 2}`. A relocation to
 `__pool_<name>` with addend i (`abs32` or `abs16`) is written as that mod's

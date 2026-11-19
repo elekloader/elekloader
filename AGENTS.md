@@ -73,7 +73,6 @@ python -m elekloader.patch --stock <stock.syx> --mod <core.elemod> --mod <mod.el
 | `mods/drive-loader-a4mk2/` | the A4 MKII's +Drive loader (core-a4mk2 0.9): drive-loader-ar2's link, own store |
 | `mods/machines-dn1/` | the Digitone mk1's machines (core-dn1 5.2): voices in place of FM; `sdk_alpha.c` adapts SDK machines and their pages behind SYN2 (docs/ADAPTING.md, "Machines on the Digitone") |
 | `mods/machines-dn2/` | the Digitone II's machines (core-dn2 0.2): SHARC synths and filters in FUNC+SYN, SDK machines (`sdk_alpha.c`), and the DSP dispatcher calling their kernels (`dispatch.s`; docs/MACHINES-DN2.md) |
-| `mods/smpl-machines/`, `mods/smpl-knob-c/` | the Rytm's SMPL machines (core-ar2 0.14): machines on the SMPL page (`analog-rytm-mk2/smpl.h`); `-knob-c` the shared knob C value machines ask for |
 | `mods/sdk-alpha/` | the SDK machines' part every companion shares (`machine.c`: the index, value mapping, `.present` and its caches, the voices, the glyph blit, the mono machines' live keys), built by machine-pages (1.54), machines-dn1 and machines-dn2 with their own `dev.h` and `sdk_alpha.c` |
 | `mods/digiswarm-dn1/` | DigiSwarm, a whole Digitone mod on core-dn1 3.2's exclusive audio: an effects engine for the inputs: grains, micro-loops and a looper (docs/ADAPTING.md, "Exclusive audio") |
 | `mods/digiprism-dn1/` | DigiPrism, a whole Digitone mod on core-dn1 3.2's exclusive audio: a pedal for the inputs with four reorderable modules of effects (docs/ADAPTING.md, "Exclusive audio") |
