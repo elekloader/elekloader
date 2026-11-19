@@ -51,11 +51,11 @@ struct core_knob_look {                 /* pages.h */
 
 extern const struct core_knob_look *const core_knob_looks[];   /* zero-terminated */
 
-/* (0.14) a stock knob's face, per call (pages.h). A stock id
+/* sidecar-smpl-machines: a stock knob's face, per call (pages.h). A stock id
  * (1..468) a core_knob_faces entry answers for is drawn, labelled, named and
  * ranged as the face its function returns for the sound: a framework mod
- * whose own machine takes over stock records (machines on the SMPL page's
- * records 39..46, say) shows that machine's knobs on stock's page, while the
+ * whose own machine takes over stock records (smpl-machines' SMPL machines on
+ * records 39..46) shows that machine's knobs on stock's page, while the
  * records, so the sound's slots, its p-locks, slides, LFO, MIDI and
  * storage, stay stock's. 0 from the function (or no entry): stock's. */
 struct core_knob_face {
@@ -75,7 +75,7 @@ extern const struct core_knob_faces *const core_knob_faces[];   /* zero-terminat
 /* the face of id for sound (a live sound item; 0: the current track's), or
  * 0 for stock's. lock.c asks it for the label and the name. (0.14) An own
  * id (555 up) takes a face too: a framework mod's knob whose value it keeps
- * itself shows the machine's label, name, look and
+ * itself (smpl-machines' knob C) shows the machine's label, name, look and
  * range, as a stock id under a face does. */
 const struct core_knob_face *core_knob_face(int32_t id, void *sound)
 {

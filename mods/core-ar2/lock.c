@@ -583,7 +583,7 @@ int core_reload(void *view, int track, int **ids, int d)
 unsigned core_param_lock_label(int id);         /* rows.c (0.11) */
 unsigned core_param_lock_name(int id);
 
-/* (0.14) a stock id's face for the set's sound (looks.c) */
+/* (sidecar-smpl-machines) a stock id's face for the set's sound (looks.c) */
 struct core_knob_face {
     const char *label, *name;
 };

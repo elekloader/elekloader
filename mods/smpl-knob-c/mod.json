@@ -1,0 +1,22 @@
+{
+ "id": "smpl-knob-c",
+ "version": "0.1",
+ "title": "SMPL machines: knob C",
+ "category": "Framework",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A companion of smpl-machines: a value of its own for knob C of the SMPL machines that ask for one (SMPL_OWN_C), so turning it never changes the sample stock plays (SMP's word). One lockable sound field and one knob id: p-locks, scenes, performances, the LFO, velocity and aftertouch routes and a MIDI CC come from core. Only a mod with such a machine needs it; it lists smpl-knob-c in its requires.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "storage": [{"sym": "smpl_c", "scope": "sound", "bits": 7, "lock": true, "cc": true, "lfo": true, "mod": true}],
+ "knobs": 1,
+ "resources": {"core": "0.13"},
+ "requires": ["core", "smpl-machines"],
+ "sources": ["knobc.c"],
+ "exports": ["smpl_knob_c"],
+ "contribute": [
+  {"to": "core_lock_params", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:smpl_c_param", 0]]},
+  {"to": "core_knob_faces", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:smpl_c_faces", 0]]},
+  {"to": "core_params", "order": 40, "data": "00000000", "relocs": [[0, "abs32", "sym:smpl_c_params", 0]]}
+ ]
+}

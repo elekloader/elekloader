@@ -2405,7 +2405,7 @@ const struct core_knob_faces my_faces = {39, 46, my_face};
 
 The value's text is a `core_params` entry's, which may answer stock ids.
 A mod's own ids (555 up) take faces too, for a knob whose value the mod
-keeps but whose face changes with the sound. The
+keeps but whose face changes with the sound (smpl-knob-c's knob C). The
 linker refuses an entry whose ids reach 469..554.
 
 ### Knob looks (core-ar2 0.13, Analog Rytm MKII)
@@ -3140,6 +3140,60 @@ read beside a stock parameter's (`lk_ring`) and the read's cost, and from
 and pitch (PIT) are lockable mod parameters, read on each synth voice every
 block with `core_param_values_voice` and added to the effects' return (the
 DAC words 4 and 5 of the TX block at `ev_render_out`).
+
+### SMPL machines (smpl-machines, Analog Rytm MKII)
+
+A sound's SMPL page (indices 17..24, records 39..46) is one sample layer
+every SRC machine shares. smpl-machines (mods/smpl-machines) lets a mod
+add machines there: a page of its own for the sounds that run it, and an
+engine in place of stock's sample. Ask for ids by count and add a record
+for each, with `analog-rytm-mk2/smpl.h`:
+
+```json
+"pool_ids": {"smpl_machines": 1},
+"requires": ["core", "smpl-machines"],
+"contribute": [{"to": "smpl_machines", "order": 50, "data": "00000000",
+                "relocs": [[0, "abs32", "sym:my_smpl", 0]]}]
+```
+
+```c
+SMPL_MACHINES;
+static void engine(int32_t voice, int32_t track, const int16_t *words, int32_t trig);
+const struct smpl_machine my_smpl = {
+    SMPL_MACHINE(0), "MY ENGINE", "MYEN", 0xff, SMPL_FREE, 0, 0, engine,
+    {{"HRM", "Harmonics", 0, 0, 127 << 8, 64 << 8, 0},
+     /* ... knobs B..H; a knob with label 0 is blank */}};
+```
+
+- `voices`: bit v lets voice v run it (`CORE_VOICE_*`). A track whose voice
+  is left out is not offered it.
+- `bind`, `src`: `SMPL_FREE` is chosen in the sound setup menu's SMPL
+  MACHINE row or the list TRK + SMPL opens only; `SMPL_DEFAULT` runs on AUTO for sounds of SRC machine
+  `src`; `SMPL_REQUIRED` always runs for them, is never offered, and the row doesn't turn.
+  `src` is a slot, `CORE_MACHINE(i)` for a mod's own SRC machine.
+- `engine`: called in the audio interrupt once a block for each voice that
+  runs the machine, with the track's engine words for indices 17..24
+  (value << 8, after p-locks, slides and the LFO) and `trig` 1 when the
+  voice would have started its sample. Stock's sample stays silent there.
+  0 for none: the page changes and the sample layer is silent.
+- `flags`: `SMPL_OWN_C` gives knob C a value of its own instead of SMP's
+  word (index 19), the sample slot; the mod then lists `smpl-knob-c` in
+  `requires`, whose one field every such machine shares
+  (mods/smpl-machines/README.md, "Knob C"). `SMPL_WAVEFORM` (0.3, core
+  0.14) keeps the SAMPLE view's second page, stock's waveform of the
+  sample SMP names under the machine's knobs; without it the machine has
+  one page. 0 otherwise.
+- `knobs`: per knob, as a knob face (above), plus `text(buf, value)` for
+  the value's text, 0 for a number. A knob with look 0 whose range differs
+  from the record's under it draws as a plain dial (BR's, 42), not as that
+  record (TUN's dial stops at its +24). A change to the machine, chosen or by
+  the SRC machine, writes each ranged knob's `def`, except into SMP's word,
+  which keeps the sample; a change to stock writes stock's SMPL defaults.
+
+The ids come from the build's lockfile (docs/FORMAT.md, "Id pools"), so a
+saved sound finds its machine in the next build. Choosing a machine
+writes each `def` of a knob with `min < max` into the sound
+(`core_param_set`).
 
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 
@@ -4907,7 +4961,7 @@ Some differences from an octabam build, by design:
 | `asks for knob ids ("knobs"), which the <device> does not give mods` | only a device with mod knob ids (the Analog Rytm MKII) has them | drop `"knobs"` |
 | `asks for machine slots ("machine_knobs"), which the <device> does not give mods` / `asks for page ids ("pages"), ...` | only the Analog Rytm MKII gives them out | pick fixed slots or ids, or drop the field |
 | `asks for a machine with N knobs, and no machine slot with that many is free` | every hidden slot with that many records is taken | ask for fewer knobs, or drop a machine mod |
-| `asks for ids from the pool P ("pool_ids"), which no given mod declares` | the mod that declares the pool (a framework mod) is not in the build | add that mod |
+| `asks for ids from the pool P ("pool_ids"), which no given mod declares` | the mod that declares the pool (a framework mod, such as smpl-machines) is not in the build | add that mod |
 | `the mods ask for N ids from the pool P, which has M` / `asks for more ids from the pool P than it has free` | the mods together ask a pool for more ids than it has | build with fewer of those mods |
 | `machine slot N is claimed by number, and the lockfile gives it to M's machine I` | a mod claims, by number, a slot the lockfile already gives a by-count machine; saved sounds name that slot | give the claim another slot |
 | `section X is not one elekloader places` | code or data in a section the linker does not know | C: default sections; asm: `.section .run, "ax"`, `.fast` or `.bss` |

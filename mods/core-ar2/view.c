@@ -2,8 +2,8 @@
 /* core-ar2 0.14: a view whose page went away. pages.s gives a page key's
  * view its list (stock's pages, then core_view_pages'), each page with a
  * shown; the key steps over a page while its shown answers 0. A page can be
- * hidden while the view is on it (a mod's machine with one page hides the
- * SAMPLE view's page 5), so before the view draws (pages.s,
+ * hidden while the view is on it (smpl-machines: a machine with one page
+ * hides the SAMPLE view's page 5), so before the view draws (pages.s,
  * core_sample_draw) it moves on to the next page that is shown, as the key
  * would, and the header takes that page's title; not while a stock list or
  * window is over it (the machine list's CONFIRM?), whose header that is. */
