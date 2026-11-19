@@ -209,8 +209,9 @@ def test_core_ar2_sites():
     # the pads' three (ev_pad: strike, release, pressure) and the LEDs' two (led_set's and
     # led_colour's slot colour sends), and the engine push's sound (0.15+: core_trig_sound), and
     # the mod folders' fourteen (drive.c: ten filesystem routines, LOAD TO PROJ's and CREATE
-    # DIR's calls, and the two SampleManager vtables' tick), and the SAMPLE view's draw (0.15)
-    assert len(mod['sites']) == 146
+    # DIR's calls, and the two SampleManager vtables' tick), and the SAMPLE view's draw (0.15),
+    # and the USB input's shift index (usbin.s)
+    assert len(mod['sites']) == 147
     # the sound push's arguments, followed by its PC-relative jsr to 0x4011dace, which stays
     x = [x for x in mod['sites'] if x.get('target') == 'core_trig_sound'][0]
     assert x['op'] == 'jsr' and x['addr'] == '0x4011f5f6', x
@@ -622,6 +623,33 @@ def test_core_ar2_drive_folders():
     with tempfile.TemporaryDirectory() as tmp:
         core = sdkbuild.build(os.path.join(ROOT, 'mods', 'core-ar2'), SYX, tmp)[0]
         app = sdkbuild.build(os.path.join(ROOT, 'examples', 'drive-check-ar2'), SYX, tmp)[0]
+        patch.build(SYX, [core, app], version='1.74', log=lambda *a: None)
+
+
+def test_core_ar2_usb_in_gain():
+    """The USB input's gain a mod holds: one site, the audio interrupt's load of USB TO MAIN's
+    index before its two copy loops, and usb-gain-check links (the build needs the cross
+    toolchain)."""
+    import shutil
+    import tempfile
+    from elekloader import patch
+    from elekloader.sdk import build as sdkbuild
+    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json')) as fh:
+        j = json.load(fh)
+    sites = [x for x in j['sites'] if x.get('target') == 'core_usb_in_site']
+    assert sites == [{'addr': '0x4011fc98', 'stock': '20398000ee7c', 'op': 'jsr',
+                      'target': 'core_usb_in_site'}], sites
+    assert j['sources'][-1] == 'usbin.s'
+    _r, _s, img = stock()
+    if REL.version != '1.74':
+        raise Skip('core-ar2 usbin is for 1.74')
+    o = 0x4011fc98 - DEV.main_load
+    assert img[o:o + 6].hex() == '20398000ee7c'
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'as'):
+        raise Skip('no cross assembler (ELEKLOADER_CROSS)')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = sdkbuild.build(os.path.join(ROOT, 'mods', 'core-ar2'), SYX, tmp)[0]
+        app = sdkbuild.build(os.path.join(ROOT, 'examples', 'usb-gain-check-ar2'), SYX, tmp)[0]
         patch.build(SYX, [core, app], version='1.74', log=lambda *a: None)
 
 

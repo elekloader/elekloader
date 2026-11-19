@@ -203,6 +203,9 @@ the one a mod that uses it names in `resources.core`.
   (0.11; ADAPTING.md, "Locks a mod keeps itself (core-ar2 0.11, Analog Rytm
   MKII)"). Spare entries in its tables for +Drive mods, which the Drive
   Loader fills at boot (0.12; the core's README, "Room for +Drive mods").
+  The USB input's gain, one of stock's USB TO MAIN steps a mod holds in
+  place of the setting (0.15; ADAPTING.md, "USB input gain (core-ar2 0.15,
+  Analog Rytm MKII)").
 - **Analog Four MKII** ([mods/core-a4](../mods/core-a4), a proof of
   concept): core-ar2's events and mod storage at the A4's addresses
   (ADAPTING.md, "Mod storage (core-a4 0.1)"), and parameter pages, whose

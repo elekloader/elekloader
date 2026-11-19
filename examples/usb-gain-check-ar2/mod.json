@@ -1,0 +1,19 @@
+{
+ "id": "usb-gain-check",
+ "version": "0.2",
+ "title": "USB gain check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for core-ar2's held USB input gain on the Analog Rytm MKII, on screen. At the first tick it checks the hold's rules (a second holder, a step out of range, another's release and a 0 holder are refused; the holder's release comes back to the setting) and shows them as a pass count; PLAYMODE then steps the hold: none (the setting), no cut, the most cut, none again. A bottom bar on the main screen (none while a menu or window is up) shows the step in force, whether it is held and the checks passed.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": ["check.c"],
+ "subscribe": [
+  {"event": "ev_tick", "fn": "ug_tick", "order": 60},
+  {"event": "ev_draw", "fn": "ug_draw", "order": 60},
+  {"event": "ev_key", "fn": "ug_key", "order": 60}
+ ],
+ "resources": {"core": "0.13"},
+ "requires": ["core"]
+}

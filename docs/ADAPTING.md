@@ -2355,6 +2355,28 @@ internals in `mods/core-ar2/pads.c`'s header). Both run in the UI task. `example
   back. `led` is stock's LED number: `CORE_LED_TRIG(k)` the trig keys,
   `CORE_LED_PAD(p)` the pads.
 
+### USB input gain (core-ar2 0.15, Analog Rytm MKII)
+
+Stock cuts the USB input before it mixes it in, by the step AUDIO
+ROUTING's USB TO MAIN [dB] sets: four steps 6 dB apart, from the most cut
+to none. A mod may hold one of those steps in its place
+(`analog-rytm-mk2/usbin.h`; the internals in `mods/core-ar2/usbin.s`'s
+header). `examples/usb-gain-check-ar2` uses each call.
+
+- **`core_usb_in_gain(who, step)`**, UI task: hold `step`
+  (`CORE_USB_IN_CUT18` .. `CORE_USB_IN_NONE`, 0..3) for `who`, any address
+  of your mod's own, the same each call; `CORE_USB_IN_RELEASE` lets your
+  hold go. 0 done, -1 refused: another mod holds it, `who` is 0 or the
+  step is not one of the four. The setting is never written: when you let
+  go, it applies again.
+- **`core_usb_in_step()`** is the step in force (held or the setting's),
+  **`core_usb_in_holder()`** who holds it (0 for nobody).
+
+The Rytm takes one stereo USB pair there, so a held step applies to
+whatever arrives on it, a DAW's audio as well as yours: hold it only while
+you need it. Only stock's own steps can be held, so the input is never
+mixed in louder than stock mixes it with the setting at its top.
+
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
 A lockable parameter is locked to a scene, or given a performance depth,
