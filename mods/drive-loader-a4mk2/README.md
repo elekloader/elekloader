@@ -178,7 +178,7 @@ kind 4. `F_KNOBS` (`drive_knobs` in `route.s`) tells host tools (tests/test_driv
 | `route.c`, `route.s` | logic kept, glue retraced | the /mods route (tests/test_drive_a4_route.py) |
 | `boot.c` | logic kept, glue retraced | the boot, the crash guard, `dl_format` |
 | `json.c`, `json.h`, `sha256.c`, `names.inc` | unchanged (tests/test_drive_a4_store.py checks) | JSON, hashes, the route's names |
-| `park.c`, `park.h` | `.store` formats 2 and 3 (tests/test_drive_a4_park.py) | parked mods |
+| `park.c`, `park.h` | `.store` formats 2 and 3 (tests/test_drive_a4_park.py) | parked mods, the build list's saved data `*` |
 | `dlink.c` | storage fields as the A4 takes them: `"track": "cv"`, `"mod"` on a kit field, no `"lfo"`; `abs16`; std1; +Drive collections with `DL_COLLECTIONS`; knob ids with `DL_KNOBS`; the payload skip is built only with `DL_PAYLOAD_SKIP` | the linker |
 | `dstore.c`, `dstore.h` | lock codes per track kind (0x70..0x7f each), the A4's CC pool, `.store` formats 2 and 3 (tests/test_drive_a4_dstore_host.py) | +Drive storage |
 | `dl.h`, `flush.s` | comments, `DL_PAYLOAD_SKIP` and `DL_COLLECTIONS` | the linker's interface; the site writes and cache push (the A4 sets the Rytm's CACR and ACR0) |

@@ -181,6 +181,22 @@ int dl_park_list(const u8 *raw, u32 len, struct dl_park *out, int max)
     return n;
 }
 
+int dl_store_has(const u8 *raw, u32 len, const char *id, int prefix)
+{
+    struct walk w;
+    struct rec r;
+    u32 n = 0;
+    if (!id || !id[0] || check(raw, len))
+        return 0;
+    while (id[n])
+        n++;
+    walk_start(&w, raw, len);
+    while (walk_next(&w, &r) > 0)
+        if (prefix ? r.nmod >= n && eq(r.mod, (const u8 *)id, n) : same(r.mod, r.nmod, id))
+            return 1;
+    return 0;
+}
+
 s32 dl_park_forget(const u8 *raw, u32 len, const char *const *ids, int n, u8 *out)
 {
     struct walk w;

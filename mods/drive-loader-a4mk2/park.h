@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* Parked +Drive storage in /mods/.store, as the MODS page reads it (PAGE.md, "Parked data"):
+/* Parked +Drive storage in /mods/.store, as the MODS page reads it (PAGE.md, "Saved data"):
  * which mods have parked fields, how many bits in each scope, and FORGET DATA's rewrite.
  * The file's layout is docs/DRIVE.md's, "+Drive storage" (format 2 on the A4: lock codes per track
  * kind); elekloader/drive_store.py is its twin (decode, forget, encode), and
@@ -29,6 +29,11 @@ extern const char *const dl_store_scopes[DL_STORE_SCOPES];
  * drive_store.decode doesn't take (cut short, another format, a wrong CRC, a bad record): the
  * boot then places afresh, so nothing is parked. */
 int dl_park_list(const u8 *raw, u32 len, struct dl_park *out, int max);
+
+/* The build list's "*": 1 when raw (as dl_park_list takes it) keeps anything for the mod id,
+ * live or parked (a field, a lock code or a CC, or a freed one), else 0 (a bad file too). With
+ * prefix, id may be the first bytes of a longer id (the page's are cut to DL_ID_MAX - 1). */
+int dl_store_has(const u8 *raw, u32 len, const char *id, int prefix);
 
 /* FORGET DATA (drive_store.forget, then encode): raw without the parked fields, freed codes and
  * freed CCs of the mods ids[0..n), into out (len bytes: it never grows). The rest of the file,
