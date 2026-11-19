@@ -84,6 +84,8 @@ static const struct core_lock_param *by_code[LAST_CODE + 1];
 static unsigned char lfo_ok[LAST_CODE + 1];
 static unsigned char route_ok[LAST_CODE + 1];
 static unsigned char kit_ok[LAST_CODE + 1];      /* a kit field: the FX track's */
+static unsigned char used[LAST_CODE + 1 - FIRST_CODE];   /* the codes with a parameter */
+static int n_used;
 static volatile int made;
 
 /* and its strings, cut to what stock shows: stock draws a short name with a
@@ -114,6 +116,8 @@ static void make(void)
         if ((code = c[1] & 0xff) >= FIRST_CODE && code <= LAST_CODE)
             for (p = core_lock_params; *p; p++)
                 if ((*p)->field == c[0]) {
+                    if (!by_code[code])
+                        used[n_used++] = code;
                     by_code[code] = *p;
                     lfo_ok[code] = !!(c[1] & LFO);
                     route_ok[code] = !!(c[1] & ROUTE);
@@ -353,14 +357,21 @@ const struct core_lock_param *core_lock_by_id(int id, unsigned *code)
 }
 
 /* (0.9) the same among the sound's parameters (kit 0) or the FX track's
- * (kit 1): a sound's page and a FX page may give the same id */
+ * (kit 1): a sound's page and a FX page may give the same id. Only the
+ * codes a parameter has are searched: stock asks this for every knob it
+ * draws with a trig held, about a hundred times a screen */
 const struct core_lock_param *core_lock_by_id_in(int id, unsigned *code, int kit)
 {
+    int i;
     if (!id)
         return 0;
-    for (*code = FIRST_CODE; *code <= LAST_CODE; ++*code)
-        if (param(*code) && param(*code)->id == id && (kit < 0 || kit == is_kit(*code)))
-            return param(*code);
+    if (!made)
+        make();
+    for (i = 0; i < n_used; i++) {
+        *code = used[i];
+        if (by_code[*code]->id == id && (kit < 0 || kit == kit_ok[*code]))
+            return by_code[*code];
+    }
     return 0;
 }
 
@@ -496,6 +507,9 @@ const struct core_lock_param *core_lock_set_param(void *set, int id, unsigned *c
 {
     int fx;
     const struct core_lock_param *p;
+    *item = 0;
+    if (!core_lock_by_id_in(id, code, -1))   /* no parameter has the id: before the item's stock calls */
+        return 0;
     if (!(*item = core_lock_item(set, &fx)) || !(p = core_lock_by_id_in(id, code, fx)) ||
         (fx ? core_lock_fx_takes(id) : core_lock_stock_takes(id, *item)))
         return 0;
@@ -508,6 +522,9 @@ static const struct core_lock_param *core_lock_knob_param(void *set, int id, uns
 {
     int fx;
     const struct core_lock_param *p;
+    *s = 0;
+    if (!core_lock_by_id_in(id, code, -1))
+        return 0;
     *s = core_lock_item(set, &fx);
     if (!(p = core_lock_by_id_in(id, code, fx)) ||
         (fx ? core_lock_fx_takes(id) : *s && core_lock_stock_takes(id, *s)))
