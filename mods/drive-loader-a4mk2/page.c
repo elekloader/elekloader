@@ -109,12 +109,18 @@ static struct dl_choice *choice;         /* a save's set, from the heap while it
 static struct dl_status *cst;
 static char (*cdet)[32];
 
-/* Parked data (the build list's PARK rows, as the Rytm's): the mods /mods/.store keeps fields of that no chosen mod
- * declares any more, read when the page opens and after FORGET DATA. The build list shows them
- * after the build's rows. */
+/* Saved data: the mods /mods/.store keeps fields, lock codes or CCs of, read when the page opens
+ * and after FORGET DATA. A build row of such a mod has "* " before its KEEP, ADD, DROP or "!"
+ * (decided 2026-11-18, in place of the Rytm's PARK rows). The parked ones (fields no chosen mod
+ * declares any more) are parks; the build list shows those of mods not on it after the build's
+ * rows (prows), and FORGET DATA drops a ticked row's parked data. */
 static struct dl_park *parks;
 static int npark;
 static u8 *forgetting;                   /* FORGET DATA's marks, one a parked mod */
+static int *prows, nprow;                /* the parks with a row of their own, after the build's */
+static u8 prows_old;                     /* prows to make again: the build or an id changed */
+static u8 *stored;                       /* a copy of .store's bytes, for "* " */
+static s32 nstored;
 static u8 *store_raw, *store_out;        /* FORGET DATA's read of .store and its rewrite */
 static s32 store_len;
 
@@ -160,12 +166,17 @@ static void page_free(void)
     dl_free(sel);
     dl_free(parks);
     dl_free(forgetting);
+    dl_free(prows);
+    dl_free(stored);
     files = 0;
     lrows = 0;
     build_rows = sel = 0;
     parks = 0;
     forgetting = 0;
-    nfiles = fcap = nlrows = nbuild = npark = 0;
+    prows = 0;
+    stored = 0;
+    nfiles = fcap = nlrows = nbuild = npark = nprow = 0;
+    nstored = 0;
     set_free();
 }
 
@@ -448,8 +459,10 @@ static void boot_record(struct file *r)
             r->boot_code = dl_status[i].code;
             r->boot_arg = dl_status[i].arg;
             copy_str(r->boot_detail, dl_detail[i], sizeof r->boot_detail);
-            if (!r->id[0] && real_id(dl_status[i].id, r->name))   /* the build list's label from */
-                copy_str(r->id, dl_status[i].id, sizeof r->id);    /* the page's opening on */
+            if (!r->id[0] && real_id(dl_status[i].id, r->name)) {   /* the build list's label from */
+                copy_str(r->id, dl_status[i].id, sizeof r->id);      /* the page's opening on */
+                prows_old = 1;
+            }
             return;
         }
 }
@@ -597,14 +610,27 @@ static int parks_from(const u8 *raw, s32 len)
     int n = len > 0 ? dl_park_list(raw, (u32)len, 0, 0) : 0;
     dl_free(parks);
     dl_free(forgetting);
+    dl_free(prows);
+    dl_free(stored);
     parks = 0;
     forgetting = 0;
-    npark = 0;
+    prows = 0;
+    stored = 0;
+    npark = nprow = 0;
+    nstored = 0;
+    prows_old = 1;
+    if (len > 0) {
+        if (!(stored = dl_alloc((u32)len)))
+            return -2;
+        dl_memcpy(stored, raw, (u32)len);
+        nstored = len;
+    }
     if (n <= 0)
         return 0;
     parks = dl_alloc((u32)n * sizeof *parks);
     forgetting = dl_alloc((u32)n);
-    if (!parks || !forgetting)
+    prows = dl_alloc((u32)n * sizeof *prows);
+    if (!parks || !forgetting || !prows)
         return -2;
     npark = dl_park_list(raw, (u32)len, parks, n);
     if (npark < 0)
@@ -782,8 +808,10 @@ static int inspect(struct file *r)
         if (dl_check_buf((u32)core_desc, &one, len, dl_stage_at, dl_stage_len, &one_st, one_det,
                          one_ver) >= 0) {        /* the file just read, not read again */
             c = one_st.code;
-            if (real_id(one_st.id, r->name))
+            if (real_id(one_st.id, r->name)) {
                 copy_str(r->id, one_st.id, sizeof r->id);
+                prows_old = 1;
+            }
             copy_str(r->ver, one_ver[0], sizeof r->ver);
             if (one_st.state != DL_ST_LOADED && c && (c <= DL_R_FEATURE || c == DL_R_CORE)) {
                 r->file_code = (u8)c;
@@ -864,9 +892,48 @@ static int build_empty(void)
     return 1;
 }
 
+/* a file's id names park p: the whole id, or its first DL_ID_MAX - 1 bytes when the file's id
+ * was cut there */
+static int id_is(const char *fid, const char *pid)
+{
+    u32 i;
+    if (!fid[0])
+        return 0;
+    for (i = 0; fid[i]; i++)
+        if (fid[i] != pid[i])
+            return 0;
+    return !pid[i] || i == DL_ID_MAX - 1;
+}
+
+/* the park of build row i's mod (file k), or -1 */
+static int park_of_file(int k)
+{
+    int p;
+    for (p = 0; p < npark; p++)
+        if (id_is(files[k].id, parks[p].id))
+            return p;
+    return -1;
+}
+
+/* prows again: the parks whose mod has no build row */
+static void park_rows(void)
+{
+    int p, i;
+    prows_old = 0;
+    nprow = 0;
+    for (p = 0; p < npark; p++) {
+        for (i = 0; i < nbuild && !id_is(files[build_rows[i]].id, parks[p].id); i++)
+            ;
+        if (i == nbuild)
+            prows[nprow++] = p;
+    }
+}
+
 static int list_n(void)
 {
-    return mode == M_BUILD ? nbuild + npark : nlrows;
+    if (prows_old)
+        park_rows();
+    return mode == M_BUILD ? nbuild + nprow : nlrows;
 }
 
 /* the file of list row i in this mode, or -1 for "..", a folder and a parked mod */
@@ -880,7 +947,18 @@ static int file_k(int i)
 /* the parked mod of list row i (the build list's rows after the build's), or -1 */
 static int park_k(int i)
 {
-    return mode == M_BUILD && i >= nbuild && i < nbuild + npark ? i - nbuild : -1;
+    if (prows_old)
+        park_rows();
+    return mode == M_BUILD && i >= nbuild && i < nbuild + nprow ? prows[i - nbuild] : -1;
+}
+
+/* the parked data FORGET DATA drops for list row i: a parked row's, or a build row's mod's */
+static int park_of(int i)
+{
+    int k = park_k(i);
+    if (k >= 0)
+        return k;
+    return mode == M_BUILD && i >= 0 && i < nbuild ? park_of_file(build_rows[i]) : -1;
 }
 
 /* the build list: the saved set, then the mods the last boot loaded that have left it
@@ -888,6 +966,7 @@ static int park_k(int i)
 static void build_list(void)
 {
     int i;
+    prows_old = 1;
     nbuild = 0;
     for (i = 0; i < nfiles && nbuild < fcap; i++)
         if (files[i].on)
@@ -1026,15 +1105,18 @@ static void publish_check(void)
  * KB rounded up once the check has read the file (blank before), "!" for a file pass 1 refuses.
  * Folders and "..": "(D)"; a folder with n ticked files below it "(n)" in its place (decided
  * 2026-11-09). Build: KEEP (loaded now, stays), ADD (loads at the next boot), DROP (loaded now,
- * gone after the next boot), "!" (the last boot refused it); a parked mod PARK. */
-static void row_column(int i, char *t, char *end)
+ * gone after the next boot), "!" (the last boot refused it). -> 1 when the row also gets the saved
+ * data mark "*" (.store keeps data of the mod): drawn in a column of its own left of the widest
+ * state word, so every row's "*" lines up; a parked mod not on the build has the "*" alone
+ * (decided 2026-11-18, in place of the Rytm's PARK). */
+static int row_column(int i, char *t, char *end)
 {
-    int k = file_k(i);
+    int k = file_k(i), star = 0;
     const struct file *r;
     t[0] = 0;
     if (park_k(i) >= 0)
-        cat(t, end, "PARK");
-    else if (k < 0) {
+        return 1;
+    if (k < 0) {
         if (lrows[i].kind == R_DIR && lrows[i].sel)
             cat(num(cat(t, end, "("), end, lrows[i].sel), end, ")");
         else
@@ -1044,12 +1126,27 @@ static void row_column(int i, char *t, char *end)
             cat(t, end, "!");
         else if (r->checked)
             cat(num(t, end, (r->size + 1023) / 1024), end, "KB");
-    } else if (r->boot == DL_ST_REFUSED || r->boot == DL_ST_DROPPED)
-        cat(t, end, "!");
-    else if (!r->on)
-        cat(t, end, "DROP");
-    else
-        cat(t, end, r->boot == DL_ST_LOADED ? "KEEP" : "ADD");
+    } else {
+        star = park_of_file(k) >= 0 || dl_store_has(stored, (u32)nstored, r->id, 1);
+        if (r->boot == DL_ST_REFUSED || r->boot == DL_ST_DROPPED)
+            cat(t, end, "!");
+        else if (!r->on)
+            cat(t, end, "DROP");
+        else
+            cat(t, end, r->boot == DL_ST_LOADED ? "KEEP" : "ADD");
+    }
+    return star;
+}
+
+/* the "*" column's right edge: STATE_GAP left of the widest build state word */
+static int star_right(void)
+{
+    static const char *const words[] = {"KEEP", "ADD", "DROP", "!"};
+    int i, w, most = 0;
+    for (i = 0; i < 4; i++)
+        if ((w = text_w(words[i])) > most)
+            most = w;
+    return COLUMN_X - most - STATE_GAP;
 }
 
 /* a message box: closed by any key, or by itself after BOX_TICKS (sticky: only by a key) */
@@ -1283,6 +1380,7 @@ static void save_step(void)
         files[i].on = files[i].keep;
         if (files[i].keep && !files[i].big && k < job.c && real_id(cst[k++].id, files[i].name))   /* the save's check names */
             copy_str(files[i].id, cst[k - 1].id, sizeof files[i].id);          /* the rows added since boot */
+    prows_old = 1;
     }
     if (save_active()) {
         for (i = 0; i < nfiles; i++)
@@ -1457,7 +1555,7 @@ static int forget_marks(void)
     for (k = 0; k < npark; k++)
         forgetting[k] = 0;
     for (i = 0; i < nbticks; i++)
-        if (bticks[i] && (k = park_k(i)) >= 0 && !forgetting[k]) {
+        if (bticks[i] && (k = park_of(i)) >= 0 && !forgetting[k]) {
             forgetting[k] = 1;
             n++;
         }
@@ -1820,9 +1918,8 @@ static void act_yes(int i)
         pending = P_CLEAR;
         confirm("CLEAR THE BUILD?");
     } else if (i == NACT && mode == M_BUILD && set_differs()) {
-        pending = P_RESTART;             /* a reboot drops what the project hasn't saved, and core
-                                          * can't tell whether it has: the window always says so */
-        confirm("RESTART NOW?\nUNSAVED PROJECT\nCHANGES ARE LOST");
+        pending = P_RESTART;             /* the working project is kept (restart_tick) */
+        confirm("RESTART NOW?");
     } else if (i == 4 && mode == M_DRIVE) {
         if (delete_dir_now()) {          /* as SAMPLES: "DELETE DIR?" over CONFIRM Y/N */
             copy_str(rmdir_name, lrows[cursor_row()].name, sizeof rmdir_name);
@@ -2055,14 +2152,18 @@ static void draw_list(void *fb)
         return;
     }
     for (r = 0; r < ROWS && top + r < n; r++) {
-        int i = top + r, y = ROW_Y(r), hl = i == cur && panel == PN_NONE, w;
+        int i = top + r, y = ROW_Y(r), hl = i == cur && panel == PN_NONE, w, star;
         unsigned inv = hl ? TEXT_INVERT : 0;
         if (hl)
             core_fill(fb, BAR_L, y, BAR_R - BAR_L + 1, BAR_H, 1);
-        row_column(i, col, col + sizeof col);
+        star = row_column(i, col, col + sizeof col);
         w = col[0] ? text_w(col) : 0;
         if (col[0])
             list_text(fb, COLUMN_X, y + TEXT_DY, TEXT_RIGHT | inv, col);
+        if (star) {
+            list_text(fb, star_right(), y + TEXT_DY, TEXT_RIGHT | inv, "*");
+            w = COLUMN_X - star_right() + text_w("*");
+        }
         row_label(i, lab, lab + sizeof lab, COLUMN_X - w - STATE_GAP - LABEL_X);
         list_text(fb, LABEL_X, y + TEXT_DY, TEXT_LEFT | inv, lab);
         if (is_ticked(i))                /* the tick: a 3 x 3 square left of the label */
@@ -2329,6 +2430,8 @@ static u32 rest_until;                   /* the tick the background may work aga
 /* APPLY & RESTART, RESTART_TICKS after its YES: the box shows that long (as stock's SUCCESS!
  * REBOOTING), and YES's release, and a remote key's status after it, are answered before the
  * reset (the emulator gate's first try reset inside the remote tap, 2026-11-16). Then the
+ * working project is kept as it is now (core_project_keep: its image repacked and written to
+ * the +Drive, which the boot reads back; decided 2026-11-16), before any lock is held. Then the
  * crash guard comes off first, since the restart is the user's and the running set got this far
  * (boot.c keeps it on while the page shows after a boot that applied sites), then dl_lock, held
  * for good, so no route upload or page write is cut between its store calls, then core_restart,
@@ -2342,6 +2445,7 @@ static void restart_tick(void)
 {
     if (!restarting || ticks - restart_asked < RESTART_TICKS)
         return;
+    core_project_keep();
     dl_lock();
     dl_guard_off();
     core_restart();

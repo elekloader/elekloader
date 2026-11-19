@@ -57,8 +57,9 @@ As the Rytm's page, with these differences:
 - **Rows.** The file list: `..` (below `/mods`), the folders with `(D)` or `(n)` ticked
   below, then the `.elemod` files by file name without `.elemod`, their size in KB once the
   background check has read them, `!` for a file pass 1 refuses. The build list: each mod's id
-  with `KEEP`, `ADD`, `DROP` or `!`, then parked mods with `PARK`. Every label is clipped from
-  the left behind `<` to the room before its right-hand column (`clip.inc`, `core_text_width`).
+  with `KEEP`, `ADD`, `DROP` or `!`, and `*` before it when the mod has saved data (below),
+  then the parked mods not in the build with `*` alone. Every label is clipped from the left
+  behind `<` to the room before its right-hand column (`clip.inc`, `core_text_width`).
 - **Action panel** (x 62..127): SELECT ALL, DESELECT ALL, LOAD TO BUILD (UPDATE BUILD), CLEAR
   BUILD, DELETE (DELETE DIR on a folder with nothing ticked here); in the build list SELECT ALL,
   DESELECT ALL, UNLOAD, INFO, FORGET DATA, and APPLY & RESTART while the saved set differs
@@ -67,8 +68,7 @@ As the Rytm's page, with these differences:
   switches the list and closes the panel. The build list's ticks (UNLOAD's and FORGET DATA's
   choice) start empty each time it is shown.
 - **Confirm window**: the question (`LOAD 2 MODS?`, `UPDATE BUILD? (2 MODS)`, `CLEAR THE
-  BUILD?`, `DELETE DIR?`, `FORGET DATA? (n MODS)`, `RESTART NOW?` with `UNSAVED PROJECT` and `CHANGES ARE
-  LOST` under it) over `CONFIRM Y/N`, centred.
+  BUILD?`, `DELETE DIR?`, `FORGET DATA? (n MODS)`, `RESTART NOW?`) over `CONFIRM Y/N`, centred.
 - **Message box**: centred, split at newlines (about 30 characters a line), closed by any key or
   by itself after 3 s; INFO's and a parked mod's INFO box stay until a key.
 - **No empty list.** An empty list draws one placeholder row, `NO MODS ON +DRIVE` or `BUILD
@@ -87,30 +87,38 @@ As the Rytm's page, with these differences:
   skipped (`skip.h`, `dl_stage_more`), so pass 1 sees what the boot sees and the CRC is the one
   `/mods/active` names; a row's KB is the whole file on the +Drive, payload included.
 
-## Parked data
+## Saved data
 
-As the Rytm's: the mods whose fields `/mods/.store` keeps parked (no chosen mod declares them any
-more) are read when the page opens and after FORGET DATA (`park.h`), and the build list shows them
-after the build's rows with `PARK`. YES ticks one and shows its parked bits per scope, lock codes
-and CCs; FORGET DATA drops the ticked ones' parked data after its confirm, in steps (read, write
-`.store.tmp`, swap). With `/mods` empty but data parked, the panels still open, so FORGET DATA can
-be reached.
+`/mods/.store` is read when the page opens and after FORGET DATA (`park.h`). A build row whose mod
+it keeps anything for (fields, lock codes or CCs, live or parked: `dl_store_has`) gets a `*`
+(the Rytm's page says `PARK`). The `*` has a column of its own, its
+right edge `STATE_GAP` left of the widest state word, so every row's `*` lines up whatever word
+follows it: `* KEEP`, `* ADD`, `* DROP`, `* !`.
+
+The parked mods (fields no chosen mod declares) that have no build row follow the
+build's rows, with the `*` alone in that column. A parked mod back in the build has no second
+row: its build row carries the `*`. YES on a parked-only row ticks it and shows its parked bits
+per scope, lock codes and CCs; FORGET DATA drops the ticked rows' parked data, on a build row or
+a parked-only one, after its confirm, in steps (read, write `.store.tmp`, swap). With `/mods`
+empty but data parked, the panels still open, so FORGET DATA can be reached.
 
 ## APPLY & RESTART
 
 The build list's action pane gets a sixth row, APPLY & RESTART, while the saved set differs
 from the running one: a build row reads `ADD` or `DROP`, or `!` for a saved mod the last boot
 refused or dropped (another boot tries it again). Parked data doesn't count: FORGET DATA
-rewrites it at once. Its confirm always warns, since a reboot drops what the project hasn't
-saved and core has no read of the modified mark. YES closes the pane, shows `RESTARTING` and
-takes no more keys; 2 s later (as stock's SUCCESS! REBOOTING shows, and so YES's release and a
-remote key's status are answered first) the page takes the crash guard off
+rewrites it at once. YES on its confirm closes the pane, shows `RESTARTING` and takes no more
+keys; 2 s later (as stock's SUCCESS! REBOOTING shows, and so YES's release and a remote key's
+status are answered first) the page keeps the working project as it is now (core-a4mk2's
+`core_project_keep`: its image repacked from the live project, mod fields included, and written
+to the +Drive, which the boot reads back), then takes the crash guard off
 (the restart is the user's, and the guard waits while the page shows after a boot that applied
 sites), takes `dl_lock` for good, so no upload or page write is cut between its store calls,
 and calls core-a4mk2's `core_restart` (`analog-four-mk2/system.h`), which waits for the +Drive
 store and card and the panel link and UART, then resets. An upload the route hasn't committed is
 dropped, as at a power cut; the store's directory stays whole. The next boot links the saved set
-(decided 2026-11-16: in VIEW BUILD's pane, shown only when the sets differ, warned every time).
+on the working project as it was (decided 2026-11-16: in VIEW BUILD's pane, shown only when the
+sets differ; the working project kept, unsaved changes included).
 
 ## Keys still to confirm
 
@@ -129,5 +137,5 @@ closed panels, every key and turn taken while the page shows and passed on after
 BUILD's confirm and the `/mods/active` it writes, NO on the confirm window, the build list after
 a load, scrolling by UP/DOWN, FUNC and the DATA encoder, the message box's close by a key
 and by time, and APPLY & RESTART: shown only while the sets differ, NO on its confirm doing
-nothing, YES showing `RESTARTING`, keeping it through a key, and calling `core_restart` with
-`dl_lock` held and the crash guard off.
+nothing, YES showing `RESTARTING`, keeping it through a key, and calling `core_project_keep`, then
+`core_restart` with `dl_lock` held and the crash guard off.

@@ -54,6 +54,22 @@ core_restart:
         move.w  %d1, %sr                | interrupts back on: send it
         bra.s   2b
 
+| ---- core_project_keep: the working project kept, from a task ------------------
+| void core_project_keep(void). The A4 keeps its working project as one image in
+| RAM that a power-fail interrupt writes to the +Drive (two copies) and the boot
+| reads back. Stock repacks that image after a project change, in a background
+| job, and a change no project event announces (a mod's own field) never reaches
+| it. This repacks the whole image from the live project (KEEP_PACK, the body of
+| stock's own full repack job) and writes it to the +Drive at once (KEEP_WRITE,
+| what stock's OS upgrade does before its reboot), so a restart after it boots
+| on the project as it is now. Takes the card for each transfer: call it before
+| core_restart, never with the store or card held. Returns.
+        .globl  core_project_keep
+core_project_keep:
+        jsr     KEEP_PACK
+        jsr     KEEP_WRITE
+        rts
+
 | ---- core_restart_now: reboot at once -----------------------------------------
 | void core_restart_now(void), never returns: the stock restart's last steps
 | without its drain, for an interrupt or an ev_crash handler.
