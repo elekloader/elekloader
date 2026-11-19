@@ -101,8 +101,8 @@ are found through hash buckets, in the order a scan would find them.
 
 ## Payloads on the +Drive
 
-A loader whose descriptor has `F_PAYLOAD_SKIP` (drive-loader-a4mk2, decided
-2026-11-15; drive-loader-ar2 from 0.8, decided 2026-11-17) keeps a mod's `.payload` on the +Drive: its bytes never take
+A loader whose descriptor has `F_PAYLOAD_SKIP` (drive-loader-a4mk2 and
+drive-loader-ar2) keeps a mod's `.payload` on the +Drive: its bytes never take
 room in the area. The `.elemod` stays one JSON file.
 
 - **Skippable.** A `.payload` whose `"len"` and 64-digit `"sha256"` come
@@ -139,8 +139,8 @@ room in the area. The `.elemod` stays one JSON file.
 
 ## +Drive collections
 
-A loader whose descriptor has `F_COLLECTIONS` (drive-loader-a4mk2, decided
-2026-11-16; drive-loader-ar2 from 0.8, decided 2026-11-17) links tables +Drive mods declare, so a flashed mod's
+A loader whose descriptor has `F_COLLECTIONS` (drive-loader-a4mk2 and
+drive-loader-ar2) links tables +Drive mods declare, so a flashed mod's
 `collections` and the contributions to them load from the +Drive unchanged.
 Flashed code never reads a +Drive table: its link is done at build.
 
@@ -169,8 +169,8 @@ Flashed code never reads a +Drive table: its link is done at build.
 
 ## Knob ids on the +Drive
 
-A loader whose descriptor has `F_KNOBS` (drive-loader-a4mk2; drive-loader-ar2
-from 0.8, decided 2026-11-17) gives +Drive mods knob ids by count, as the
+A loader whose descriptor has `F_KNOBS` (drive-loader-a4mk2 and
+drive-loader-ar2) gives +Drive mods knob ids by count, as the
 linker gives flashed mods theirs (docs/ADAPTING.md, "Knob ids by count
 (Analog Four MKII)"), so a flashed mod's `"knobs"` and its `__knobs`
 relocations load from the +Drive unchanged. The flashed ids are below
