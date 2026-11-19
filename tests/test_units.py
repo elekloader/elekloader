@@ -2290,7 +2290,9 @@ def test_core_ar2_0_17_std_map():
     """core-ar2 0.17 serves std1 at the sites it owns: each map entry is a std1.h event and one of
     core's tables, the native table for the same prototype or its first part, a std_ table of its
     own for the thunks (std.c) that core's own handlers, .boot and pages.s call, and for the UI and
-    system events (ui.c) and the MIDI events (stdmidi.c) at new sites; ev_enc has its prototype in std1.h (decided 2026-11-19)."""
+    system events (ui.c), the MIDI events (stdmidi.c) and the voice events (stdvoice.c, render
+    tables: they run in the audio interrupt) at new sites; ev_enc has its prototype in std1.h
+    (decided 2026-11-19)."""
     import re
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     mdir = os.path.join(root, 'mods', 'core-ar2')
@@ -2308,6 +2310,9 @@ def test_core_ar2_0_17_std_map():
                'ev_clip', 'ev_pattern', 'ev_mute', 'ev_view'}
     # the MIDI events at new sites (stdmidi.c, stdmidi.s)
     thunks |= {'ev_midi_in', 'ev_midi_cc', 'ev_midi_pc', 'ev_midi_out', 'ev_seq_midi'}
+    # the voice events at new sites in the audio interrupt (stdvoice.c, stdvoice.s)
+    audio = {'ev_voice_start', 'ev_voice_end'}
+    thunks |= audio
     assert set(std) == native | thunks and set(std) <= events
     assert {e for e, t in std.items() if t == e} == native
     for e in native:
@@ -2319,7 +2324,8 @@ def test_core_ar2_0_17_std_map():
                 csrc += fh.read()
     for e in thunks:
         assert std[e] == 'std_' + e[3:], e
-        assert doc['collections'][std[e]] == {'entry': 4, 'spare': 256}, e
+        want = {'entry': 4, 'render': True, 'spare': 256} if e in audio else {'entry': 4, 'spare': 256}
+        assert doc['collections'][std[e]] == want, e
         assert re.search(r'^extern const \w+ %s\[\];' % std[e], csrc, re.M), e
     subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
     assert subs[('ev_key', 'core_std_key')] == 0
@@ -2370,6 +2376,39 @@ def test_core_ar2_0_17_midi_sites():
         ports = fh.read()
     for f in ('CORE_MIDI_CC_AUTO  0x01u', 'CORE_MIDI_PC_STOCK 0x02u', 'CORE_MIDI_CC_PERF  0x04u'):
         assert f in ports, f
+
+
+def test_core_ar2_0_17_voice_sites():
+    """core-ar2 0.17's std1 voice events (stdvoice.c, stdvoice.s), in the audio interrupt's trig
+    intake: two jmp sites, each "len" and "stock_sha256", whose stubs run the displaced
+    instructions and resume right after them; a start ends a voice still started first, and an
+    end comes only for a started voice (one bit per voice)."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-ar2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(mdir, 'stdvoice.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    with open(os.path.join(mdir, 'stdvoice.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    sites = [x for x in doc['sites'] if x.get('target', '').startswith('core_std_voice_')]
+    want = {'core_std_voice_trig_site': ('0x401210ae', 8, 'jmp'), 'core_std_voice_rel_site': ('0x4012110e', 8, 'jmp')}
+    assert {x['target']: (x['addr'], x['len'], x['op']) for x in sites} == want
+    for x in sites:
+        assert 'stock' not in x and len(x['stock_sha256']) == 64, x
+        assert 'jmp     0x%08x' % (int(x['addr'], 16) + x['len']) in asm, x
+    # the displaced instructions, in stock's order
+    assert re.search(r'move\.l\s+\(0,%a2,%d6\.l\),%d6\s.*\n\s+move\.b\s+%d0,\(0,%a1,%d1\.l\)', asm)
+    assert re.search(r'lsl\.l\s+#5,%d1\n\s+moveq\s+#4,%d7\n\s+move\.l\s+%d7,\(0,%a0,%d1\.l\)', asm)
+    for t in ('std_voice_start', 'std_voice_end'):
+        assert re.search(r'^extern const \w+ %s\[\];' % t, src, re.M), t
+        assert doc['std']['ev' + t[3:]] == t
+    start = src[src.index('void core_std_voice_start'):]
+    assert start.index('core_std_voice_end(v);') < start.index('started |= 1u << v;')
+    assert 'stdvoice.c' in doc['sources'] and 'stdvoice.s' in doc['sources']
 
 
 def test_core_a4mk2_0_7_std_map():
