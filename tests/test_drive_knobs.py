@@ -9,7 +9,7 @@ the host twin (elekloader/drive.py) does the same on that build only.
 Built for the computer and run on a made-up Analog Four MKII build against the twin, with /mods/.store
 carried from one boot to the next: the same records, area bytes, tables and .store; then the Rytm's
 loader on a made-up Analog Rytm MKII build, with the Rytm's rules (core ids 469..554, own ids from 555,
-three tables, no abs16).
+three tables, abs16 from drive-loader-ar2 0.9).
 
     python tests/test_drive_knobs.py
 
@@ -38,8 +38,8 @@ RYTM_FIXED = (0x300, 0x306)                     # the flashed module's ids, past
 def flashed(B, knobs=True, rytm=False):
     """The A4 loader's kind of build, keeping +Drive storage, with core_params and core_knob_looks,
     a flashed module whose entry takes ids 0x300..0x306, and (knobs) a loader exporting drive_knobs;
-    rytm: the Rytm loader's kind (no abs16), with core_param_locks too."""
-    mods = TD.flashed(B, store=True, stage_top=True, payload_skip=True, abs16=not rytm, collections=True)
+    rytm: the Rytm loader's kind (abs16 from drive-loader-ar2 0.9), with core_param_locks too."""
+    mods = TD.flashed(B, store=True, stage_top=True, payload_skip=True, abs16=True, collections=True)
     core, loader = mods[0], mods[1]
     core['collections'].update({'core_params': {'entry': 4}, 'core_knob_looks': {'entry': 4}})
     if rytm:
@@ -307,8 +307,8 @@ def rytm(work, check):
             'f3': ('ok', ''), 'f4': ('ids', "0x501-0x501 are f3's"), 'f5': ('ids', '0x10-0x11 are below 0x22b'),
             'f6': ('ok', ''), 'f7': ('ids', '0x20-0x21 are below 0x22b'), 'f8': ('ok', '')}, why(r))
         sm, ram, st, r = alike('an abs16 to __knobs', [km(B, 'a16', 2)])
-        check('rytm: an abs16 to __knobs is a format refusal (no abs16 on the Rytm)',
-              why(r)['a16'][0] == 'format', why(r))
+        check('rytm: an abs16 to __knobs loads (abs16 from drive-loader-ar2 0.9)',
+              why(r)['a16'][0] == 'ok', why(r))
         sm, ram, st6, r = alike('no knobs mods', [k('fx', fixed=(0x400, 0x405))], st3)
         s6 = ds.decode(st6)
         check('rytm: no knobs mods: the runs freed, kept, format 4', s6['knobs'] == [] and st6[4:6] == b'\x00\x04'

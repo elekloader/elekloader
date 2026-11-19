@@ -185,9 +185,8 @@ the A4's are given here, the Rytm's are the core's 469..554, own ids from
   `core_params` and `core_knob_looks` entries take, its run included, as
   claims of kind 4 (`"<first> <last>"`, hex).
 - **Form.** `"knobs"` is 0..1024 and `__knobs` no mod's symbol; a relocation
-  to `__knobs` is `abs32` or `abs16` (`abs32` alone on the Rytm, whose
-  loader takes no `abs16`) with an addend below `"knobs"` (else
-  `format`). `__knobs` is the import of a mod with `"knobs"` only.
+  to `__knobs` is `abs32` or `abs16` (`abs16` on a build with `F_ABS16`)
+  with an addend below `"knobs"` (else `format`). `__knobs` is the import of a mod with `"knobs"` only.
 - **Fixed ids.** The ids a mod's entries name in its own `.run` bytes
   follow the linker's rules, in the check rounds after `claim`: none of the
   core's 0x127..0x1ff, a `core_knob_looks` entry's from 0x200 up, and from
@@ -247,7 +246,8 @@ checked only against a built image (a `.build` file alone has none).
 
 ## Claims
 
-On a build whose descriptor has `F_CLAIMS` (the A4's loader, `drive_claims`),
+On a build whose descriptor has `F_CLAIMS` (both +Drive loaders,
+`drive_claims`),
 a +Drive mod's contribution may carry `claims`, `[[lo, hi], ...]`: byte
 ranges of the main OS its entry relies on, which no other mod may change or
 claim, as the build's linker checks them (link.py `check`). Nothing is
@@ -265,7 +265,7 @@ contribution's claims (kind 7, by its module). The checks are the sites':
   copied block may overlap.
 
 A +Drive site over a flashed claim is refused as one over a flashed site.
-Without the flag (drive-loader-ar2), `claims` is the feature refusal
+Without the flag (an older loader), `claims` is the feature refusal
 `claims`.
 
 ## Regions on the A4

@@ -77,7 +77,7 @@ enum {
     DL_R_TABLE = 15,                     /* adds to a table +Drive mods can't use (detail) */
     DL_R_FULL = 16,                      /* a table has no spare entry left (detail: it) */
     DL_R_ROOM = 17,                      /* the area is full (arg: KB over) */
-    DL_R_RANGE = 18,                     /* a pc16 reference out of range */
+    DL_R_RANGE = 18,                     /* a pc16 or abs16 reference out of range */
     DL_R_LIMIT = 19,                     /* past the loader's own limits (symbols, entries) */
     DL_R_COUNT = 20,                     /* more than DL_MAX_MODS lines in /mods/active */
     /* the Octatrack's TELOS (DL_SITES): mods that write sites */

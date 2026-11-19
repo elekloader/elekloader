@@ -95,6 +95,10 @@ drive_staging:
 | (skip.h), so host tools stage, check and CRC files as it does
         .globl  drive_payload_skip
         .set    drive_payload_skip, 1
+| the build descriptor's flags bit 2: the boot linker (dlink.c) takes abs16 relocations, so
+| host tools take them too
+        .globl  drive_abs16
+        .set    drive_abs16, 1
 | the build descriptor carries the shadow, stock's bytes of every range the flashed build wrote,
 | and flags bit 6: the boot linker (dlink.c shadow_over) lays it over a +Drive mod's stock parts,
 | which the running OS would give as the flashed build's bytes
@@ -104,6 +108,10 @@ drive_staging:
 | ("collections", dl.h DL_COLLECTIONS), so host tools check and lay out sets as it does
         .globl  drive_collections
         .set    drive_collections, 1
+| the build descriptor's flags bit 5: the boot linker takes contributions' claims, checked against
+| the site map, which then carries the flashed contributions' claims (dlink.c, scan_claims)
+        .globl  drive_claims
+        .set    drive_claims, 1
 | the build descriptor's flags bit 7: the boot linker gives +Drive mods knob ids ("knobs", dl.h
 | DL_KNOBS) and checks their entries' ids, so host tools check sets as it does
         .globl  drive_knobs
