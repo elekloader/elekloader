@@ -402,9 +402,15 @@ class LoaderModel:
     save_profiles = save_settings
 
 
+NAME_MAX_IDS = 96     # past this the mod ids make a name file systems refuse (issue #406)
+
+
 def suggested_name(descs, version):
     ids = sorted(d['id'] for d in descs if d.get('id') not in (None, 'core'))
-    return 'custom-%s%s.syx' % (version or 'x', ('-' + '+'.join(ids)) if ids else '')
+    tail = '+'.join(ids)
+    if len(tail) > NAME_MAX_IDS:        # 25 mods' ids run past 255 characters with .map.json
+        tail = '%d-mods' % len(ids)
+    return 'custom-%s%s.syx' % (version or 'x', ('-' + tail) if ids else '')
 
 
 # ---- the window -----------------------------------------------------------------------
