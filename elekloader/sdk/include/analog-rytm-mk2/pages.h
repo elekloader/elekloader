@@ -207,6 +207,11 @@ struct core_knob_flag {
     uint32_t flags;         /* added to the record's +0x24 flags: CORE_KNOB_LIST */
 };
 
+/* the id of the knob the picker last created a list for (any knob's). The
+ * list keeps no id, and every own id has container index -1, so a mod with
+ * two list knobs reads which one the open list is for here. */
+extern int32_t core_knob_list_id;
+
 /* Stock knob faces (core 0.15). A mod whose own machine takes over stock
  * parameter records (machines on the SMPL page's records 39..46, say) keeps the records, so the sound's slots, its
  * p-locks, slides, LFO, MIDI and storage stay stock's, and changes how the

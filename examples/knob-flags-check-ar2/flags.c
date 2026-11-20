@@ -16,13 +16,15 @@
  * getter (0x40007234, which core takes) answers for 67 and for B, C and D,
  * and per own knob how often core asked get, delta and text, the last delta
  * and text value, and the value; the stock overlay state (screen.h) and how
- * often it changed. */
+ * often it changed; and core_knob_list_id, the knob the last list was
+ * created for. */
 #include <stdint.h>
 #include "analog-rytm-mk2/pages.h"
 #include "analog-rytm-mk2/screen.h"
 
 CORE_KNOBS;
-CORE_PAGES;
+
+#define KF_PAGE 90                               /* a fixed page id: "pages" by count is not on the +Drive */
 
 #define NOWN 3
 #define LOOK 67                                  /* LFO DEST */
@@ -43,6 +45,7 @@ struct {
     struct { uint32_t gets, deltas, texts; int32_t last_delta, last_text, value; } k[NOWN];
     int32_t overlay;                    /* core_stock_overlay() at the last tick */
     uint32_t overlay_changes;
+    int32_t list_id;                    /* core_knob_list_id at the last tick */
 } kf = {{'K', 'F', 'C', '1'}};
 
 static int own_ix(int32_t id) { return (uint32_t)(id - CORE_KNOB(0)) < NOWN ? id - CORE_KNOB(0) : -1; }
@@ -99,6 +102,7 @@ void kf_tick(void *ctrl)
     if (o != kf.overlay && kf.ticks > 1)
         kf.overlay_changes++;
     kf.overlay = o;
+    kf.list_id = core_knob_list_id;
 }
 
 /* the tables */
@@ -107,5 +111,5 @@ const struct core_param_lock kf_locks = {CORE_KNOB(0), CORE_KNOB(NOWN - 1), 0, 0
 const struct core_knob_look kf_looks = {CORE_KNOB(0), CORE_KNOB(NOWN - 1), LOOK, 0, 0, 0};
 const struct core_knob_flag kf_flag_list = {CORE_KNOB(0), CORE_KNOB(0), CORE_KNOB_LIST};
 const struct core_knob_flag kf_flag_masked = {CORE_KNOB(1), CORE_KNOB(1), 0xfffeffffu};
-const struct core_page kf_page = {CORE_PAGE(0), "KNOB FLAGS", {LOOK, CORE_KNOB(0), CORE_KNOB(1), CORE_KNOB(2), 0, 0, 0, 0}};
-const struct core_view_page kf_view = {CORE_VIEW_LFO, CORE_PAGE(0), 0};
+const struct core_page kf_page = {KF_PAGE, "KNOB FLAGS", {LOOK, CORE_KNOB(0), CORE_KNOB(1), CORE_KNOB(2), 0, 0, 0, 0}};
+const struct core_view_page kf_view = {CORE_VIEW_LFO, KF_PAGE, 0};

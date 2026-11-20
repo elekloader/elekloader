@@ -2430,6 +2430,8 @@ const struct core_knob_flag my_flags = {CORE_KNOB(0), CORE_KNOB(1), CORE_KNOB_LI
   masks the other bits off.
 - Give the ids a look too (`core_knob_looks`, look 67 draws LFO DEST's
   knob); the value and its text stay your `core_params` entry's.
+- `core_knob_list_id`: the knob the last list was created for. Own ids all
+  have container index -1, so with two list knobs this says whose it is.
 
 Stock ids never change. The linker refuses an entry below 555 and two
 mods' entries that share an id. A mod that gated the flag reads itself

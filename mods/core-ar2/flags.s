@@ -22,7 +22,7 @@
 
         .text
         .globl  core_flags_hook, core_flags_turn_site, core_flags_delta_site
-        .globl  core_flags_push_site, core_flags_list_site
+        .globl  core_flags_push_site, core_flags_list_site, core_knob_list_id
 
 | the id's entry flags into %d0 (id at 4(%sp)); every other register kept
         .align  2
@@ -77,6 +77,7 @@ core_flags_push_site:
 
         .align  2
 core_flags_list_site:
+        move.l  %d0,core_knob_list_id     | the knob this list is created for
         move.l  0x24(%a0,%d1.l),%d7
         move.l  %d0,-(%sp)                | id: stock's argument, and ours
         bsr.w   flags_of
@@ -84,3 +85,10 @@ core_flags_list_site:
         move.l  (%sp),%d0
         jsr     0x40006ea8
         jmp     0x40039da0
+
+        .data
+        .align  2
+| the id of the knob the picker last created a list for, any knob's: the
+| list keeps no id, and a mod's own ids all have container index -1
+core_knob_list_id:
+        .long   0

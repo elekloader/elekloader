@@ -9,7 +9,6 @@
  "device": "analog-rytm-mk2",
  "os": "1.74",
  "knobs": 3,
- "pages": 1,
  "resources": {
   "core": "0.18"
  },

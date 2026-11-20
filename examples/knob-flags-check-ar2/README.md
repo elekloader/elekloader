@@ -45,7 +45,8 @@ first (header KNOB FLAGS, labels KFL KFM KFN):
 6. **A second knob while the list is open.** With B's list open, turn D:
    record whether the list stays or closes (all own ids share container
    index -1, so stock may treat D as the list's knob; lfo-rnd keeps its own
-   `list_same` and `knob_cidx` gates for that).
+   `list_same` and `knob_cidx` gates for that). `kf.list_id` is B's id
+   while B's list is open.
 7. **Stock unchanged.** A (LFO DEST) and the LFO page's own DEST knob open
    their list and commit as on stock; other stock knobs open none.
 8. **+Drive.** The same with the example loaded from the +Drive
