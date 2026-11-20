@@ -135,6 +135,8 @@ export const DIGITAKT_MK1: Device = {
   areas: { ddr: [0x47be0000, 0x47c00000], 'sram-tail': [0x8000f700, 0x80010000], 'sram-block': [0x80003360, 0x80008000] },
   ddr: [0x47be0000, 0x47c00000], sramCode: [0x8000f700, 0x80010000], fastTable: 'fa_copies',
   coreDdr: [['4.0', [0x47bc0000, 0x47c00000]]],   // core 4.0: 256 KB
+  driveAlign: 0x1000,                              // +Drive mods' area: what the flashed build leaves of coreDdr's, from a 4 KB boundary
+  driveShadow: true,                               // TELOS copies stock parts from RAM (desc.ts, shadow)
   slotClaims: [['core_machines', 0, 128, 'machine']],   // a machine's descriptor names its id at +0
   tableLimits: { sdk_alpha_machines: 32 },   // machine-pages' SDK machines
   recovery: 'hold FUNC while powering on for the startup menu, then send the stock .syx',
