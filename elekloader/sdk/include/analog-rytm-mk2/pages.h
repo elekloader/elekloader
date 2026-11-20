@@ -184,6 +184,29 @@ struct core_knob_look {
 /* the stock UI record of id (0..468; record 0 for any other id), to copy */
 const void *core_knob_stock_ui(int32_t id);
 
+/* core-ar2 0.18: knob flags. A mod's own id (555 up) has no stock parameter
+ * record, so stock reads record 0's flags (+0x24) for it, and no own knob
+ * opens a list when turned or pushed, as LFO DEST does. An entry in
+ * core_knob_flags adds flags to what stock reads for the ids:
+ *
+ *     {"to": "core_knob_flags", "order": 50, "data": "00000000",
+ *      "relocs": [[0, "abs32", "sym:my_flags", 0]]}
+ *
+ *     const struct core_knob_flag my_flags = {CORE_KNOB(0), CORE_KNOB(1), CORE_KNOB_LIST};
+ *
+ * Only CORE_KNOB_LIST is honoured; core masks the other bits off. The list
+ * is stock's destination list (the one LFO DEST opens); the knob's look is
+ * its core_knob_looks entry's (look 67 draws it as LFO DEST), its value the
+ * mod's (core_params). Stock ids are never changed. The linker refuses an
+ * entry below 555 and two mods' entries sharing an id, as for
+ * core_knob_looks. */
+#define CORE_KNOB_LIST 0x10000  /* a turn or a push opens the knob's list */
+
+struct core_knob_flag {
+    int32_t first, last;    /* the ids this entry answers for */
+    uint32_t flags;         /* added to the record's +0x24 flags: CORE_KNOB_LIST */
+};
+
 /* Stock knob faces (core 0.15). A mod whose own machine takes over stock
  * parameter records (machines on the SMPL page's records 39..46, say) keeps the records, so the sound's slots, its
  * p-locks, slides, LFO, MIDI and storage stay stock's, and changes how the

@@ -178,11 +178,11 @@ relocations load from the +Drive unchanged. The flashed ids are below
 `drive_knobs`), so a reflash never moves them. The rules below are the
 device profile's `param_ids`, which each loader's dl.h has as constants:
 the A4's are given here, the Rytm's are the core's 469..554, own ids from
-555 (0x22b), and three tables (`core_params`, and `core_param_locks` and
-`core_knob_looks`, whose entries take own ids only).
+555 (0x22b), and four tables (`core_params`, and `core_param_locks`,
+`core_knob_looks` and `core_knob_flags`, whose entries take own ids only).
 
 - **The flashed ids.** The descriptor names the ids each flashed module's
-  `core_params` and `core_knob_looks` entries take, its run included, as
+  entries in those tables take, its run included, as
   claims of kind 4 (`"<first> <last>"`, hex).
 - **Form.** `"knobs"` is 0..1024 and `__knobs` no mod's symbol; a relocation
   to `__knobs` is `abs32` or `abs16` (`abs16` on a build with `F_ABS16`)

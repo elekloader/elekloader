@@ -2408,6 +2408,33 @@ A mod's own ids (555 up) take faces too, for a knob whose value the mod
 keeps but whose face changes with the sound (smpl-knob-c's knob C). The
 linker refuses an entry whose ids reach 469..554.
 
+### Knob flags (core-ar2 0.18, Analog Rytm MKII)
+
+A knob of the mod's own (555 up) that should open a destination list when
+turned or pushed, as LFO DEST does, sets the list flag stock reads from the
+parameter record, which an own id doesn't have. With
+`analog-rytm-mk2/pages.h`:
+
+```json
+{"to": "core_knob_flags", "order": 50, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_flags", 0]]}
+```
+
+```c
+CORE_KNOBS;
+/* {first, last, flags} */
+const struct core_knob_flag my_flags = {CORE_KNOB(0), CORE_KNOB(1), CORE_KNOB_LIST};
+```
+
+- `flags`: added to the record's. Only `CORE_KNOB_LIST` is honoured; core
+  masks the other bits off.
+- Give the ids a look too (`core_knob_looks`, look 67 draws LFO DEST's
+  knob); the value and its text stay your `core_params` entry's.
+
+Stock ids never change. The linker refuses an entry below 555 and two
+mods' entries that share an id. A mod that gated the flag reads itself
+(lfo-rnd 1.4) clashes with core 0.18 at those sites.
+
 ### Knob looks (core-ar2 0.13, Analog Rytm MKII)
 
 A knob id of the mod's own (555 up) has no stock records: without more,

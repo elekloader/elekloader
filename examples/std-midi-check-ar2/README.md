@@ -10,7 +10,7 @@ one message it takes; `midi.c` says what it records in `std_midi`.
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/std-midi-check-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.17.elemod --mod examples/std-midi-check-ar2/out/std-midi-check-0.1.elemod \
+    --mod mods/core-ar2/out/core-0.18.elemod --mod examples/std-midi-check-ar2/out/std-midi-check-0.1.elemod \
     --out ar-std-midi.syx --version SM74
 ```
 
