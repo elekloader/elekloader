@@ -324,11 +324,13 @@ void core_setting_add(void *menu, const struct core_setting *s)
 
 /* fb is ev_draw's bmp: stock's 28-byte bitmap record (+4 width, +8 height,
  * +16 the pixels; analog-rytm-mk2/screen.h). The pixels are columns of
- * height / 8 bytes, a column's top row in its first byte's top bit (row r
- * from the bottom, as stock's calls count, is byte height / 8 - 1 - r / 8,
- * bit r % 8: screen.c's LEVEL field). The helpers take rows from
- * the top, clip to the record's size and write the pixels themselves; the
- * mask, if the record has one, is left as it is. */
+ * height / 8 bytes, a column's bottom row in its first byte's top bit: row
+ * b from the bottom, as stock's calls count, is byte b / 8, bit 0x80 >> (b %
+ * 8), so glass row t from the top is byte height / 8 - 1 - t / 8, bit 1 <<
+ * (t % 8) (screen.c's LEVEL field). The helpers take rows from the top (as
+ * the A4's), clip to the record's size, turn each row into stock's count
+ * (b = height - 1 - t) and write the pixels themselves; the mask, if the
+ * record has one, is left as it is. */
 #define BMP_W(b) (*(const int32_t *)((const uint8_t *)(b) + 4))
 #define BMP_H(b) (*(const int32_t *)((const uint8_t *)(b) + 8))
 #define BMP_PX(b) (*(uint8_t *const *)((const uint8_t *)(b) + 16))
@@ -364,11 +366,12 @@ void core_fill(void *fb, int x, int y, int w, int h, int on)
     for (c = x; c <= x1; c++) {
         uint8_t *col = px + c * stride;
         for (r = y; r <= y1; r++) {
-            uint8_t m = (uint8_t)(0x80u >> (r & 7));
+            int b = fh - 1 - r;                     /* stock's row, from the bottom */
+            uint8_t m = (uint8_t)(0x80u >> (b & 7));
             if (on)
-                col[r >> 3] |= m;
+                col[b >> 3] |= m;
             else
-                col[r >> 3] &= (uint8_t)~m;
+                col[b >> 3] &= (uint8_t)~m;
         }
     }
 }
