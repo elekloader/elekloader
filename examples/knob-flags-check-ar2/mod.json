@@ -1,0 +1,122 @@
+{
+ "id": "knob-flags-check",
+ "version": "0.1",
+ "title": "Knob flags check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for core-ar2 0.18's knob flags (core_knob_flags). One page, KNOB FLAGS, behind the LFO key: A is stock's LFO DEST, B, C and D knob ids of the mod's own drawn as LFO DEST (core_knob_looks look 67). B's core_knob_flags entry has CORE_KNOB_LIST, so a turn or a push opens the destination list; C's has every other bit, which core masks off; D has none. The values are the mod's (core_params) with stock's LFO DEST text. After the magic KFC1, what the flags getter answers for 67, B, C and D, and per own knob the get, delta and text calls core made, with the stock overlay state.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "knobs": 3,
+ "pages": 1,
+ "resources": {
+  "core": "0.18"
+ },
+ "requires": [
+  "core"
+ ],
+ "sources": [
+  "flags.c"
+ ],
+ "subscribe": [
+  {
+   "event": "ev_tick",
+   "fn": "kf_tick",
+   "order": 60
+  }
+ ],
+ "contribute": [
+  {
+   "to": "core_params",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:kf_params",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_param_locks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:kf_locks",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:kf_looks",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_flags",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:kf_flag_list",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_flags",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:kf_flag_masked",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:kf_page",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 30,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:kf_view",
+     0
+    ]
+   ]
+  }
+ ]
+}
