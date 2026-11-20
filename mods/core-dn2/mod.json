@@ -1,12 +1,13 @@
 {
- "id": "core", "version": "0.4",
+ "id": "core", "version": "0.5",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina",
- "description": "The boot copier and the hook bus for the Digitone II: every other mod needs it. On its own it changes nothing the unit does.",
+ "description": "The boot copier and the hook bus for the Digitone II: every other mod needs it. On its own it changes nothing the unit does. It also gives a mod that links more mods on the unit (TELOS) the card ready, its sectors, project saves and loads, crashes, restart and the OS's tasks.",
  "device": "digitone-mk2", "os": "1.12",
  "sharc": {"artifact": "bridge.sharc.json"},
  "sources": ["../core/core.s", "../core/settings.s", "../core-dt2/personalize.s",
-             "input.c", "input.s", "sysex.s", "peek.c", "midi.s"],
+             "input.c", "input.s", "sysex.s", "peek.c", "midi.s",
+             "../core-dt2/system.s", "../core-dt2/fw.s", "tasks.s"],
  "defsym": {
   "DRAWALL": "0x4011d60a",
   "KEYDISP": "0x4002c5c8",
@@ -23,7 +24,11 @@
   "PANEL_ENCODER": "0x4011ff0c", "PANEL_COUNTER": "0x466768b0",
   "SYSEX_SEND": "0x401236d2", "SYSEX_TABLE": "0x40207f9e",
   "DSP_FRAME": "0x400cf922", "DSP_QUEUE": "0x80002510",
-  "ROUTER_EXIT": "0x4003f1a2"
+  "ROUTER_EXIT": "0x4003f1a2",
+  "CARD_STATUS": "0x4243989c", "CRASH_SET": "0x40001986", "FW_RESTART": "0x40005608",
+  "SLOT_SAVE": "0x40040190", "PROJ_LOAD": "0x40042e6e", "TCB_SP": "72",
+  "FW_FILLRECT": "0x40114b22", "FW_TEXTF": "0x4011573c", "FW_FONT5": "0x44508ef8", "FW_BLIT": "0x40115adc", "FW_INVALIDATE": "0x4011ca9a",
+  "CARD_READ": "0x4012c87a", "CARD_WRITE": "0x4012ca60"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb9400019b0", "op": "jsr", "target": "boot"},
@@ -37,8 +42,13 @@
   {"addr": "0x4011f8c4", "stock": "52b9466768b0", "op": "jsr", "target": "core_panel_clock"},
   {"addr": "0x4012197a", "stock": "47f940207f9e", "op": "jsr", "target": "core_sysex"},
   {"addr": "0x40025e9e", "stock": "4eb9400cf922", "op": "jsr", "target": "core_dsp_frame"},
-  {"addr": "0x4003f106", "stock": "2a2f0028b083", "op": "jsr", "target": "core_midi_cc"}
+  {"addr": "0x4003f106", "stock": "2a2f0028b083", "op": "jsr", "target": "core_midi_cc"},
+  {"addr": "0x400cf0f2", "stock": "23c04243989c", "op": "jsr", "target": "core_card_ready"},
+  {"addr": "0x40040190", "stock": "4fefffcc48d77c1c", "op": "jmp", "target": "core_slot_save"},
+  {"addr": "0x40042e6e", "stock": "4fefffdc48d7043c", "op": "jmp", "target": "core_project_load"},
+  {"addr": "0x4011ee16", "stock": "4eb940001986", "op": "jsr", "target": "core_crash_install"}
  ],
  "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_personalize": 4, "ev_sysex": 4,
-                 "ev_midi_cc": 4}
+                 "ev_midi_cc": 4, "ev_card_ready": 4, "ev_project_slot_write": 4, "ev_project_saved": 4,
+                 "ev_project_loaded": 4, "ev_crash": 4}
 }

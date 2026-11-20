@@ -306,7 +306,10 @@ CORE_SITES = ((0x40000538, '4eb9400019b0'), (0x4002e464, '4eb94011d5d4'),
               (0x4002f256, '4eb94002c55c'), (0x4009ff88, '205248780002'),
               (0x400987a2, '4cef7c7c0018'), (0x4011fc8c, '4fefffbc48d77cfc'),
               (0x4011f8c4, '52b9466768b0'), (0x4012197a, '47f940207f9e'),
-              (0x40025e9e, '4eb9400cf922'), (0x4003f106, '2a2f0028b083'))
+              (0x40025e9e, '4eb9400cf922'), (0x4003f106, '2a2f0028b083'),
+              # core 0.5: the system's moments (core-dt2's system.s)
+              (0x400cf0f2, '23c04243989c'), (0x40040190, '4fefffcc48d77c1c'),
+              (0x40042e6e, '4fefffdc48d7043c'), (0x4011ee16, '4eb940001986'))
 
 
 def at(img, addr, n):
@@ -375,7 +378,11 @@ CORE_HOOKS = {0x40000538: ('4eb9', 'boot'), 0x4002e464: ('4eb9', 'core_tick'),
               0x4011f8c4: ('4eb9', 'core_panel_clock'),
               0x4012197a: ('4eb9', 'core_sysex'),
               0x40025e9e: ('4eb9', 'core_dsp_frame'),
-              0x4003f106: ('4eb9', 'core_midi_cc')}
+              0x4003f106: ('4eb9', 'core_midi_cc'),
+              0x400cf0f2: ('4eb9', 'core_card_ready'),
+              0x40040190: ('4ef9', 'core_slot_save'),
+              0x40042e6e: ('4ef9', 'core_project_load'),
+              0x4011ee16: ('4eb9', 'core_crash_install')}
 
 
 def assert_hooked(new, man):
@@ -492,29 +499,37 @@ def test_hooks_check_links_with_core():
 
 PEEK_SITE = 0x40025e9e          # 0.3: the frame sender's call of the SPI driver
 CC_SITE = 0x4003f106            # 0.4: the CC router's flags load and CC 95 check
+# 0.5: TELOS's sites, events and exports (core-dt2's system.s and fw.s, tasks.s)
+SYSTEM_SITES = (0x400cf0f2, 0x40040190, 0x40042e6e, 0x4011ee16)
+SYSTEM_EVENTS = ['ev_card_ready', 'ev_project_slot_write', 'ev_project_saved', 'ev_project_loaded', 'ev_crash']
+SYSTEM_EXPORTS = {'core_card_ready', 'core_crash', 'core_crash_install', 'core_project_load', 'core_restart',
+                  'core_restart_now', 'core_slot_save', 'core_tasks', 'fw_blit', 'fw_card_read', 'fw_card_write',
+                  'fw_fillrect', 'fw_font5', 'fw_invalidate', 'fw_op_new', 'fw_textf'}
 PEEK_EXPORTS = {'core_dsp_frame', 'core_dsp_peek', 'core_dsp_peek_status', 'core_dsp_peek_data',
                 'core_dsp_peek_stop', 'core_dsp_span', 'core_dsp_post', 'core_midi_cc'}
 
 
 def test_core_0_3_keeps_the_0_1_control_contract_and_adds_only_the_peek():
-    """0.2 added its dormant SHARC bridge, 0.3 the DSP peek (one site at the frame sender) and 0.4
-    ev_midi_cc (one site at the CC router, its table) and the posts, its code after 0.1's. Every 0.1
-    site, symbol, relocation, table and reservation stays."""
+    """0.2 added its dormant SHARC bridge, 0.3 the DSP peek (one site at the frame sender), 0.4
+    ev_midi_cc (one site at the CC router, its table) and the posts, and 0.5 what TELOS needs (four
+    sites, five tables), its code after 0.1's. Every 0.1 site, symbol, relocation, table and
+    reservation stays."""
     old = json.loads(need(CORE_01, 'ELEKLOADER_DN2_CORE_01'))
     with tempfile.TemporaryDirectory() as tmp:
         with open(built(os.path.join('mods', 'core-dn2'), tmp)) as fh:
             new = json.load(fh)
-    assert old['version'] == '0.1' and new['version'] == '0.4'
+    assert old['version'] == '0.1' and new['version'] == '0.5'
     for key in ('target', 'contribute', 'resources', 'copied', 'weak'):
         assert new[key] == old[key], key
-    assert new['collections'] == {**old['collections'], 'ev_midi_cc': 4}
-    assert sorted(new['imports']) == sorted(old['imports'] + ['ev_midi_cc'])
+    assert new['collections'] == {**old['collections'], **{e: 4 for e in ['ev_midi_cc'] + SYSTEM_EVENTS}}
+    assert sorted(new['imports']) == sorted(old['imports'] + ['ev_midi_cc'] + SYSTEM_EVENTS)
     added = [x for x in new['sites'] if x not in old['sites']]
     assert [x for x in new['sites'] if x in old['sites']] == old['sites']
     assert [(int(x['addr'], 0), x['relocs']) for x in added] == [(PEEK_SITE, [[2, 'abs32', 'sym:core_dsp_frame', 0]]),
-                                                                 (CC_SITE, [[2, 'abs32', 'sym:core_midi_cc', 0]])]
+                                                                 (CC_SITE, [[2, 'abs32', 'sym:core_midi_cc', 0]])] + [
+        (a, [[2, 'abs32', 'sym:' + t, 0]]) for a, (_op, t) in CORE_HOOKS.items() if a in SYSTEM_SITES]
     assert all(new['symbols'].get(k) == v for k, v in old['symbols'].items())   # 0.1's code has not moved
-    assert set(new['exports']) - set(old['exports']) == PEEK_EXPORTS
+    assert set(new['exports']) - set(old['exports']) == PEEK_EXPORTS | SYSTEM_EXPORTS
     assert all(r in new['relocs'] for r in old['relocs'])
     assert 'sharc' not in old and new['sharc']['entries'] is not None
 

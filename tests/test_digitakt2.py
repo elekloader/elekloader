@@ -240,12 +240,16 @@ CORE_SITES = ((0x40000538, '4eb9400019b0'), (0x40032ad4, '4eb94011bc60'),
               (0x4002e90c, '4eb9400d9508'), (0x400311a2, '4ebaf7ea2f02'),
               (0x400dbee4, '223cbacef00c'), (0x400db8be, '223cbacef00c'),
               (0x400df932, '26bcbeefbace'), (0x400df99c, '203cbeefbace'),
-              (0x40136388, '226f0004206f0008202f000c'))
+              (0x40136388, '226f0004206f0008202f000c'),
+              # 1.2: the system's moments (system.s)
+              (0x400cccbe, '23c042940a48'), (0x400ccd6c, '7040c0b94029eef0'),
+              (0x40043a30, '4fefffcc48d77c1c'), (0x40046c38, '4fefffdc48d7043c'),
+              (0x4011d4a2, '4eb940001986'), (0x40120006, '47f94021e5d2'))
 
 
 def test_core_builds_links_and_verifies():
     """mods/core-dt2 built with the SDK, then a build with it alone: its
-    fourteen sites, and nothing else in the image changed."""
+    twenty sites, and nothing else in the image changed."""
     with tempfile.TemporaryDirectory() as tmp:
         core = built(os.path.join('mods', 'core-dt2'), tmp)
         outputs, man = patch.build(SYX, [core], version='DT03', log=lambda *a: None)

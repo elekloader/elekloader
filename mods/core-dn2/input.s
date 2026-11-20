@@ -22,9 +22,8 @@ core_stock_buttons:
         movem.l %d2-%d7/%a2-%a6, (%sp)
         jmp     KEY_CONTINUE
 
-        .globl fw_panel_encoder, fw_sysex_send
+        .globl fw_panel_encoder
         .set fw_panel_encoder, PANEL_ENCODER
-        .set fw_sysex_send, SYSEX_SEND
         .globl core_millis, core_panel_clock
 core_millis:
         move.l core_ms, %d0

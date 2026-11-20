@@ -29,7 +29,7 @@ older ones people still have:
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.4.elemod`, `core-dn1-5.4-os1.44.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page |
-| Digitakt II | 1.17 | `core-dt2-1.1.elemod` | on main, not released: build it ([below](#building-a-core)) |
+| Digitakt II | 1.17 | `core-dt2-1.2.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitone II | 1.12 | `core-dn2-0.4.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page (experimental) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.14.elemod` | build it ([below](#building-a-core)). Drive Loader 0.5 needs it: +Drive storage at boot (`ev_boot_drive`, `core_store_gens`) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.13.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page. The Drive Loader needs 0.12 or newer: the +Drive mods' spare entries in its tables. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
@@ -201,6 +201,9 @@ the one a mod that uses it names in `resources.core`.
     LEDs over the stock views' (`ev_key_leds`);
   - the mods' project and kit data, saved with the project and its kits
     and copied with the kits, and value rows (ADAPTING.md, "Project data, kit data and value rows (core-dt2 1.1, Digitakt II)").
+  - what a +Drive loader needs (TELOS): the card and its file system ready, the
+    +Drive's files, project saves and loads, crashes, restart, SysEx and the
+    OS's tasks (1.2; the core's README).
 - **Digitone II** ([mods/core-dn2](../mods/core-dn2), experimental): the
   Digitakt II's events and rows, without `.fast`; remote panel input and
   SysEx observers (ADAPTING.md, "Remote panel input and SysEx"); and SHARC
@@ -209,7 +212,9 @@ the one a mod that uses it names in `resources.core`.
   the [sine example](../examples/sharc-sine/README.md)); from 0.3 a DSP
   memory peek (ADAPTING.md, "The DSP peek"); from 0.4 MIDI CCs before the
   stock applies them (`ev_midi_cc`) and words posted to DSP code
-  (`core_dsp_post`, ADAPTING.md, "The DSP peek"). The optional
+  (`core_dsp_post`, ADAPTING.md, "The DSP peek"); and what a +Drive loader
+  needs (TELOS): the card ready and its sectors, project saves and loads,
+  crashes, restart and the OS's tasks (the core's README). The optional
   [dspbusy-dn2 companion](../mods/dspbusy-dn2/README.md) enables the busy
   measure for a build with a SHARC mod. The
   [machines companion](MACHINES-DN2.md) adds

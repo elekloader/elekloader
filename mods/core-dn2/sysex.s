@@ -2,7 +2,14 @@
 | ev_sysex: void f(const u8 *message, u32 length, u32 source).
 | MIDI task, before stock routing; observers must validate header/length/source.
 | Source 2/4 is USB, 8/16 DIN. Stock routing always continues unchanged.
+| Shared by core-dt2 (its SYSEX_TABLE and SYSEX_SEND); fw_sysex_send(buf, len, abort, port) is the stock sender.
+        .globl fw_sysex_send
+        .set fw_sysex_send, SYSEX_SEND
+        .ifdef  SYSEX_IN_TEXT                   | core-dt2 1.2: after its C, so 1.1's code keeps its place
+        .text
+        .else                           | core-dn2: in .run, where 0.4 has it
         .section .run, "ax"
+        .endif
         .globl core_sysex
 core_sysex:
         lea -32(%sp), %sp
