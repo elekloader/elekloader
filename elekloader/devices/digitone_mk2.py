@@ -135,6 +135,9 @@ DEVICE = Device(
         'ddr': (0x47F00000, 0x47F40000),          # above the DMA buffers, below the boot stack
     },
     ddr=(0x47F00000, 0x47F40000),
+    drive_align=0x1000,                       # +Drive mods' area: what the flashed build leaves of ddr,
+                                              # from a 4 KB boundary (TELOS, github.com/elekloader/telos)
+    drive_shadow=True,                        # TELOS copies stock parts from RAM (desc.py, "shadow")
     slot_claims=(('mk2_voice_synths', 0, 32, 'mk2-synth'),  # stable synth IDs
                  ('sdk_alpha_machines', 0, 128, 'mk2-synth'),
                  ('mk2_voice_filters', 0, 32, 'mk2-filter'),

@@ -106,6 +106,9 @@ DEVICE = Device(
         'sram-block': (0x80006E80, 0x80008000),   # free SRAM after the first half's data
     },
     ddr=(0x47F00000, 0x47F40000),
+    drive_align=0x1000,                       # +Drive mods' area: what the flashed build leaves of ddr,
+                                              # from a 4 KB boundary (TELOS, github.com/elekloader/telos)
+    drive_shadow=True,                        # TELOS copies stock parts from RAM (desc.py, "shadow")
     sram_code=(0x8000F100, 0x80010000),
     fast_table='core_fast',                     # declared and copied by core-dt2 (fast.s)
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '

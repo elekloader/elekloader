@@ -169,6 +169,8 @@ export const DIGITAKT_MK2: Device = {
   // ddr-low: below the linker's area, above the DSP buffers; what mods that place code at fixed addresses claim
   areas: { ddr: [0x47f00000, 0x47f40000], 'ddr-low': [0x47e7b000, 0x47f00000], 'sram-tail': [0x8000f100, 0x80010000], 'sram-block': [0x80006e80, 0x80008000] },
   ddr: [0x47f00000, 0x47f40000], sramCode: [0x8000f100, 0x80010000], fastTable: 'core_fast',
+  driveAlign: 0x1000,                              // +Drive mods' area: what the flashed build leaves of ddr's, from a 4 KB boundary
+  driveShadow: true,                               // TELOS copies stock parts from RAM (desc.ts, shadow)
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI (not USB)',
 }
@@ -470,6 +472,8 @@ export const DIGITONE_MK2: Device = {
   stage: 0x40400000, flashAt: 0x80000, flashLimit: 0x380000, trailer: 'hmac', hmacKeyFrom: [2, 'Multiplier'],
   areas: { ddr: [0x47f00000, 0x47f40000] },
   ddr: [0x47f00000, 0x47f40000],
+  driveAlign: 0x1000,                              // +Drive mods' area: what the flashed build leaves of ddr's, from a 4 KB boundary
+  driveShadow: true,                               // TELOS copies stock parts from RAM (desc.ts, shadow)
   slotClaims: [['mk2_voice_synths', 0, 32, 'mk2-synth'], ['sdk_alpha_machines', 0, 128, 'mk2-synth'],
     ['mk2_voice_filters', 0, 32, 'mk2-filter'],
     ['mk2_voice_pages', 0, 32, 'mk2-pages']],   // one pages entry per synth ID
