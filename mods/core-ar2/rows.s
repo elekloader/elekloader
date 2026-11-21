@@ -14,10 +14,22 @@ core_memcpy:
         moveq   #88,%d0
         cmp.l   12(%sp),%d0
         bhi.s   0f
-        tst.l   core_rows_ents            | (0.19) no lock entries and no step
-        bne.s   1f                        | owners: nothing to follow, stock's
-        tst.l   core_step_owners          | copy alone
+        tst.l   core_step_owners          | (0.19) step owners: always followed
         bne.s   1f
+        tst.l   core_rows_ents            | no lock entries: nothing to follow,
+        beq.s   0f                        | stock's copy alone
+        move.l  8(%sp),%d0                | (0.19) src and dst both outside
+        cmp.l   core_rows_hi,%d0          | [core_rows_lo, core_rows_hi), the
+        bcc.s   2f                        | span every entry's address is in:
+        add.l   12(%sp),%d0               | the same
+        cmp.l   core_rows_lo,%d0
+        bhi.s   1f
+2:      move.l  4(%sp),%d0
+        cmp.l   core_rows_hi,%d0
+        bcc.s   0f
+        add.l   12(%sp),%d0
+        cmp.l   core_rows_lo,%d0
+        bhi.s   1f
 0:      movea.l 4(%sp),%a1
         movea.l 8(%sp),%a0
         jmp     0x40098bc8
@@ -45,10 +57,16 @@ core_memset:
         moveq   #88,%d0
         cmp.l   12(%sp),%d0
         bhi.s   1f
-        tst.l   core_rows_ents            | (0.19) nothing to drop
-        bne.s   0f
-        tst.l   core_step_owners
+        tst.l   core_step_owners          | (0.19) nothing to drop: no step
+        bne.s   0f                        | owners and the block outside the
+        tst.l   core_rows_ents            | entries' span (or none)
         beq.s   1f
+        move.l  4(%sp),%d0
+        cmp.l   core_rows_hi,%d0
+        bcc.s   1f
+        add.l   12(%sp),%d0
+        cmp.l   core_rows_lo,%d0
+        bls.s   1f
 0:      move.l  12(%sp),-(%sp)
         move.l  8(%sp),-(%sp)
         jsr     core_rows_drop
@@ -66,10 +84,16 @@ core_new_array:
         addq.l  #4,%sp
         tst.l   %d0
         beq.s   1f
-        tst.l   core_rows_ents            | (0.19) nothing to drop
-        bne.s   0f
-        tst.l   core_step_owners
+        tst.l   core_step_owners          | (0.19) nothing to drop: no step
+        bne.s   0f                        | owners and the block outside the
+        tst.l   core_rows_ents            | entries' span (or none)
         beq.s   1f
+        cmp.l   core_rows_hi,%d0
+        bcc.s   1f
+        move.l  %d0,%d1
+        add.l   4(%sp),%d1
+        cmp.l   core_rows_lo,%d1
+        bls.s   1f
 0:      move.l  %d0,-(%sp)
         move.l  8(%sp),-(%sp)
         move.l  %d0,-(%sp)

@@ -160,6 +160,11 @@ static struct ledger *volatile led[REGIONS];
  * core_step_owners[0] are 0, rows.s's memcpy, memset and operator new go
  * straight to stock's (a copy can carry nothing then) */
 volatile unsigned core_rows_ents;
+/* (0.19) a span holding every entry's address, live or dead: it only grows
+ * while entries exist (each array swapped in adds its first and last) and
+ * starts again from empty at the first swap after core_rows_ents was 0; a
+ * copy, a clear or a new block wholly outside it carries and drops nothing */
+volatile unsigned core_rows_lo = ~0u, core_rows_hi;
 static volatile unsigned gen[REGIONS];          /* every change, to the array or in place */
 static volatile unsigned short dead[REGIONS];   /* entries marked DEAD since the last rebuild */
 
@@ -334,6 +339,16 @@ static int replace_r(int r, unsigned a, unsigned b, const struct ent *add, int k
             n->n = j;
         sr = irq_mask();
         if (led[r] == l && gen[r] == g) {
+            if (!core_rows_ents) {
+                core_rows_lo = ~0u;
+                core_rows_hi = 0;
+            }
+            if (n && n->n) {
+                if (n->e[0].addr < core_rows_lo)
+                    core_rows_lo = n->e[0].addr;
+                if (n->e[n->n - 1].addr + 1 > core_rows_hi)
+                    core_rows_hi = n->e[n->n - 1].addr + 1;
+            }
             core_rows_ents += (n ? n->n : 0) - (l ? l->n - dead[r] : 0);
             led[r] = n;
             dead[r] = 0;
