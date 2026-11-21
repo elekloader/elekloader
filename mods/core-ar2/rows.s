@@ -14,11 +14,11 @@ core_memcpy:
         moveq   #88,%d0
         cmp.l   12(%sp),%d0
         bhi.s   0f
-        tst.l   core_step_owners          | (0.19) step owners: always followed
+        tst.l   core_step_owners          | (0.17) step owners: always followed
         bne.s   1f
         tst.l   core_rows_ents            | no lock entries: nothing to follow,
         beq.s   0f                        | stock's copy alone
-        move.l  8(%sp),%d0                | (0.19) src and dst both outside
+        move.l  8(%sp),%d0                | (0.17) src and dst both outside
         cmp.l   core_rows_hi,%d0          | [core_rows_lo, core_rows_hi), the
         bcc.s   2f                        | span every entry's address is in:
         add.l   12(%sp),%d0               | the same
@@ -57,7 +57,7 @@ core_memset:
         moveq   #88,%d0
         cmp.l   12(%sp),%d0
         bhi.s   1f
-        tst.l   core_step_owners          | (0.19) nothing to drop: no step
+        tst.l   core_step_owners          | (0.17) nothing to drop: no step
         bne.s   0f                        | owners and the block outside the
         tst.l   core_rows_ents            | entries' span (or none)
         beq.s   1f
@@ -84,7 +84,7 @@ core_new_array:
         addq.l  #4,%sp
         tst.l   %d0
         beq.s   1f
-        tst.l   core_step_owners          | (0.19) nothing to drop: no step
+        tst.l   core_step_owners          | (0.17) nothing to drop: no step
         bne.s   0f                        | owners and the block outside the
         tst.l   core_rows_ents            | entries' span (or none)
         beq.s   1f
