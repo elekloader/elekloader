@@ -176,9 +176,10 @@ tables the link rewrites.
   link and the flush, and as it ends. `/mods/.status` shows it as `boot: N us (checks N, link N, inits N)`
   (the skip key's query alone is 20 ms of the checks); a part the boot didn't reach is 0.
 
-`tests/drive_link_host.c` builds the same linker for the computer, and
-`tests/test_drive_link.py` checks it on a made-up Rytm build, and checks that the MODS page's
-`dl_check` gives the same verdicts without writing RAM.
+- **std1**: as [drive-loader-a4mk2](../drive-loader-a4mk2/README.md#std1).
+
+`tests/test_drive_link.py` checks the linker, built for the computer (`tests/drive_link_host.c`), on
+a made-up Rytm build, and the MODS page's `dl_check`.
 
 | what | address |
 |---|---|
@@ -212,5 +213,5 @@ emulator through its `--usb-midi-tcp` port.
 ```bash
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build mods/drive-loader-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
-python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.14.elemod --mod drive-loader-0.9.elemod --out dl.syx --version 1.74
+python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.14.elemod --mod drive-loader-0.10.elemod --out dl.syx --version 1.74
 ```

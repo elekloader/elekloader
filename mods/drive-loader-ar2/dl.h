@@ -45,7 +45,7 @@ typedef int s32;
 #define DL_KNOB_CORE_HI 554
 #define DL_KNOBS_MAX 1024                /* a mod's "knobs" (link.MAX_KNOBS) */
 /* the tables whose entries name ids (the profile's param_ids): {table, own ids only} */
-#define DL_KNOB_TABLES {{"core_params", 0}, {"core_param_locks", 1}, {"core_knob_looks", 1}}
+#define DL_KNOB_TABLES {{"core_params", 0}, {"core_param_locks", 1}, {"core_knob_looks", 1}, {"core_knob_flags", 1}}
 
 /* ---- status records: /mods/.status and the MODS page (32 bytes per /mods/active line) -- */
 struct dl_status {
@@ -95,6 +95,7 @@ enum {
     /* +Drive storage and the boot-linked sites (without DL_SITES) */
     DL_R_STORE = 29,                     /* +Drive storage room is short (detail: "WHAT NEED HAVE") */
     DL_R_CLASH = 30,                     /* a site or copied block clashes (arg: kind << 8 | line; detail: address) */
+    DL_R_STD = 31,                       /* subscribes to a standard event the core does not map (detail: it) */
     DL_R_IDS = 32,                       /* knob ids its entries name are taken, or no run is left (detail) */
 };
 enum { DL_SITE_CORE = 1, DL_SITE_MOD, DL_SITE_PRELINK, DL_SITE_STOCK };   /* DL_R_CLASH's kind */

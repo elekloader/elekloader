@@ -10,6 +10,7 @@ The addresses below are 1.73's. 1.74's main OS is 1.73's with code added in
 two places (Outbox 8's main-output routing), so what follows each moved:
 see moved(). Core-ar2 0.3 is for 1.74 only (0.2 is the last core with 1.73).
 """
+import hashlib
 import json
 import os
 import struct
@@ -129,8 +130,13 @@ def test_core_ar2_sites():
     mod, port = build.for_release(j, DEV, REL)
     assert not port and mod['device'] == DEV.key and mod['os'] == REL.version
     for s in mod['sites']:
-        a, want = int(s['addr'], 16), bytes.fromhex(s['stock'])
-        assert img[a - DEV.main_load:a - DEV.main_load + len(want)] == want, s
+        a = int(s['addr'], 16)
+        if 'stock' in s:
+            want = bytes.fromhex(s['stock'])
+            assert img[a - DEV.main_load:a - DEV.main_load + len(want)] == want, s
+        else:                           # (0.17) "len" and "stock_sha256": no stock bytes in mod.json
+            want = img[a - DEV.main_load:a - DEV.main_load + s['len']]
+            assert hashlib.sha256(want).hexdigest() == s['stock_sha256'], s
         if s['op'] == 'ptr':            # data: the sound set's vtable entries, not code: +76
             # (0.8, the slot id) and +60..+72 (0.8, the lock get, set, clear and turn); and from
             # 0.9 the FX set's (vtable 0x401dcea0), the same five
@@ -211,8 +217,23 @@ def test_core_ar2_sites():
     # the mod folders' fourteen (drive.c: ten filesystem routines, LOAD TO PROJ's and CREATE
     # DIR's calls, and the two SampleManager vtables' tick), and the SAMPLE view's draw (0.15),
     # and the USB input's shift index (usbin.s), and main()'s call at 0x401009e0 (0.14, ev_boot_drive), and the silent-voice skip's,
-    # the sample-layer skip's two, the UI skip's and the FX skip's three (0.16)
-    assert len(mod['sites']) == 155
+    # the sample-layer skip's two, the UI skip's and the FX skip's three (0.16), and std1's UI
+    # and system events' 23 (0.17, ui.s: boot done and idle, USB, LEDs, pattern, mute, the
+    # parameter set, six view stack sites, eleven clipboard calls), and std1's MIDI events' 8
+    # (0.17, stdmidi.s: the DIN and USB dispatch, the CC apply, program change, the three senders
+    # and the sequencer's note post), and std1's voice events' 2 (0.17, stdvoice.s: the audio
+    # interrupt's trig and release), and the knob flags' five (0.17, flags.s: the flags getter, the
+    # turn's two reads, the push's and the list's creation)
+    assert len(mod['sites']) == 193
+    # (0.17) the UI, MIDI and voice events' sites give "len" and "stock_sha256", no stock bytes,
+    # the knob flags' too
+    ui = [x for x in mod['sites'] if 'stock_sha256' in x]
+    assert len(ui) == 38 and all('stock' not in x for x in ui)
+    # (0.17) the knob flags' sites (flags.s), their stock bytes checked by sha256 above
+    fl = {x['addr']: (x['len'], x['target']) for x in mod['sites'] if x.get('target', '').startswith('core_flags_')}
+    assert fl == {'0x40007234': (10, 'core_flags_hook'), '0x40039fbe': (10, 'core_flags_turn_site'),
+                  '0x4003a224': (10, 'core_flags_delta_site'), '0x4003a890': (10, 'core_flags_push_site'),
+                  '0x40039d94': (12, 'core_flags_list_site')}, fl
     # the sound push's arguments, followed by its PC-relative jsr to 0x4011dace, which stays
     x = [x for x in mod['sites'] if x.get('target') == 'core_trig_sound'][0]
     assert x['op'] == 'jsr' and x['addr'] == '0x4011f5f6', x

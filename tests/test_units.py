@@ -2286,6 +2286,131 @@ def test_core_a4mk2_0_7_voice_events():
     assert ln.index('jsr     core_voice_end') < ln.index('jsr     0x40105410') < ln.index('rts')
 
 
+def test_core_ar2_0_17_std_map():
+    """core-ar2 0.17 serves std1 at the sites it owns: each map entry is a std1.h event and one of
+    core's tables, the native table for the same prototype or its first part, a std_ table of its
+    own for the thunks (std.c) that core's own handlers, .boot and pages.s call, and for the UI and
+    system events (ui.c), the MIDI events (stdmidi.c) and the voice events (stdvoice.c, render
+    tables: they run in the audio interrupt) at new sites; ev_enc has its prototype in std1.h
+    (decided 2026-11-19)."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-ar2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'std1.h'), encoding='utf-8') as fh:
+        events = set(re.findall(r'\(\*std1_(ev_\w+)_fn\)', fh.read()))
+    std = doc['std']
+    native = {'ev_tick', 'ev_draw', 'ev_settings', 'ev_project', 'ev_render_in', 'ev_seq_tick'}
+    thunks = {'ev_boot', 'ev_key', 'ev_enc', 'ev_param_turn', 'ev_sysex_in'}
+    # the UI and system events at new sites (ui.c, ui.s)
+    thunks |= {'ev_boot_done', 'ev_idle', 'ev_crash', 'ev_usb', 'ev_key_leds', 'ev_mode', 'ev_param_set',
+               'ev_clip', 'ev_pattern', 'ev_mute', 'ev_view'}
+    # the MIDI events at new sites (stdmidi.c, stdmidi.s)
+    thunks |= {'ev_midi_in', 'ev_midi_cc', 'ev_midi_pc', 'ev_midi_out', 'ev_seq_midi'}
+    # the voice events at new sites in the audio interrupt (stdvoice.c, stdvoice.s)
+    audio = {'ev_voice_start', 'ev_voice_end'}
+    thunks |= audio
+    assert set(std) == native | thunks and set(std) <= events
+    assert {e for e, t in std.items() if t == e} == native
+    for e in native:
+        assert e in doc['collections'], e
+    csrc = ''
+    for name in doc['sources']:
+        if name.endswith('.c') and not name.startswith('..'):
+            with open(os.path.join(mdir, name), encoding='utf-8') as fh:
+                csrc += fh.read()
+    for e in thunks:
+        assert std[e] == 'std_' + e[3:], e
+        want = {'entry': 4, 'render': True, 'spare': 256} if e in audio else {'entry': 4, 'spare': 256}
+        assert doc['collections'][std[e]] == want, e
+        assert re.search(r'^extern const \w+ %s\[\];' % std[e], csrc, re.M), e
+    subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
+    assert subs[('ev_key', 'core_std_key')] == 0
+    assert subs[('ev_enc', 'core_std_enc')] == 0
+    assert subs[('ev_sysex_in', 'core_std_sysex_in')] == 0
+    assert subs[('ev_tick', 'core_std_tick')] == -1000000
+    assert subs[('ev_tick', 'core_std_tick_end')] < subs[('ev_tick', 'core_leds_tick')]
+    assert 'core_std_boot();' in csrc and 'std.c' in doc['sources'] and 'stdui.s' in doc['sources']
+    with open(os.path.join(mdir, 'pages.s'), encoding='utf-8') as fh:
+        assert 'jsr     core_std_param_turn' in fh.read()
+
+
+def test_core_ar2_0_17_midi_sites():
+    """core-ar2 0.17's std1 MIDI events (stdmidi.c, stdmidi.s), core-a4mk2's stdmidi at the Rytm's
+    addresses: eight sites, each "len" and "stock_sha256" and a global of stdmidi.s; the two
+    dispatch sites are jsr (their stubs end in the handler's jmp or an rts), the others jmp and
+    resume right after the bytes they displaced; each std table is walked in stdmidi.c."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-ar2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(mdir, 'stdmidi.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    with open(os.path.join(mdir, 'stdmidi.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    globs = set(re.findall(r'^\s*\.globl\s+(.+)$', asm, re.M))
+    globs = {g.strip() for line in globs for g in line.split(',')}
+    sites = [x for x in doc['sites'] if x.get('target') in globs]
+    want = {'core_std_in_din_site': ('0x40082e18', 6, 'jsr'), 'core_std_in_usb_site': ('0x40082e9e', 6, 'jsr'),
+            'core_std_cc_site': ('0x40085652', 6, 'jmp'), 'core_std_pc_site': ('0x40083384', 10, 'jmp'),
+            'core_std_send_site': ('0x400857ca', 8, 'jmp'), 'core_std_bits_site': ('0x400856b8', 8, 'jmp'),
+            'core_std_rt_site': ('0x40085724', 10, 'jmp'), 'core_std_seq_midi_site': ('0x401200b2', 8, 'jmp')}
+    assert {x['target']: (x['addr'], x['len'], x['op']) for x in sites} == want
+    for x in sites:
+        assert 'stock' not in x and len(x['stock_sha256']) == 64, x
+        if x['op'] == 'jmp':
+            assert 'jmp     0x%08x' % (int(x['addr'], 16) + x['len']) in asm, x
+    # the sequencer note's stub, when taken, skips the post and its addq (0x401200ba..0x401200c1)
+    assert 'jmp     0x401200c2' in asm and 'jmp     0x401200ba' in asm
+    for t in ('std_midi_in', 'std_midi_cc', 'std_midi_pc', 'std_midi_out', 'std_seq_midi'):
+        assert re.search(r'^extern const \w+ %s\[\];' % t, src, re.M), t
+        assert doc['std']['ev' + t[3:]] == t
+    assert 'stdmidi.c' in doc['sources'] and 'stdmidi.s' in doc['sources']
+    with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-rytm-mk2', 'ports.h'), encoding='utf-8') as fh:
+        ports = fh.read()
+    for f in ('CORE_MIDI_CC_AUTO  0x01u', 'CORE_MIDI_PC_STOCK 0x02u', 'CORE_MIDI_CC_PERF  0x04u'):
+        assert f in ports, f
+
+
+def test_core_ar2_0_17_voice_sites():
+    """core-ar2 0.17's std1 voice events (stdvoice.c, stdvoice.s), in the audio interrupt's trig
+    intake: two jmp sites, each "len" and "stock_sha256", whose stubs run the displaced
+    instructions and resume right after them; a start ends a voice still started first, and an
+    end comes only for a started voice (one bit per voice)."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-ar2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(mdir, 'stdvoice.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    with open(os.path.join(mdir, 'stdvoice.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    sites = [x for x in doc['sites'] if x.get('target', '').startswith('core_std_voice_')]
+    want = {'core_std_voice_trig_site': ('0x401210ae', 8, 'jmp'), 'core_std_voice_rel_site': ('0x4012110e', 8, 'jmp')}
+    assert {x['target']: (x['addr'], x['len'], x['op']) for x in sites} == want
+    for x in sites:
+        assert 'stock' not in x and len(x['stock_sha256']) == 64, x
+        assert 'jmp     0x%08x' % (int(x['addr'], 16) + x['len']) in asm, x
+    # the displaced instructions, in stock's order
+    assert re.search(r'move\.l\s+\(0,%a2,%d6\.l\),%d6\s.*\n\s+move\.b\s+%d0,\(0,%a1,%d1\.l\)', asm)
+    assert re.search(r'lsl\.l\s+#5,%d1\n\s+moveq\s+#4,%d7\n\s+move\.l\s+%d7,\(0,%a0,%d1\.l\)', asm)
+    for t in ('std_voice_start', 'std_voice_end'):
+        assert re.search(r'^extern const \w+ %s\[\];' % t, src, re.M), t
+        assert doc['std']['ev' + t[3:]] == t
+    start = src[src.index('void core_std_voice_start'):]
+    assert start.index('core_std_voice_end(v);') < start.index('started |= 1u << v;')
+    assert 'stdvoice.c' in doc['sources'] and 'stdvoice.s' in doc['sources']
+
+
 def test_core_a4mk2_0_7_std_map():
     """core-a4mk2 0.7 serves std1 at the sites it owns: each map entry is a std1.h event and one
     of core's tables, the native table for the same prototype or its first part, a std_ table of

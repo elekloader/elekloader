@@ -29,16 +29,13 @@ routing, so its sites and routines are 1.73's moved (+0x6c, `FN_MGR`
 +0x1cc), each found again by its own bytes. A core built for one release
 is refused with the other's stock file.
 
-**OS versions.** New core versions drop old OS support: 0.3 builds for
-1.74 only (`mod.json`'s `os`, with no `ports`), and is refused with a 1.73
-stock file. 0.1 and 0.2 build for 1.73 and 1.74 (1.73 their `os`, 1.74 their
-port) and keep their 1.73 support as released; 0.2 is the last core with
-1.73. A build takes the newest core it has for the stock OS
-([CORES.md](../../docs/CORES.md#how-a-build-picks-one)), so a 1.73 build
-takes 0.2, and a mod that needs 0.3 (`"core": "0.3"` in `resources`) is
-for 1.74 only. Core 0.2 for 1.73 is built from the tree before 0.3
-(commit 92a99c9: `git worktree add ../core-ar2-0.2 92a99c9`, then build its
-`mods/core-ar2` with the 1.73 stock file).
+**OS versions.** Core 0.3 and newer are for 1.74 only (`os`, no `ports`),
+refused with a 1.73 stock file; 0.1 and 0.2 build for both (1.74 their
+port), and 0.2 is the last for 1.73. A build takes the newest core for its
+stock OS ([CORES.md](../../docs/CORES.md#how-a-build-picks-one)): a 1.73
+build takes 0.2, and a mod that needs 0.3 or newer is for 1.74 only. Core
+0.2 is built from commit 92a99c9 (`git worktree add ../core-ar2-0.2
+92a99c9`, then build its `mods/core-ar2` with the 1.73 stock file).
 
 The routines `core_additem` calls are the Digitakt's, the same code with the
 addresses in it masked: `OP_NEW` 0x40082a40, `ITEM_CTOR` 0x40072fbc,
@@ -1154,8 +1151,7 @@ calls stock's own routines; nothing of their code or glyphs is copied.
 
 `looks.c`, `looks.s`: a mod's own knob id (555 up, `core_params` and
 `core_param_locks`) has no stock records, so stock drew every such knob as
-record 0's dial on record 0's range (0..0), whatever it showed: a switch
-like voice-dac's POL became a dial whose pointer never moves. An entry in
+record 0's dial on record 0's range (0..0). An entry in
 `core_knob_looks` (`elekloader/sdk/include/analog-rytm-mk2/pages.h`,
 docs/ADAPTING.md "Knob looks (core-ar2 0.13, Analog Rytm MKII)") gives its
 ids the look of any stock knob, a range of their own, or a UI record of the
@@ -1232,6 +1228,10 @@ lookups 0x400a9000 and 0x400a9022 (`lock.c`, with the page's sound), and
 `uirec`, `range` (which the setter 0x400a906c clamps to) and the graphic
 (`looks.c`, sound 0: the current track's). No code site of its own.
 
+## Knob flags (0.17)
+
+`flags.c`, `flags.s` (their top comments); docs/ADAPTING.md.
+
 ## Note ends, track mutes and DIN MIDI out (0.15)
 
 No new sites; the traces are in `machines.c` and `voiceio.c`.
@@ -1241,6 +1241,11 @@ No new sites; the traces are in `machines.c` and `voiceio.c`.
 | `core_voice_released(v)` | trig state 0x8000e508 + 4t in the trig latch: 2 (release) gives 1, 3 (cut) gives 2 | the engine |
 | `core_track_mutes()`, `core_set_track_mutes(mask)` | settings model (0x400ae492) data +0x20; 0x400b6d94, 0x400b6dd8 | UI task |
 | `core_midi_din_try_send(len, msg)`, `core_midi_din_up()` | DIN sender 0x40001dea, its room test under a mask; OUT PORT FUNC 0x400b5424 | any |
+
+## Standard events (0.17)
+
+std1: `std.c`, `ui.c`, `stdmidi.c`, `stdvoice.c` (their top comments);
+[std-check](../../examples/std-check-ar2), [ui-check](../../examples/ui-check-ar2).
 
 ## Checked so far
 
