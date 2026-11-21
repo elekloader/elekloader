@@ -13,8 +13,12 @@
 core_memcpy:
         moveq   #88,%d0
         cmp.l   12(%sp),%d0
-        bls.s   1f
-        movea.l 4(%sp),%a1
+        bhi.s   0f
+        tst.l   core_rows_ents            | (0.19) no lock entries and no step
+        bne.s   1f                        | owners: nothing to follow, stock's
+        tst.l   core_step_owners          | copy alone
+        bne.s   1f
+0:      movea.l 4(%sp),%a1
         movea.l 8(%sp),%a0
         jmp     0x40098bc8
 1:      move.l  12(%sp),-(%sp)
@@ -41,7 +45,11 @@ core_memset:
         moveq   #88,%d0
         cmp.l   12(%sp),%d0
         bhi.s   1f
-        move.l  12(%sp),-(%sp)
+        tst.l   core_rows_ents            | (0.19) nothing to drop
+        bne.s   0f
+        tst.l   core_step_owners
+        beq.s   1f
+0:      move.l  12(%sp),-(%sp)
         move.l  8(%sp),-(%sp)
         jsr     core_rows_drop
         addq.l  #8,%sp
@@ -58,7 +66,11 @@ core_new_array:
         addq.l  #4,%sp
         tst.l   %d0
         beq.s   1f
-        move.l  %d0,-(%sp)
+        tst.l   core_rows_ents            | (0.19) nothing to drop
+        bne.s   0f
+        tst.l   core_step_owners
+        beq.s   1f
+0:      move.l  %d0,-(%sp)
         move.l  8(%sp),-(%sp)
         move.l  %d0,-(%sp)
         jsr     core_rows_drop
