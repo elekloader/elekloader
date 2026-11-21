@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { Bridge } from '../src/bridge.ts'
 import { sha } from '../src/bytes.ts'
-import { type Desc, oneCore, withRequirements } from '../src/model.ts'
+import { type Desc, oneCore, suggestedName, withRequirements } from '../src/model.ts'
 import { VERSION } from '../src/version.ts'
 import { lcg } from './helpers.ts'
 
@@ -168,4 +168,11 @@ test('mods: the name, the JSON, the format', () => {
 test('the version field and the file name', () => {
   const b = new Bridge()
   assert.deepEqual(b.version({ version: '2.0a', enabled: [] }), { ok: true, name: 'custom-2.0a.syx' })
+})
+
+test('a build of many mods gets a short file name (issue #406)', () => {
+  const few = ['digihealth', 'digislicer'].map(id => ({ id }) as Desc)
+  assert.equal(suggestedName(few, '1.54'), 'custom-1.54-digihealth+digislicer.syx')
+  const many = Array.from({ length: 25 }, (_, i) => ({ id: `some-mod-${i}` }) as Desc)
+  assert.equal(suggestedName(many, '1.54'), 'custom-1.54-25-mods.syx')
 })
