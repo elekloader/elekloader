@@ -213,4 +213,53 @@ extern volatile int32_t fw_amp_level[];
 #define CORE_MIDI_CC_AUTO  1u
 typedef int32_t (*ev_midi_cc_fn)(int32_t track, int32_t cc, int32_t value, int32_t flags);
 
+/* ---- core 4.5: for a mod that links more mods on the unit (TELOS) ---------------------------------- */
+/* ev_card_ready: the +Drive is up (status 0; nonzero, it failed), nothing else is: the init task, before
+ * the project, the UI task, the views and the first sample. A handler must not take the firmware's heap. */
+typedef void (*ev_card_ready_fn)(int32_t status);
+/* ev_fs_ready: after ev_card_ready, the +Drive's file system (ekFS) mounted (nonzero) or not; still before
+ * the samples, the project and the UI task. fw_fs_* work from here on, from a task, never an interrupt and
+ * never from inside another fs call (its mutex is not recursive). */
+typedef void (*ev_fs_ready_fn)(int32_t mounted);
+/* A handle: {node, position (set it to seek), writing, open}. mode "r", or "w" (made if missing, never
+ * truncated). read/write -> bytes, or -1; the rest 0 or -1. ekFS writes through to the card. */
+struct fw_fs_file { uint32_t node, pos, writing, open; };
+extern int32_t fw_fs_open(const char *path, const char *mode, struct fw_fs_file *f);
+extern int32_t fw_fs_read(void *buf, uint32_t len, struct fw_fs_file *f);
+extern int32_t fw_fs_write(const void *buf, uint32_t len, struct fw_fs_file *f);
+extern int32_t fw_fs_close(struct fw_fs_file *f);
+extern int32_t fw_fs_unlink(const char *path);
+extern int32_t fw_fs_mkdir(const char *path);
+extern int32_t fw_fs_rename(const char *from, const char *to);
+extern int32_t fw_fs_stat(const char *path, uint32_t out[4]);
+/* Project slots, the UI side. ev_project_slot_write: slot (0-127; 128 the working copy) is about to be
+ * written: a SAVE, or MANAGE PROJECTS > CLEAR (a new project there). ev_project_saved: a SAVE's write
+ * returned (ok nonzero: written). ev_project_loaded: a load finished (err 0: LOAD OK), slot the project's. */
+typedef void (*ev_project_slot_write_fn)(void *fs, int32_t slot, int32_t ctx);
+typedef void (*ev_project_saved_fn)(void *block, int32_t slot, int32_t ok);
+typedef void (*ev_project_loaded_fn)(int32_t slot, int32_t err);
+/* ev_crash: an exception the firmware does not handle, interrupts masked; the stock printer halts after
+ * the handlers. A handler that wants the unit back calls core_restart_now. */
+typedef void (*ev_crash_fn)(void *frame);
+/* ev_sysex: each whole SysEx message, F0 to F7; nonzero takes it (the stock does not see it). The MIDI task:
+ * a handler that blocks holds every MIDI input. */
+typedef int32_t (*ev_sysex_fn)(const uint8_t *msg, int32_t len, int32_t source);
+extern void core_restart(void) __attribute__((noreturn));       /* the firmware's own restart, from a task */
+extern void core_restart_now(void) __attribute__((noreturn));   /* at once: from ev_crash, or interrupts masked */
+/* The +Drive below its file system, 512-byte sectors, from a task (never an interrupt): 0 or < 0. */
+extern int32_t fw_card_read(uint32_t sector, uint32_t bytes, void *buf);
+extern int32_t fw_card_write(uint32_t sector, uint32_t bytes, const void *buf);
+extern int32_t fw_card_erase(uint32_t first, uint32_t count);
+extern int32_t fw_card_sectors(void);                           /* -1 before the card is up */
+/* port 1 the settings' output, 2 USB, 3 DIN, 4 both; nonzero: sent */
+extern int32_t fw_sysex_send(const uint8_t *buf, int32_t len, volatile uint8_t *abort, int32_t port);
+/* The OS image as it was before it ran, from 0x40000400 (in the sample pool's top: read it before samples
+ * load, at ev_card_ready); and the OS's sixteen static tasks: {count, the init task's row, the TCB's saved-SP
+ * offset}, then {TCB, stack's low end, stack size} each. */
+struct core_stock_info { unsigned long at, len; };
+extern const struct core_stock_info core_stock_info;
+struct core_task { unsigned long tcb, stack, size; };
+struct core_tasks { unsigned long n, init, sp_at; struct core_task t[16]; };
+extern const struct core_tasks core_tasks;
+
 #endif

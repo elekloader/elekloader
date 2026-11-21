@@ -105,8 +105,10 @@ def test_core_alone_changes_only_its_sites():
     out = link.link(mods('core'), image())
     img0 = image()
     diff = [i for i in range(len(img0)) if out.image[i] != img0[i]]
-    sites = [int(s['addr'], 16) - LOAD for s in doc('core')['sites']]
-    assert all(any(s <= d < s + 6 for s in sites) for d in diff)
+    # each site's own length: its stock bytes (a jsr or jmp over more than 6 is padded with nops)
+    sites = [(int(s['addr'], 16) - LOAD, max(6, len(s.get('stock') or s.get('new') or '') // 2))
+             for s in doc('core')['sites']]
+    assert all(any(s <= d < s + n for s, n in sites) for d in diff)
 
 
 def test_weak_import_without_fast_audio():
