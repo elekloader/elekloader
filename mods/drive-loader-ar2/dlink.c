@@ -2116,8 +2116,8 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
 /* ---- knob ids (docs/DRIVE.md, "Knob ids on the +Drive") ----------------------------------------
  * A +Drive mod may declare "knobs": n and gets a run of n ids in DL_KNOB_LO..DL_KNOB_HI, kept from
  * boot to boot in /mods/.store (store.knobs, the lockfile's rules). Ids a mod's entries name in its
- * own bytes follow link.id_problems: none of the core's, a core_knob_looks entry's from DL_KNOB_OWN
- * up, and from there up no id taken twice, by a flashed module (claims of kind 4) or a mod. */
+ * own bytes follow link.id_problems: none of the core's, an own-ids table's entry's (dl.h
+ * DL_KNOB_TABLES) from DL_KNOB_OWN up, and from there up no id taken twice, by a flashed module (claims of kind 4) or a mod. */
 #define KNOB_FREED_MAX DS_MAX_KNOBS      /* the freed runs a .store keeps: the last ones */
 #define KNOB_RUNS_MAX (DS_MAX_KNOBS + DL_MAX_MODS)
 static char *put_num(char *p, u32 v);
@@ -2322,8 +2322,8 @@ static int run_long(const char **k, const char *parts_p, const u8 *buf, u32 len,
 }
 
 /* Pass 1's part for knob ids, on a build with F_KNOBS: the references to __knobs, then the ids the
- * mod's entries name in its own bytes (link.Mod2.id_ranges: core_params' and core_knob_looks'
- * entries point at a pair of longs, the first and last id). -> 0, or a refusal code. */
+ * mod's entries name in its own bytes (link.Mod2.id_ranges: the DL_KNOB_TABLES entries point at a
+ * pair of longs, the first and last id). -> 0, or a refusal code. */
 static int knob_scan(struct dmod *m, const char **k, const u8 *buf, u32 len)
 {
     static const struct { const char *name; u8 own_only; } tabs[] = DL_KNOB_TABLES;

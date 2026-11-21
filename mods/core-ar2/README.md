@@ -1151,8 +1151,7 @@ calls stock's own routines; nothing of their code or glyphs is copied.
 
 `looks.c`, `looks.s`: a mod's own knob id (555 up, `core_params` and
 `core_param_locks`) has no stock records, so stock drew every such knob as
-record 0's dial on record 0's range (0..0), whatever it showed: a switch
-like voice-dac's POL became a dial whose pointer never moves. An entry in
+record 0's dial on record 0's range (0..0). An entry in
 `core_knob_looks` (`elekloader/sdk/include/analog-rytm-mk2/pages.h`,
 docs/ADAPTING.md "Knob looks (core-ar2 0.13, Analog Rytm MKII)") gives its
 ids the look of any stock knob, a range of their own, or a UI record of the
@@ -1228,6 +1227,10 @@ label, name, look, range and default for the sounds a mod says, on the hooks abo
 lookups 0x400a9000 and 0x400a9022 (`lock.c`, with the page's sound), and
 `uirec`, `range` (which the setter 0x400a906c clamps to) and the graphic
 (`looks.c`, sound 0: the current track's). No code site of its own.
+
+## Knob flags (0.18)
+
+`flags.c`, `flags.s` (their top comments); docs/ADAPTING.md.
 
 ## Note ends, track mutes and DIN MIDI out (0.15)
 

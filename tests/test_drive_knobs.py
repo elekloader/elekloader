@@ -38,12 +38,14 @@ RYTM_FIXED = (0x300, 0x306)                     # the flashed module's ids, past
 def flashed(B, knobs=True, rytm=False):
     """The A4 loader's kind of build, keeping +Drive storage, with core_params and core_knob_looks,
     a flashed module whose entry takes ids 0x300..0x306, and (knobs) a loader exporting drive_knobs;
-    rytm: the Rytm loader's kind (abs16 from drive-loader-ar2 0.9), with core_param_locks too."""
+    rytm: the Rytm loader's kind (abs16 from drive-loader-ar2 0.9), with core_param_locks too, and
+    core_knob_flags (core-ar2 0.18, drive-loader-ar2 0.11)."""
     mods = TD.flashed(B, store=True, stage_top=True, payload_skip=True, abs16=True, collections=True)
     core, loader = mods[0], mods[1]
     core['collections'].update({'core_params': {'entry': 4}, 'core_knob_looks': {'entry': 4}})
     if rytm:
         core['collections']['core_param_locks'] = {'entry': 4}
+        core['collections']['core_knob_flags'] = {'entry': 4}
     if knobs:
         loader['symbols']['drive_knobs'] = ['abs', 1]
         loader['exports'].append('drive_knobs')
@@ -301,11 +303,13 @@ def rytm(work, check):
             k('f1', fixed=(500, 501)), k('f2', fixed=(0x302, 0x302)), k('f3', fixed=(0x500, 0x501)),
             k('f4', fixed=(0x501, 0x502)), k('f5', fixed=(0x10, 0x11), table='core_knob_looks'),
             k('f6', fixed=(0x10, 0x11)), k('f7', fixed=(0x20, 0x21), table='core_param_locks'),
-            k('f8', fixed=(600, 601), table='core_param_locks')])
+            k('f8', fixed=(600, 601), table='core_param_locks'), k('f9', fixed=(0x43, 0x43), table='core_knob_flags'),
+            k('f10', fixed=(610, 611), table='core_knob_flags')])
         check('rytm: fixed ids refused: details', why(r) == {
             'f1': ('ids', "0x1f4-0x1f5 are core's"), 'f2': ('ids', "0x302-0x302 are fixed-ae's"),
             'f3': ('ok', ''), 'f4': ('ids', "0x501-0x501 are f3's"), 'f5': ('ids', '0x10-0x11 are below 0x22b'),
-            'f6': ('ok', ''), 'f7': ('ids', '0x20-0x21 are below 0x22b'), 'f8': ('ok', '')}, why(r))
+            'f6': ('ok', ''), 'f7': ('ids', '0x20-0x21 are below 0x22b'), 'f8': ('ok', ''),
+            'f9': ('ids', '0x43-0x43 are below 0x22b'), 'f10': ('ok', '')}, why(r))
         sm, ram, st, r = alike('an abs16 to __knobs', [km(B, 'a16', 2)])
         check('rytm: an abs16 to __knobs loads (abs16 from drive-loader-ar2 0.9)',
               why(r)['a16'][0] == 'ok', why(r))
