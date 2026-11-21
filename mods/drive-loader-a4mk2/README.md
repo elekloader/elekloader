@@ -1,6 +1,6 @@
 # drive-loader-a4mk2: the +Drive mods loader for the Analog Four MKII
 
-The flashed part of +Drive mods on the A4 MKII, OS 1.56, on core-a4mk2 0.9 and newer: mods kept as
+The flashed part of +Drive mods on the A4 MKII, OS 1.56, on core-a4mk2 0.10 and newer: mods kept as
 files in `/mods` on the A4's +Drive are linked into the +Drive mods' area at boot, so they can be
 added and removed without reflashing. It is drive-loader-ar2 (the Analog Rytm MKII's, docs/DRIVE.md)
 carried over as a mod of its own; what differs is the A4's +Drive, which has no file system.

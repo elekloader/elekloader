@@ -15,7 +15,7 @@
  "std": {"ev_boot": "std_boot", "ev_tick": "ev_tick", "ev_draw": "ev_draw", "ev_key": "std_key", "ev_settings": "ev_settings", "ev_project": "ev_project", "ev_render_in": "ev_render_in", "ev_param_turn": "std_param_turn", "ev_midi_in": "std_midi_in", "ev_sysex_in": "std_sysex_in", "ev_midi_cc": "std_midi_cc", "ev_midi_pc": "std_midi_pc", "ev_midi_out": "std_midi_out", "ev_seq_midi": "std_seq_midi", "ev_seq_tick": "std_seq_tick", "ev_voice_start": "std_voice_start", "ev_voice_end": "std_voice_end", "ev_boot_done": "std_boot_done", "ev_idle": "std_idle", "ev_crash": "std_crash", "ev_usb": "std_usb", "ev_key_leds": "std_key_leds", "ev_mode": "std_mode", "ev_param_set": "std_param_set", "ev_clip": "std_clip", "ev_pattern": "std_pattern", "ev_mute": "std_mute", "ev_view": "std_view"},
  "defsym": {
   "BOOT_INIT": "1",
-  "FINISH_PANEL": "0x4133cfc0", "FINISH_UART": "0x4133cfd0", "FINISH_DRAIN": "0x40002766", "STORE_PTR": "0x418717a8", "STORE_MUTEX": "0x24e78", "RMUTEX_LOCK": "0x40001cbc", "CARD_MUTEX": "0x428a7590", "MUTEX_LOCK": "0x40001c54",
+  "FINISH_PANEL": "0x4133cfc0", "FINISH_UART": "0x4133cfd0", "FINISH_DRAIN": "0x40002766", "STORE_PTR": "0x418717a8", "STORE_MUTEX": "0x24e78", "RMUTEX_LOCK": "0x40001cbc", "CARD_MUTEX": "0x428a7590", "MUTEX_LOCK": "0x40001c54", "KEEP_PACK": "0x40096d90", "KEEP_WRITE": "0x40106f04",
   "DRAWALL": "0x400625ca",
   "KEYDISP": "0x40098b36",
   "ENCDISP": "0x40098bec",
