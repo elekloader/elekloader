@@ -5,7 +5,7 @@
  "category": "Framework",
  "license": "GPL-2.0-or-later",
  "author": "Iced-Cream",
- "description": "The +Drive mods loader's flashed part for the Analog Four MKII (core-a4mk2 0.9 and newer, OS 1.56). The A4's +Drive has no file system, so the loader keeps its own store in sectors stock never addresses (0x3000..0x7a000): a directory in two copies and each file one run of sectors, with folders, mkdir and move. The boot linker, run in core's ev_boot_drive, links the mods chosen in /mods/active into the +Drive mods' area at boot (skip with [NO] held; a crash guard skips once after a start that didn't get 10 s in). The /mods route is a top-level /mods in the unit's Data root listing, whose uploads go straight to sectors and reads straight from them; /mods/.build is the build descriptor (core_desc), /mods/.status the loader's status in plain text. FORMAT +DRIVE empties the store. A mod's .payload stays on the +Drive: the boot stages each file without its hex and keeps a table of the loaded mods' payloads (drive_payloads, dl_payload_read) for sidecar-core. The MODS page comes in a later version.",
+ "description": "The +Drive mods loader's flashed part for the Analog Four MKII (core-a4mk2 0.10 and newer, OS 1.56). The A4's +Drive has no file system, so the loader keeps its own store in sectors stock never addresses (0x3000..0x7a000): a directory in two copies and each file one run of sectors, with folders, mkdir and move. The boot linker, run in core's ev_boot_drive, links the mods chosen in /mods/active into the +Drive mods' area at boot (skip with [NO] held; a crash guard skips once after a start that didn't get 10 s in). The /mods route is a top-level /mods in the unit's Data root listing, whose uploads go straight to sectors and reads straight from them; /mods/.build is the build descriptor (core_desc), /mods/.status the loader's status in plain text. FORMAT +DRIVE empties the store. A mod's .payload stays on the +Drive: the boot stages each file without its hex and keeps a table of the loaded mods' payloads (drive_payloads, dl_payload_read) for sidecar-core. The MODS page comes in a later version.",
  "device": "analog-four-mk2",
  "os": "1.56",
  "sources": [
@@ -79,7 +79,7 @@
   }
  ],
  "resources": {
-  "core": "0.9",
+  "core": "0.10",
   "names": [
    "data-route:mods",
    "settings:MODS"
