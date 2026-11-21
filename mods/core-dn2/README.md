@@ -102,8 +102,8 @@ Build it with the SDK (it needs m68k binutils; with Homebrew's
 `m68k-elf-binutils`, set `ELEKLOADER_CROSS=m68k-elf-`):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx      # out/core-0.4.elemod
-python -m elekloader.lint mods/core-dn2/out/core-0.4.elemod --stock Digitone_II_OS1.12.syx
+python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx      # out/core-0.5.elemod
+python -m elekloader.lint mods/core-dn2/out/core-0.5.elemod --stock Digitone_II_OS1.12.syx
 ```
 
 ## Input bridge and SysEx observers
@@ -139,9 +139,48 @@ sites. The six UI events and their existing implementations remain intact.
 The C declarations are in `elekloader/sdk/include/digitone-mk2/core.h`.
 No arbitrary memory-write or function-call command is added.
 
+## What a loader on the unit needs (TELOS)
+
+For a mod that links more mods on the unit, such as
+[TELOS](https://github.com/elekloader/telos), core builds core-dt2's
+[system.s](../core-dt2/system.s) and [fw.s](../core-dt2/fw.s) with OS
+1.12's addresses, and its own [tasks.s](tasks.s). Each routine is the
+Digitakt II's twin, the code the same with the addresses masked; their code
+goes after core's C code, so 0.4's code keeps its place.
+
+| site | was | event |
+|---|---|---|
+| 0x400cf0f2 | `move.l d0,0x4243989c`: the init task stores the card bring-up's status | `ev_card_ready(status)` |
+| 0x40040190 | the entry of the project slot write (project, slot, progress) -> ok | `ev_project_slot_write(project, slot, progress)` before, `ev_project_saved(project, slot, ok)` after |
+| 0x40042e6e | the entry of the project load (project, slot, progress) -> ok | `ev_project_loaded(slot, err)` after |
+| 0x4011ee16 | `jsr 0x40001986`: the OS installs its crash printer as the exception hook | `ev_crash(frame)`, then the printer |
+
+- There is no file system and no `ev_fs_ready`: `fw_card_read` and
+  `fw_card_write` (0x4012c87a, 0x4012ca60: sector, bytes, buffer) reach
+  the card's sectors from `ev_card_ready` on. Stock writes no sector from
+  0x458000 up (ElekLabs digikit's finding 59), and ElekLabs digikit keeps
+  its own store from 0x800000.
+- The project events run in a background worker task; slot 128 is the
+  working copy, saved at boot and after each load. `core_restart` is the
+  firmware's restart (0x40005608, as on the Digitakt II); `core_restart_now`
+  does it at once, for `ev_crash`.
+- `core_tasks` lists the OS's fourteen static tasks, saved SP at TCB+72;
+  the init task (0x400cedfc), which runs `ev_card_ready`, is row 1.
+- The exports `fw_fillrect` (0x40114b22), `fw_textf` (0x4011573c, flags as
+  its fifth argument), `fw_font5` (0x44508ef8), `fw_blit` (0x40115adc),
+  `fw_op_new` and `fw_invalidate` (0x4011ca9a). No `core_stock_info`.
+
+Checked in the emulator of [ElekLabs/digikit](https://github.com/ElekLabs/digikit)
+(`digi-emud`, ColdFire only, OS 1.12 on a card image) with TELOS: mods
+written to the store over USB SysEx linked at the next boot (one with a
+code site, which ran), the page and APPLY & RESTART worked, a mod that
+crashed the UI task was skipped on the next boot, and a project saved with
+a mod asked for it when loaded after the mod was switched off. Not yet run
+on a unit.
+
 ## Validation and limits
 
-Core 0.4 is experimental. `tests/test_digitone2.py` checks the stock sites,
+Core 0.5 is experimental. `tests/test_digitone2.py` checks the stock sites,
 stack/queue contracts, clock setup and exact patch boundaries.
 `tests/test_dn2_input.py` checks ownership and input/queue bounds without
 firmware. Digikit's ColdFire emulator checks stock-identical core-only

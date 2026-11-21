@@ -47,4 +47,35 @@ void core_dsp_post(unsigned word);
  * 16 the FX track; flags bit 0 (CORE_MIDI_CC_AUTO), on the auto channel. Nonzero takes it. */
 enum { CORE_MIDI_CC_AUTO = 1 };
 typedef int32_t (*ev_midi_cc_fn)(int32_t track, int32_t cc, int32_t value, int32_t flags);
+/* core-dn2 0.5: for a mod that links more mods on the unit (TELOS); mods/core-dn2/README.md has the sites. */
+extern void fw_fillrect(void *bmp, int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t colour);
+/* printf text (128 bytes); flags 0 plain, bit 1 centre, bit 2 right-align. */
+extern int32_t fw_textf(void *bmp, const void *font, int32_t x, int32_t y, uint32_t flags, const char *fmt, ...);
+extern const char fw_font5[];                           /* the stock small font */
+extern void fw_blit(void *dst, const void *src, int32_t x, int32_t y, int32_t centre);
+extern uint32_t fw_op_new(uint32_t size);               /* the firmware's heap */
+extern void fw_invalidate(void *view);                  /* the view is drawn again */
+/* The card, 512-byte sectors, from ev_card_ready on, from a task (never an interrupt): 0, or < 0. Stock
+ * writes nothing from sector 0x458000 up; ElekLabs digikit keeps its store from 0x800000. */
+extern int32_t fw_card_read(uint32_t sector, uint32_t bytes, void *buf);
+extern int32_t fw_card_write(uint32_t sector, uint32_t bytes, const void *buf);
+/* ev_card_ready: the card is up (status 0), nothing else is: the init task, before the project and the UI
+ * task. A handler must not take the firmware's heap. */
+typedef void (*ev_card_ready_fn)(int32_t status);
+/* Project slots, in a background worker task. ev_project_slot_write: slot (0-127; 128 the working copy)
+ * is about to be written; ev_project_saved: that write returned (ok nonzero: written); ev_project_loaded:
+ * a LOAD PROJECT finished (err 0: LOAD OK). The boot's own load of the working copy calls none. */
+typedef void (*ev_project_slot_write_fn)(void *project, int32_t slot, int32_t progress);
+typedef void (*ev_project_saved_fn)(void *project, int32_t slot, int32_t ok);
+typedef void (*ev_project_loaded_fn)(int32_t slot, int32_t err);
+/* ev_crash: an exception the firmware does not handle, interrupts masked; the stock printer runs after the
+ * handlers. A handler that wants the unit back calls core_restart_now. */
+typedef void (*ev_crash_fn)(void *frame);
+extern void core_restart(void) __attribute__((noreturn));       /* the firmware's own restart, from a task */
+extern void core_restart_now(void) __attribute__((noreturn));   /* at once: from ev_crash, or interrupts masked */
+/* The OS's fourteen static tasks: {count, the init task's row, the TCB's saved-SP offset}, then {TCB,
+ * stack's low end, stack size} each. */
+struct core_task { unsigned long tcb, stack, size; };
+struct core_tasks { unsigned long n, init, sp_at; struct core_task t[16]; };
+extern const struct core_tasks core_tasks;
 #endif

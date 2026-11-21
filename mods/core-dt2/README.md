@@ -45,6 +45,25 @@ in it: the Digitakt II renders its audio on the DSP.
   tail (0x8000F100-0x80010000) on the first tick, once: the OS zeroes SRAM
   after the boot copier runs.
 
+It also builds `fw.s`, `frame.s`, `leds.s`, `store.s`,
+`store.c`, `rows.s` and `rows.c`: the events `ev_frame_params` and
+`ev_key_leds`, the mods' project and kit data (`core_projdata`,
+`core_kitdata`) and value rows (`core_addvalue`). What mods use is in
+[docs/ADAPTING.md](../../docs/ADAPTING.md), "Project data, kit data and
+value rows (core-dt2 1.1, Digitakt II)", and
+[digitakt-mk2/core.h](../../elekloader/sdk/include/digitakt-mk2/core.h).
+Its sites, each a whole instruction the shim runs too:
+
+| site | was | for |
+|---|---|---|
+| 0x4002e90c | `jsr 0x400d9508`: the frame interrupt's per-track modulators, after it rebuilt the values from the smoother (block 0x80005b50, 71 values a track from +0x22) | `ev_frame_params` |
+| 0x400311a2 | `jsr (pc) 0x4003098e; move.l d2,-(sp)`: the LED frame (0x4003117c) clears every LED, then pushes the views' argument | `ev_key_leds` |
+| 0x400dbee4 | `move.l #0xbacef00c,d1` in the kit serializer (0x400dbdca), before it writes the record's end mark: a2 the record, a3 the kit | kit save |
+| 0x400db8be | the same instruction in the kit loader (0x400db898), after its version check: a2 the kit, a3 the record | kit load |
+| 0x400df932 | `move.l #0xbeefbace,(a3)`, the file's mark, in the project save (0x400df66c) | project save |
+| 0x400df99c | `move.l #0xbeefbace,d0`, the load's (0x400df95a) check of that mark | project load |
+| 0x40136388 | `memcpy`'s first 12 bytes, the loads of its three arguments, by jmp: a copy of a kit's size (0x5574) also calls `core_kit_copied` | kit copies |
+
 Each site and routine was found by the mk1's code, with the addresses
 masked: the UI loop's dirty check and frame composition, the key and
 encoder events built from the UI queue's message, and the SETTINGS
@@ -53,12 +72,59 @@ plus PERSONALIZE). 0x4011bc60 is the mk1's 0x400ca574 instruction for
 instruction, `Brain::key` reads the same fields (+0x94, +0x98), and each
 routine `core_additem` calls matches the mk1's whole.
 
+## What a loader on the unit needs (TELOS)
+
+[system.s](system.s), [fw.s](fw.s) and [tasks.s](tasks.s) serve a mod that
+links more mods on the unit, such as [TELOS](https://github.com/elekloader/telos).
+Each routine is the Digitakt mk1 core 4.5's with OS 1.17's addresses, found
+by the mk1's code. core-dn2 builds the same system.s and fw.s with the
+Digitone II's addresses (its README), and this core builds core-dn2's
+[sysex.s](../core-dn2/sysex.s), whose router the II shares byte for byte.
+`elekloader/sdk/include/digitakt-mk2/core.h` declares it all in C.
+
+| site | was | event |
+|---|---|---|
+| 0x400cccbe | `move.l d0,0x42940a48`: the init task stores the card bring-up's status | `ev_card_ready(status)` |
+| 0x400ccd6c | `moveq #64,d0; and.l 0x4029eef0,d0`: the init task's paths join after the file system's mount (0x4015a72c) | `ev_fs_ready(mounted)` |
+| 0x40043a30 | the entry of the project slot write (project, slot, progress) -> ok | `ev_project_slot_write(project, slot, progress)` before, `ev_project_saved(project, slot, ok)` after |
+| 0x40046c38 | the entry of the project load (project, slot, progress) -> ok | `ev_project_loaded(slot, err)` after |
+| 0x4011d4a2 | `jsr 0x40001986`: the OS installs its crash printer as the exception hook | `ev_crash(frame)`, then the printer |
+| 0x40120006 | `lea 0x4021e5d2,a3`: the MIDI task's SysEx router, the message in a1, its length in d1, the source in d2 | `ev_sysex(msg, len, source)`, observe only |
+
+- The project events run in a background worker task. Slot 128 is the
+  working copy, saved at boot and after each load; the boot's own load of
+  it does not call `ev_project_loaded`.
+- `core_restart` jumps to the firmware's restart (0x40005608: interrupts
+  off, the console drained, DDR's word 0 cleared, the reset controller's
+  soft reset); `core_restart_now` does the same at once, for `ev_crash`.
+- `core_tasks` lists the OS's fifteen static tasks, {TCB, stack, size},
+  with the saved stack pointer at TCB+72, as each task create (0x400012c8)
+  pushes them in a cold boot of 1.17, and the init task (0x400cc9c8), which
+  runs `ev_card_ready` and `ev_fs_ready`, as row 1.
+- The exports: `fw_fs_open`, `_read`, `_write`, `_close`, `_unlink`,
+  `_mkdir`, `_rename` (the +Drive's file system, with the mk1's four-word
+  handle; open "w" never truncates), `fw_sysex_send` (0x40121d2a, core-dn2's
+  sender byte for byte), `fw_fillrect`, `fw_textf` (its fifth argument is
+  flags, 0 for plain text, not the mk1's length), `fw_font5`, `fw_blit`,
+  `fw_op_new` and `fw_invalidate`.
+- Unlike the mk1's 4.5 there is no `core_stock_info`: the Digitakt II has
+  no free RAM for a copy of its 3.2 MB OS, so a loader reads stock bytes
+  from RAM as the OS has them.
+
+Checked in the emulator of [ElekLabs/digikit](https://github.com/ElekLabs/digikit)
+(`digi-emud`, ColdFire only, OS 1.17 on a +Drive card image): with TELOS,
+every event above fired as described, TELOS linked mods from the +Drive
+(one with a code site of its own, which ran), its page and APPLY & RESTART
+worked, a mod that crashed the UI task was skipped on the next boot, and a
+project saved with a mod asked for it when loaded after the mod was
+switched off. Not yet run on a unit.
+
 Build it with the SDK (it needs m68k binutils; with Homebrew's
 `m68k-elf-binutils`, set `ELEKLOADER_CROSS=m68k-elf-`):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx      # out/core-1.0.elemod
-python -m elekloader.lint mods/core-dt2/out/core-1.0.elemod --stock Digitakt_II_OS1.17.syx
+python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx      # out/core-1.2.elemod
+python -m elekloader.lint mods/core-dt2/out/core-1.2.elemod --stock Digitakt_II_OS1.17.syx
 ```
 
 Checked by cold-booting it in digikit's emulator (`emu.checkpoint`, then
