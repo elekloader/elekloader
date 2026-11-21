@@ -201,7 +201,7 @@ background checks and firmware calls are in [PAGE.md](PAGE.md).
   `tests/test_drive_route.py`.
 - `flush.s`, `boot.c`, `dlink.c`, `json.c`, `sha256.c`: the boot link. Tests: `tests/drive_link_host.c`,
   `tests/test_drive_link.py`, `tests/test_drive_top_stage.py`.
-- `page.c`, `page.s`, `clip.inc` (the build list's label clip), `park.c` (parked data): the
+- `page.c`, `page.s`, `clip.inc` (the build list's label clip), `park.c` (parked data, the build list's saved data `*`): the
   MODS page. Tests: `tests/drive_page_clip_host.c`, `tests/drive_build_rows_host.c` (the build
   list after folder changes and moves over USB, parked data against `elekloader/drive_store.py`),
   `tests/drive_check_tick_host.c`, `tests/drive_reader_host.c` (a file over the stage),

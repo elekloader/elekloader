@@ -15,6 +15,7 @@ import unittest
 import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+SDK = os.path.join(os.path.dirname(HERE), 'elekloader', 'sdk', 'include')
 sys.path.insert(0, os.path.dirname(HERE))
 from elekloader import drive_store as ds   # noqa: E402
 LABEL = 48                                         # page.c's label buffer
@@ -81,7 +82,7 @@ class BuildRows(unittest.TestCase):
     def setUpClass(cls):
         cls.work = tempfile.TemporaryDirectory()
         cls.exe = os.path.join(cls.work.name, 'drive_build_rows_host')
-        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-o', cls.exe, os.path.join(HERE, 'drive_build_rows_host.c'),
+        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-I', SDK, '-o', cls.exe, os.path.join(HERE, 'drive_build_rows_host.c'),
                         '-Wl,--unresolved-symbols=ignore-all'], check=True)
 
     @classmethod
@@ -133,6 +134,19 @@ class BuildRows(unittest.TestCase):
         got = self.run_page(['boot x.elemod|x.elemod', 'build'], tree=['x.elemod'], active=['x.elemod'])
         self.assertEqual(got, [['x']])
 
+    def test_apply_and_restart_shows_only_while_the_saved_set_differs(self):
+        acts = ['SELECT ALL', 'DESELECT ALL', 'UNLOAD', 'INFO', 'FORGET DATA']
+        tree, active = ['a.elemod', 'b.elemod'], ['a.elemod']
+        self.assertEqual(self.lines(['acts'], 'ACTS', tree, active), ['|'.join(acts + ['APPLY & RESTART'])])
+        self.assertEqual(self.lines(['boot a.elemod|a', 'acts'], 'ACTS', tree, active), ['|'.join(acts)])
+
+    def test_yes_on_apply_and_restart_keeps_the_project_then_restarts_without_the_guard(self):
+        tree, active = ['a.elemod'], ['a.elemod']
+        self.assertEqual(self.lines(['restart 39'], 'KEY', tree, active), ['1'])     # keys taken
+        self.assertEqual(self.lines(['restart 39'], 'WAITING', tree, active),
+                         ['kept=0 locked=0 guard_off=0'])   # 2 s not yet up: nothing done
+        self.assertEqual(self.lines(['restart 40'], 'RESTART', tree, active), ['kept=1 locked=1 guard_off=1'])
+
     def test_file_rows_show_the_file_name_never_the_id(self):
         got = self.lines(['id ~T FCR/~T fnm-01-0.1.elemod|fnm-01', 'open ~T FCR', 'drive'], 'DRIVE')
         rows = [r.split('=') for r in got[0].split('|')]
@@ -169,7 +183,7 @@ class Parked(unittest.TestCase):
     def setUpClass(cls):
         cls.work = tempfile.TemporaryDirectory()
         cls.exe = os.path.join(cls.work.name, 'drive_build_rows_host')
-        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-o', cls.exe, os.path.join(HERE, 'drive_build_rows_host.c'),
+        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-I', SDK, '-o', cls.exe, os.path.join(HERE, 'drive_build_rows_host.c'),
                         '-Wl,--unresolved-symbols=ignore-all'], check=True)
         with open(os.path.join(HERE, '..', 'js', 'test', 'drivestore-vectors.json'), encoding='utf-8') as fh:
             runs = json.load(fh)['runs']
@@ -218,7 +232,7 @@ class Parked(unittest.TestCase):
             mods = self.parked_mods(st)
             rows = self.lines(['store ' + h, 'build'], 'BUILD')
             got = rows[0].split('|') if rows and rows[0] else []
-            self.assertEqual(got, ['%s=PARK' % m for m in mods], h)
+            self.assertEqual(got, ['%s=*' % m for m in mods], h)
             for i, m in enumerate(mods):
                 info = self.lines(['store ' + h, 'parkinfo %d' % i], 'PARKINFO')[0].split('~')
                 self.assertEqual(info[0], 'PARKED DATA')
@@ -243,7 +257,23 @@ class Parked(unittest.TestCase):
         h = next(h for h in self.stores if ds.decode(bytes.fromhex(h))['parked'])
         mods = self.parked_mods(ds.decode(bytes.fromhex(h)))
         got = self.lines(['store ' + h, 'build'], 'BUILD', active=['x.elemod'])[0].split('|')
-        self.assertEqual(got, ['x'] + ['%s=PARK' % m for m in mods])
+        self.assertEqual(got, ['x'] + ['%s=*' % m for m in mods])
+
+    def test_a_parked_mod_back_in_the_build_has_one_row_with_a_star(self):
+        """decided 2026-11-18 (the A4's): no PARK row; a build row whose mod has saved data shows
+        "* " before its state word, and a parked mod back in the build has no second row."""
+        h = next(h for h in self.stores if ds.decode(bytes.fromhex(h))['parked'])
+        mods = self.parked_mods(ds.decode(bytes.fromhex(h)))
+        got = self.lines(['id x.elemod|' + mods[0], 'store ' + h, 'build'], 'BUILD', active=['x.elemod'])
+        self.assertEqual(got[0].split('|'), [mods[0] + '=* ADD'] + ['%s=*' % m for m in mods[1:]])
+
+    def test_live_data_stars_a_build_row_and_none_without_data(self):
+        h, live = next((h, f['mod']) for h in self.stores for f in ds.decode(bytes.fromhex(h))['fields'])
+        mods = self.parked_mods(ds.decode(bytes.fromhex(h)))
+        got = self.lines(['id x.elemod|' + live, 'store ' + h, 'build'], 'BUILD', active=['x.elemod'])
+        self.assertEqual(got[0].split('|')[0], live + '=* ADD')
+        got = self.lines(['id x.elemod|nobody', 'store ' + h, 'build'], 'BUILD', active=['x.elemod'])
+        self.assertEqual(got[0].split('|'), ['nobody'] + ['%s=*' % m for m in mods])
 
     def test_storage_room_refusals_in_full(self):
         got = self.lines(['reason 29 0 sound 62 56', 'reason 29 0 codes 3 1', 'reason 29 0 core_handles 3 2'],
@@ -271,7 +301,7 @@ class CheckTick(unittest.TestCase):
     def setUpClass(cls):
         cls.work = tempfile.TemporaryDirectory()
         cls.exe = os.path.join(cls.work.name, 'drive_check_tick_host')
-        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-o', cls.exe, os.path.join(HERE, 'drive_check_tick_host.c'),
+        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-I', SDK, '-o', cls.exe, os.path.join(HERE, 'drive_check_tick_host.c'),
                         '-Wl,--unresolved-symbols=ignore-all'], check=True)
 
     @classmethod
@@ -314,7 +344,7 @@ class Reader(unittest.TestCase):
     def setUpClass(cls):
         cls.work = tempfile.TemporaryDirectory()
         cls.exe = os.path.join(cls.work.name, 'drive_reader_host')
-        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-o', cls.exe, os.path.join(HERE, 'drive_reader_host.c'),
+        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-I', SDK, '-o', cls.exe, os.path.join(HERE, 'drive_reader_host.c'),
                         '-Wl,--unresolved-symbols=ignore-all'], check=True)
 
     @classmethod

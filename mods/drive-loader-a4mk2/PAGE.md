@@ -90,8 +90,7 @@ As the Rytm's page, with these differences:
 ## Saved data
 
 `/mods/.store` is read when the page opens and after FORGET DATA (`park.h`). A build row whose mod
-it keeps anything for (fields, lock codes or CCs, live or parked: `dl_store_has`) gets a `*`
-(the Rytm's page says `PARK`). The `*` has a column of its own, its
+it keeps anything for (fields, lock codes or CCs, live or parked: `dl_store_has`) gets a `*`. The `*` has a column of its own, its
 right edge `STATE_GAP` left of the widest state word, so every row's `*` lines up whatever word
 follows it: `* KEEP`, `* ADD`, `* DROP`, `* !`.
 

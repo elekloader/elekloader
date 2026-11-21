@@ -9,7 +9,9 @@
  * which switches the list to the build. Every change runs the boot linker's own pass 1,
  * checks and layout on the new set (dl_check, dlink.c) against core_desc: a set that would
  * load whole is written to DL_DIR/active for the next boot, one that wouldn't is never saved
- * and a box says why. The page never loads or unloads code.
+ * and a box says why. The page never loads or unloads code: APPLY & RESTART, in the build
+ * list's action panel while the saved set differs from the running one, keeps the working
+ * project (core_project_keep) and reboots the unit (core_restart), so the next boot loads it.
  *
  * Everything here runs in the UI task. The route runs in the SysEx tasks: the page takes
  * the staging buffer only while it reads one file (the background check of the listed files,
@@ -23,6 +25,7 @@
 #include "fs.h"
 #include "park.h"
 #include "skip.h"
+#include <analog-rytm-mk2/system.h>
 
 /* stock's menus (core-ar2 README; trace 2, section 1) */
 #define NEW ((void *(*)(unsigned))0x40082a40)
@@ -99,12 +102,18 @@ static struct dl_status *cst;
 static char (*cdet)[32];
 static char label[48];
 
-/* Parked data (PAGE.md, "Parked data"): the mods /mods/.store keeps fields of that no chosen mod
- * declares any more, read when the page opens and after FORGET DATA. The build list shows them
- * after the build's rows. */
+/* Saved data (PAGE.md, "Saved data"): the mods /mods/.store keeps fields, lock codes or CCs of,
+ * read when the page opens and after FORGET DATA. A build row of such a mod has "* " before its
+ * KEEP, ADD, DROP or "!" (decided 2026-11-18, the A4's, in place of PARK rows). The parked ones
+ * (fields no chosen mod declares any more) are parks; the build list shows those of mods not on
+ * it after the build's rows (prows, made with the list's rows in page_rows, so stock's row
+ * count never changes under it), and FORGET DATA drops a ticked row's parked data. */
 static struct dl_park *parks;
 static int npark;
 static u8 *forgetting;                   /* FORGET DATA's marks, one a parked mod */
+static int *prows, nprow;                /* the parks with a row of their own, after the build's */
+static u8 *stored;                       /* a copy of .store's bytes, for "* " */
+static s32 nstored;
 static u8 *store_raw, *store_out;        /* FORGET DATA's read of .store and its rewrite */
 static s32 store_len;
 
@@ -150,12 +159,17 @@ static void page_free(void)
     dl_free(sel);
     dl_free(parks);
     dl_free(forgetting);
+    dl_free(prows);
+    dl_free(stored);
     files = 0;
     lrows = 0;
     build_rows = sel = 0;
     parks = 0;
     forgetting = 0;
-    nfiles = fcap = nlrows = nbuild = npark = 0;
+    prows = 0;
+    stored = 0;
+    nfiles = fcap = nlrows = nbuild = npark = nprow = 0;
+    nstored = 0;
     set_free();
 }
 
@@ -587,14 +601,26 @@ static int parks_from(const u8 *raw, s32 len)
     int n = len > 0 ? dl_park_list(raw, (u32)len, 0, 0) : 0;
     dl_free(parks);
     dl_free(forgetting);
+    dl_free(prows);
+    dl_free(stored);
     parks = 0;
     forgetting = 0;
-    npark = 0;
+    prows = 0;
+    stored = 0;
+    npark = nprow = 0;
+    nstored = 0;
+    if (len > 0) {
+        if (!(stored = dl_alloc((u32)len)))
+            return -2;
+        dl_memcpy(stored, raw, (u32)len);
+        nstored = len;
+    }
     if (n <= 0)
         return 0;
     parks = dl_alloc((u32)n * sizeof *parks);
     forgetting = dl_alloc((u32)n);
-    if (!parks || !forgetting)
+    prows = dl_alloc((u32)n * sizeof *prows);
+    if (!parks || !forgetting || !prows)
         return -2;
     npark = dl_park_list(raw, (u32)len, parks, n);
     if (npark < 0)
@@ -840,10 +866,23 @@ struct fn {                              /* std::function: functor[2], manager, 
 };
 
 enum { M_DRIVE, M_BUILD };
-enum { P_NONE, P_LOAD, P_UNLOAD, P_DELETE, P_CLEAR, P_RMDIR, P_FORGET };
+enum { P_NONE, P_LOAD, P_UNLOAD, P_DELETE, P_CLEAR, P_RMDIR, P_FORGET, P_RESTART };
 static u8 mode;                          /* the list: the files, or the build */
 static u8 pending;                       /* what the open confirm window does */
 static void *view;                       /* the page's view while it shows (UI task only) */
+
+/* the saved data "*" column's right edge, from the row's x: STATE_GAP left of the widest build
+ * state word, so every row's "*" lines up whatever word follows it (decided 2026-11-18) */
+static int star_x(void)
+{
+    static const char *const words[] = {"KEEP", "ADD", "DROP", "!"};
+    int i, w, most = 0;
+    for (i = 0; i < 4; i++)
+        if ((w = text_w(words[i])) > most)
+            most = w;
+    return ((int (*)(void *))VCALL(V_WIDTH))(view) - 9 - most - STATE_GAP;
+}
+
 static char msg[80];
 static char rmdir_name[DL_SEG_MAX + 1];  /* the folder DELETE DIR asked about */
 
@@ -859,9 +898,45 @@ static int build_empty(void)
     return 1;
 }
 
+/* a file's id names park pid: the whole id, or its first DL_ID_MAX - 1 bytes when the file's id
+ * was cut there */
+static int id_is(const char *fid, const char *pid)
+{
+    u32 i;
+    if (!fid[0])
+        return 0;
+    for (i = 0; fid[i]; i++)
+        if (fid[i] != pid[i])
+            return 0;
+    return !pid[i] || i == DL_ID_MAX - 1;
+}
+
+/* the park of file k's mod, or -1 */
+static int park_of_file(int k)
+{
+    int p;
+    for (p = 0; p < npark; p++)
+        if (id_is(files[k].id, parks[p].id))
+            return p;
+    return -1;
+}
+
+/* prows again: the parks whose mod has no build row (page_rows, with the list's rows) */
+static void park_rows(void)
+{
+    int p, i;
+    nprow = 0;
+    for (p = 0; p < npark && prows; p++) {
+        for (i = 0; i < nbuild && !id_is(files[build_rows[i]].id, parks[p].id); i++)
+            ;
+        if (i == nbuild)
+            prows[nprow++] = p;
+    }
+}
+
 static int list_n(void)
 {
-    return mode == M_BUILD ? nbuild + npark : nlrows;
+    return mode == M_BUILD ? nbuild + nprow : nlrows;
 }
 
 /* the file of list row i in this mode, or -1 for "..", a folder and a parked mod */
@@ -875,7 +950,16 @@ static int file_k(int i)
 /* the parked mod of list row i (the build list's rows after the build's), or -1 */
 static int park_k(int i)
 {
-    return mode == M_BUILD && i >= nbuild && i < nbuild + npark ? i - nbuild : -1;
+    return mode == M_BUILD && i >= nbuild && i < nbuild + nprow ? prows[i - nbuild] : -1;
+}
+
+/* the parked data FORGET DATA drops for list row i: a parked row's, or a build row's mod's */
+static int park_of(int i)
+{
+    int k = park_k(i);
+    if (k >= 0)
+        return k;
+    return mode == M_BUILD && i >= 0 && i < nbuild ? park_of_file(build_rows[i]) : -1;
 }
 
 /* the build list: the saved set, then the mods the last boot loaded that have left it
@@ -918,9 +1002,29 @@ static int delete_dir_now(void)
 }
 
 static const char *const acts_drive[] = {"SELECT ALL", "DESELECT ALL", "LOAD TO BUILD", "CLEAR BUILD", "DELETE"};
-static const char *const acts_build[] = {"SELECT ALL", "DESELECT ALL", "UNLOAD", "INFO", "FORGET DATA"};
+static const char *const acts_build[] = {"SELECT ALL", "DESELECT ALL", "UNLOAD", "INFO", "FORGET DATA",
+                                         "APPLY & RESTART"};
 #define NACT_DRIVE 5
-#define NACT_BUILD 5
+#define NACT_BUILD 5                     /* the build panel's rows, APPLY & RESTART not counted */
+
+/* The saved set differs from the running one: a build row reads ADD (saved, not loaded now) or
+ * DROP (loaded now, not saved), and a "!" row of a saved mod the last boot refused or dropped
+ * counts as ADD, since another boot tries it again. Saved data doesn't count: FORGET DATA
+ * rewrites it at once. As the A4 loader's. */
+static int set_differs(void)
+{
+    int i;
+    for (i = 0; i < nfiles; i++)
+        if (files[i].on != (files[i].boot == DL_ST_LOADED))
+            return 1;
+    return 0;
+}
+
+/* the action panel's rows: the build list adds APPLY & RESTART while the sets differ */
+static int n_acts(void)
+{
+    return mode == M_BUILD ? NACT_BUILD + set_differs() : NACT_DRIVE;
+}
 /* functor indices: list rows are 1..list_n(), and the list has no file limit (one row a file in
  * /mods), so the other rows sit far above any list row. At 100/200/300 the 256-mod emulator
  * record drew list row 100 as SELECT ALL, rows from 200 as NO MODS ON +DRIVE and rows from 300
@@ -949,15 +1053,14 @@ unsigned dl_page_text(int i)
         if (mode == M_DRIVE && i < NACT_DRIVE)
             cat(label, end, i == 2 && !build_empty() ? "UPDATE BUILD"
                             : i == 4 && view && delete_dir_now() ? "DELETE DIR" : acts_drive[i]);
-        else if (mode == M_BUILD && i < NACT_BUILD)
+        else if (mode == M_BUILD && i <= NACT_BUILD)
             cat(label, end, acts_build[i]);
     } else if (--i >= 0 && i < list_n()) {
         int k = file_k(i);
         if (park_k(i) >= 0) {            /* a parked mod: its id, clipped as the build's */
             const char *id = parks[park_k(i)].id;
             if (view)
-                clip_tail(label, end, id, ((int (*)(void *))VCALL(V_WIDTH))(view) - 9 - text_w("KEEP") -
-                          LABEL_X - STATE_GAP, text_w);
+                clip_tail(label, end, id, star_x() - text_w("*") - LABEL_X - STATE_GAP, text_w);
             else
                 cat(label, end, id);
         } else if (k >= 0) {
@@ -968,8 +1071,7 @@ unsigned dl_page_text(int i)
             else
                 bare_name(name, name + sizeof name, r->name);
             if (mode == M_BUILD && view)     /* clipped left of the state column */
-                clip_tail(label, end, name, ((int (*)(void *))VCALL(V_WIDTH))(view) - 9 -
-                          text_w("KEEP") - LABEL_X - STATE_GAP, text_w);
+                clip_tail(label, end, name, star_x() - text_w("*") - LABEL_X - STATE_GAP, text_w);
             else
                 cat(label, end, name);
         } else if (lrows[i].kind == R_UP)
@@ -1013,15 +1115,17 @@ static void publish_check(void)
  * "(n)" in its place (decided 2026-11-09). Build: KEEP
  * (loaded now, stays), ADD (loads at the next boot), DROP (loaded now, gone after the next boot),
  * "!" (the last boot refused it). */
-/* list row i's right-hand column into t */
-static void row_column(int i, char *t, char *end)
+/* list row i's right-hand column into t -> 1 when the row also gets the saved data mark "*"
+ * (.store keeps data of the mod, live or parked), drawn in a column of its own at star_x; a
+ * parked mod not on the build has the "*" alone (decided 2026-11-18, the A4's, in place of PARK) */
+static int row_column(int i, char *t, char *end)
 {
-    int k = file_k(i);
+    int k = file_k(i), star = 0;
     const struct file *r;
     t[0] = 0;
     if (park_k(i) >= 0)                  /* parked data: its fields keep their bits */
-        cat(t, end, "PARK");
-    else if (k < 0) {
+        return 1;
+    if (k < 0) {
         if (lrows[i].kind == R_DIR && lrows[i].sel)   /* "(3)": 3 ticked files below it */
             cat(num(cat(t, end, "("), end, lrows[i].sel), end, ")");
         else
@@ -1031,24 +1135,33 @@ static void row_column(int i, char *t, char *end)
             cat(t, end, "!");
         else if (r->checked)             /* the size once the check has read the file */
             cat(num(t, end, (r->size + 1023) / 1024), end, "KB");
-    } else if (r->boot == DL_ST_REFUSED || r->boot == DL_ST_DROPPED)
-        cat(t, end, "!");
-    else if (!r->on)
-        cat(t, end, "DROP");
-    else
-        cat(t, end, r->boot == DL_ST_LOADED ? "KEEP" : "ADD");
+    } else {
+        star = park_of_file(k) >= 0 || dl_store_has(stored, (u32)nstored, r->id, 1);
+        if (r->boot == DL_ST_REFUSED || r->boot == DL_ST_DROPPED)
+            cat(t, end, "!");
+        else if (!r->on)
+            cat(t, end, "DROP");
+        else
+            cat(t, end, r->boot == DL_ST_LOADED ? "KEEP" : "ADD");
+    }
+    return star;
 }
 
 void dl_page_draw(void **f, void *item, void *canvas, int x, int y)
 {
-    int i = (int)*f - 1;
+    int i = (int)*f - 1, star;
     char t[16];
     (void)item;
     drawn_at = ticks;
     if (!view || i < 0 || i >= list_n())
         return;
-    row_column(i, t, t + sizeof t);
-    TEXT(canvas, FONT_LIST, x + ((int (*)(void *))VCALL(V_WIDTH))(view) - 9, y, 2, 0, "XXXXXXX", "%s", t);
+    star = row_column(i, t, t + sizeof t);
+    if (t[0])
+        TEXT(canvas, FONT_LIST, x + ((int (*)(void *))VCALL(V_WIDTH))(view) - 9, y, 2, 0, "XXXXXXX", "%s", t);
+    if (star)                            /* after the word: the word's "XXXXXXX" box clears what lies
+                                          * under it, the star with it (DMS1 emulator, 2026-11-18:
+                                          * "* KEEP" drew as "KEEP"); the star's own box is one "X" */
+        TEXT(canvas, FONT_LIST, x + star_x(), y, 2, 0, "X", "%s", "*");
 }
 
 static void show_box(const char *s)
@@ -1488,7 +1601,7 @@ static int forget_marks(void)
     for (k = 0; k < npark; k++)
         forgetting[k] = 0;
     for (; v && v < e; v++)
-        if ((k = park_k(*v)) >= 0 && !forgetting[k]) {
+        if ((k = park_of(*v)) >= 0 && !forgetting[k]) {
             forgetting[k] = 1;
             n++;
         }
@@ -1634,6 +1747,18 @@ static void do_rmdir(void)
     cursor_to(i < nlrows ? i - 1 : nlrows - 1);   /* about where the folder was */
 }
 
+/* APPLY & RESTART's YES: a box says RESTARTING and the page takes no more keys (dl_key);
+ * dl_page_tick reboots RESTART_TICKS later (restart_tick) */
+static u8 restarting;
+static u32 restart_asked;
+
+static void do_restart(void)
+{
+    restarting = 1;
+    restart_asked = ticks;
+    show_box("RESTARTING");
+}
+
 void dl_page_yes(void **f, int yes)
 {
     (void)f;
@@ -1650,6 +1775,8 @@ void dl_page_yes(void **f, int yes)
             do_rmdir();
         else if (pending == P_FORGET)
             do_forget();
+        else if (pending == P_RESTART)
+            do_restart();
     }
     pending = P_NONE;
 }
@@ -1842,6 +1969,9 @@ void dl_page_select(void **f)
     else if (i == 3 && mode == M_DRIVE) {
         pending = P_CLEAR;
         confirm("CLEAR THE BUILD?");
+    } else if (i == NACT_BUILD && mode == M_BUILD && set_differs()) {
+        pending = P_RESTART;             /* the working project is kept (restart_tick) */
+        confirm("RESTART NOW?");
     } else if (i == 4 && mode == M_DRIVE) {
         if (delete_dir_now()) {          /* as SAMPLES: "DELETE DIR?" over CONFIRM Y/N */
             copy_str(rmdir_name, lrows[cursor_row()].name, sizeof rmdir_name);
@@ -1877,6 +2007,7 @@ static void page_rows(void)
     void *right = (char *)view + PANE_RIGHT, *left = (char *)view + PANE_LEFT;
     LIST_CLEAR(view);
     ((int *)view)[11] = ((int *)view)[10];   /* no ticks carried across lists */
+    park_rows();                         /* the parked-only rows, fixed until the next rebuild */
     for (i = 0; i < list_n(); i++)
         add_item(view, i + 1, i);
     /* stock's list is never left with no row: its own lists never are (a folder has "..", VIEW
@@ -1893,7 +2024,8 @@ static void page_rows(void)
     if (!list_n())
         add_item(view, I_EMPTY, 0);
     LIST_CLEAR(right);
-    for (i = 0; i < (mode == M_BUILD ? NACT_BUILD : NACT_DRIVE); i++)
+    for (i = 0; i < n_acts(); i++)      /* LIST_CLEAR put its cursor on row 0, so it is never left
+                                          * on APPLY & RESTART once that row has gone (trace R3) */
         add_item(right, I_ACT + i, -1);
     LIST_CLEAR(left);
     add_item(left, I_LEFT, -1);
@@ -1959,7 +2091,7 @@ int dl_key(void *brain, void *ev)
 {
     (void)brain, (void)ev;
     last_input = ticks;
-    return 0;
+    return restarting;                   /* after APPLY & RESTART's YES: RESTARTING stays up */
 }
 
 int dl_enc(void *brain, void *ev)
@@ -2135,6 +2267,30 @@ static void follow_route(void)
 #define TICK_US 50000u
 static u32 rest_until;                   /* the tick the background may work again */
 
+/* APPLY & RESTART, RESTART_TICKS after its YES: the box shows that long (as stock's SUCCESS!
+ * REBOOTING), and YES's release, and a remote key's status after it, are answered before the
+ * reset (the A4's emulator gate's first try reset inside the remote tap, 2026-11-16). Then the
+ * working project is kept as it is now (core_project_keep: written to the +Drive as stock's OS
+ * upgrade writes it before its reboot, mod fields included), before any lock is held. Then the
+ * crash guard comes off, since the restart is the user's and the running set got this far
+ * (boot.c keeps it on while the page shows after a boot that applied sites), then dl_lock, held
+ * for good, so no route upload or page write is cut between its ekFS calls, then core_restart,
+ * which waits for the +Drive and the panel link and UART, and resets. An upload the route hasn't
+ * committed is dropped, as at a power cut. As the A4 loader's (decided 2026-11-16). */
+#define RESTART_TICKS 40                 /* 2 s */
+
+void dl_guard_off(void);
+
+static void restart_tick(void)
+{
+    if (!restarting || ticks - restart_asked < RESTART_TICKS)
+        return;
+    core_project_keep();
+    dl_lock();
+    dl_guard_off();
+    core_restart();
+}
+
 void dl_page_tick(void *ctrl)
 {
     ticks++;
@@ -2153,4 +2309,5 @@ void dl_page_tick(void *ctrl)
         redraw = 0;
         *((volatile u8 *)ctrl + 0x20) = 1;
     }
+    restart_tick();
 }

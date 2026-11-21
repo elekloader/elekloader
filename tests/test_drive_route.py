@@ -16,6 +16,7 @@ import unittest
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+SDK = os.path.join(os.path.dirname(HERE), 'elekloader', 'sdk', 'include')
 sys.path.insert(0, os.path.dirname(HERE))
 
 from elekloader import datarpc                                   # noqa: E402
@@ -167,7 +168,7 @@ class Moves(unittest.TestCase):
     def setUpClass(cls):
         cls.work = tempfile.TemporaryDirectory()
         cls.exe = os.path.join(cls.work.name, 'drive_move_host')
-        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-o', cls.exe, os.path.join(HERE, 'drive_move_host.c'),
+        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-I', SDK, '-o', cls.exe, os.path.join(HERE, 'drive_move_host.c'),
                         '-Wl,--unresolved-symbols=ignore-all'], check=True)
 
     @classmethod
@@ -367,7 +368,7 @@ class PastTheThirdLevel(unittest.TestCase):
         cls.exe = {}
         for m in ('PAGE', 'ROUTE'):
             cls.exe[m] = os.path.join(cls.work.name, 'drive_depth_' + m.lower())
-            subprocess.run(['cc', '-O1', '-w', '-no-pie', '-DDEPTH_' + m, '-o', cls.exe[m],
+            subprocess.run(['cc', '-O1', '-w', '-no-pie', '-I', SDK, '-DDEPTH_' + m, '-o', cls.exe[m],
                             os.path.join(HERE, 'drive_depth_host.c'),
                             '-Wl,--unresolved-symbols=ignore-all'], check=True)
 

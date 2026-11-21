@@ -349,7 +349,7 @@ descriptor alone (`/mods/.build`) is enough for `fit`, not for placing.
 - **Parked**: a field no chosen mod declares keeps its bits and values; the
   core counts it as owned, and it gets its place back when its mod
   returns. `forget` (FORGET DATA on the MODS page: mods/drive-loader-ar2/PAGE.md,
-  "Parked data") drops a parked mod's fields, codes and CCs; their bits are given out again only by a repack.
+  "Saved data") drops a parked mod's fields, codes and CCs; their bits are given out again only by a repack.
 - **Repack**: when a scope's never-used bits (below its low mark) run out,
   or the flashed build repacked the scope, grew into a field or has less
   room, the scope gets a new generation, its parked fields are dropped and
