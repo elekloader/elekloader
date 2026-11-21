@@ -155,9 +155,10 @@ int core_steps_live(unsigned addr);
 #define HEAP_REGION 129
 
 static struct ledger *volatile led[REGIONS];
-/* (0.19) the entries in every region's array, dead ones included: while it
- * and core_step_owners[0] are 0, rows.s's memcpy, memset and operator new
- * go straight to stock's (a copy can carry nothing then) */
+/* (0.19) the live entries in every region's array (dead ones left out, so
+ * it is back at 0 once every lock is gone): while it and
+ * core_step_owners[0] are 0, rows.s's memcpy, memset and operator new go
+ * straight to stock's (a copy can carry nothing then) */
 volatile unsigned core_rows_ents;
 static volatile unsigned gen[REGIONS];          /* every change, to the array or in place */
 static volatile unsigned short dead[REGIONS];   /* entries marked DEAD since the last rebuild */
@@ -270,6 +271,7 @@ static void drop_r(int r, unsigned a, unsigned b)
         if (l->e[i].code != DEAD) {
             l->e[i].code = DEAD;
             dead[r]++;
+            core_rows_ents--;
             gen[r]++;
         }
 }
@@ -332,7 +334,7 @@ static int replace_r(int r, unsigned a, unsigned b, const struct ent *add, int k
             n->n = j;
         sr = irq_mask();
         if (led[r] == l && gen[r] == g) {
-            core_rows_ents += (n ? n->n : 0) - (l ? l->n : 0);
+            core_rows_ents += (n ? n->n : 0) - (l ? l->n - dead[r] : 0);
             led[r] = n;
             dead[r] = 0;
             gen[r]++;
