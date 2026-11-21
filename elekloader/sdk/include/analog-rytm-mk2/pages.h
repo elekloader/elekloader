@@ -184,7 +184,7 @@ struct core_knob_look {
 /* the stock UI record of id (0..468; record 0 for any other id), to copy */
 const void *core_knob_stock_ui(int32_t id);
 
-/* core-ar2 0.18: knob flags. A mod's own id (555 up) has no stock parameter
+/* core-ar2 0.17: knob flags. A mod's own id (555 up) has no stock parameter
  * record, so stock reads record 0's flags (+0x24) for it, and no own knob
  * opens a list when turned or pushed, as LFO DEST does. An entry in
  * core_knob_flags adds flags to what stock reads for the ids:

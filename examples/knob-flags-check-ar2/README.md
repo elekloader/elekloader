@@ -1,7 +1,7 @@
 # knob-flags-check (Analog Rytm MKII)
 
-A test for [core-ar2](../../mods/core-ar2) 0.18's knob flags
-(`core_knob_flags`, docs/ADAPTING.md "Knob flags (core-ar2 0.18, Analog
+A test for [core-ar2](../../mods/core-ar2) 0.17's knob flags
+(`core_knob_flags`, docs/ADAPTING.md "Knob flags (core-ar2 0.17, Analog
 Rytm MKII)"). One page, KNOB FLAGS, behind the LFO key (after LFO and
 stock's own pages):
 
@@ -20,7 +20,7 @@ the top of `flags.c`. It takes no site.
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/knob-flags-check-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.18.elemod --mod examples/knob-flags-check-ar2/out/knob-flags-check-0.1.elemod \
+    --mod mods/core-ar2/out/core-0.17.elemod --mod examples/knob-flags-check-ar2/out/knob-flags-check-0.1.elemod \
     --out ar-kf.syx --version KF74
 ```
 
@@ -36,7 +36,7 @@ first (header KNOB FLAGS, labels KFL KFM KFN):
    `deltas` stays put while it is open.
 3. **List on push.** Pushing B opens the list.
 4. **YES and NO.** NO closes the list with B's value unchanged. YES closes
-   it; what B's value does is recorded, not assumed: core 0.18 opens the
+   it; what B's value does is recorded, not assumed: core 0.17 opens the
    list but does not route its commit to a mod (stock's setter 0x400a906c
    writes through the sound set for the id; lfo-rnd takes the setter and
    the read, 0x400a8e66, itself).
@@ -50,4 +50,4 @@ first (header KNOB FLAGS, labels KFL KFM KFN):
 7. **Stock unchanged.** A (LFO DEST) and the LFO page's own DEST knob open
    their list and commit as on stock; other stock knobs open none.
 8. **+Drive.** The same with the example loaded from the +Drive
-   (drive-loader-ar2 0.11), whose loader checks `core_knob_flags` ids.
+   (drive-loader-ar2 0.10), whose loader checks `core_knob_flags` ids.

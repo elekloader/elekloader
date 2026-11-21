@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.18: knob flags (README, "Knob flags (0.18)"). A mod's own knob
+/* core-ar2 0.17: knob flags (README, "Knob flags (0.17)"). A mod's own knob
  * id (555 up) has no stock parameter record, so stock reads record 0's flags
  * (+0x24, 0) for it: no own knob opens a destination list when it is turned
  * or pushed, as LFO DEST does. An entry in core_knob_flags gives the ids

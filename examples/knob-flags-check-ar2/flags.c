@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* knob-flags-check (Analog Rytm MKII): core-ar2 0.18's knob flags (README).
+/* knob-flags-check (Analog Rytm MKII): core-ar2 0.17's knob flags (README).
  *
  * One page, KNOB FLAGS, behind the LFO key: A is stock's LFO DEST (id 67),
  * the reference; B, C and D are knob ids of the mod's own that all look like
@@ -31,7 +31,7 @@ CORE_KNOBS;
 #define PARAMS ((const uint8_t *)0x401bfbc8)     /* 52 bytes an id */
 #define P_MIN(id) (*(const int32_t *)(PARAMS + 52 * (id) + 0x08))
 #define P_MAX(id) (*(const int32_t *)(PARAMS + 52 * (id) + 0x0c))
-#define FLAGS_OF ((uint32_t (*)(int32_t))0x40007234)   /* stock's getter, core's from 0.18 */
+#define FLAGS_OF ((uint32_t (*)(int32_t))0x40007234)   /* stock's getter, core's from 0.17 */
 
 static const char *const labels[NOWN] = {"KFL", "KFM", "KFN"};
 static const char *const names[NOWN] = {"FLAG LIST", "FLAG MASKED", "FLAG NONE"};

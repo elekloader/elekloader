@@ -39,7 +39,7 @@ def flashed(B, knobs=True, rytm=False):
     """The A4 loader's kind of build, keeping +Drive storage, with core_params and core_knob_looks,
     a flashed module whose entry takes ids 0x300..0x306, and (knobs) a loader exporting drive_knobs;
     rytm: the Rytm loader's kind (abs16 from drive-loader-ar2 0.9), with core_param_locks too, and
-    core_knob_flags (core-ar2 0.18, drive-loader-ar2 0.11)."""
+    core_knob_flags (core-ar2 0.17, drive-loader-ar2 0.10)."""
     mods = TD.flashed(B, store=True, stage_top=True, payload_skip=True, abs16=True, collections=True)
     core, loader = mods[0], mods[1]
     core['collections'].update({'core_params': {'entry': 4}, 'core_knob_looks': {'entry': 4}})

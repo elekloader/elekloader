@@ -36,6 +36,6 @@ USB message, and the DRAW TEST pattern exact.
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/std-check-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.18.elemod --mod examples/std-check-ar2/out/std-check-0.1.elemod \
+    --mod mods/core-ar2/out/core-0.17.elemod --mod examples/std-check-ar2/out/std-check-0.1.elemod \
     --out ar2-std.syx --version SD74
 ```

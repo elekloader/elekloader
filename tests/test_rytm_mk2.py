@@ -222,14 +222,14 @@ def test_core_ar2_sites():
     # parameter set, six view stack sites, eleven clipboard calls), and std1's MIDI events' 8
     # (0.17, stdmidi.s: the DIN and USB dispatch, the CC apply, program change, the three senders
     # and the sequencer's note post), and std1's voice events' 2 (0.17, stdvoice.s: the audio
-    # interrupt's trig and release), and the knob flags' five (0.18, flags.s: the flags getter, the
+    # interrupt's trig and release), and the knob flags' five (0.17, flags.s: the flags getter, the
     # turn's two reads, the push's and the list's creation)
     assert len(mod['sites']) == 193
-    # (0.17) the UI, MIDI and voice events' sites give "len" and "stock_sha256", no stock bytes;
-    # (0.18) the knob flags' too
+    # (0.17) the UI, MIDI and voice events' sites give "len" and "stock_sha256", no stock bytes,
+    # the knob flags' too
     ui = [x for x in mod['sites'] if 'stock_sha256' in x]
     assert len(ui) == 38 and all('stock' not in x for x in ui)
-    # (0.18) the knob flags' sites (flags.s), their stock bytes checked by sha256 above
+    # (0.17) the knob flags' sites (flags.s), their stock bytes checked by sha256 above
     fl = {x['addr']: (x['len'], x['target']) for x in mod['sites'] if x.get('target', '').startswith('core_flags_')}
     assert fl == {'0x40007234': (10, 'core_flags_hook'), '0x40039fbe': (10, 'core_flags_turn_site'),
                   '0x4003a224': (10, 'core_flags_delta_site'), '0x4003a890': (10, 'core_flags_push_site'),

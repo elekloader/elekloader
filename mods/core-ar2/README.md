@@ -1228,7 +1228,7 @@ lookups 0x400a9000 and 0x400a9022 (`lock.c`, with the page's sound), and
 `uirec`, `range` (which the setter 0x400a906c clamps to) and the graphic
 (`looks.c`, sound 0: the current track's). No code site of its own.
 
-## Knob flags (0.18)
+## Knob flags (0.17)
 
 `flags.c`, `flags.s` (their top comments); docs/ADAPTING.md.
 

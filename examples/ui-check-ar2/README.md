@@ -17,7 +17,7 @@ stock's crash screen follows and the unit needs a power cycle.
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/ui-check-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.18.elemod --mod examples/ui-check-ar2/out/ui-check-0.1.elemod \
+    --mod mods/core-ar2/out/core-0.17.elemod --mod examples/ui-check-ar2/out/ui-check-0.1.elemod \
     --out ar-ui.syx --version UI74
 ```
 

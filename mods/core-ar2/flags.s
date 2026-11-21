@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-ar2 0.18: knob flags (flags.c). Stock's readers of the parameter
+| core-ar2 0.17: knob flags (flags.c). Stock's readers of the parameter
 | record's +0x24 flags for a knob's own id, OS 1.74:
 |
 | 0x40007234, flags(id): `move.l 4(%sp),%d1; cmpi.l #469,%d1`, from its
