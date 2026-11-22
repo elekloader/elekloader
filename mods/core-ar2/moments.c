@@ -210,7 +210,7 @@ static int room(int len)
         return 0;
     at = TX_AT;
     if (TX_LEVEL + 4 * len > TX_ROOM ||
-        (len > 0x2f && at > 0xfbf && at - 0x3f <= TX_LEVEL))
+        (len > 0x2f && at > 0xfbf && TX_LEVEL != 0))   /* 0.19: core_usb_send_site waits for 0 */
         return 0;
     return requests_free(at + 4 * len > 0xfff ? 2 : 1);
 }

@@ -460,6 +460,10 @@ that the routine does no harm.
 `core_restart`, `core_restart_now` and `core_project_keep`: `restart.s`'s
 comments, `analog-rytm-mk2/system.h`.
 
+## The USB-MIDI sender's wrap (0.19)
+
+`usbring.c`'s comments.
+
 ## Lockable parameters (0.8)
 
 The first part of the lock service (docs/ADAPTING.md, "Lockable parameters
@@ -984,8 +988,7 @@ Analog Rytm MKII)"; `elekloader/sdk/include/analog-rytm-mk2/moments.h`).
   is not busy; otherwise it answers 0. The try-lock and the give are a
   task's (the owner is the current task, the give can switch tasks), so
   from an interrupt (the status register's level not 0) core uses neither:
-  it sends at once, at level 5 for the sender's call (as the Sidecar
-  companion's step clock did, so the audio interrupt can't cut in), when
+  it sends at once, at level 5 for the sender's call, when
   no task holds the mutex (its owner word 0), no other interrupt is
   sending and the same checks pass. Otherwise the message goes into core's
   ring (1,024 bytes, at most 128 a message), which the next sequencer tick
@@ -995,7 +998,7 @@ Analog Rytm MKII)"; `elekloader/sdk/include/analog-rytm-mk2/moments.h`).
   another interrupt's send may go first. `core_midi_irq` (magic `MIRQ`)
   counts the interrupt path's sends at once, queued, drained and refused,
   and its longest time at level 5 in DMA timer 0 ticks. Only whole
-  messages: a status byte first, and a SysEx closed in the same call.
+  messages: a status byte first, a SysEx closed in the same call.
 - **The project model** (0x419f28a8) is read, never made: 0x4017fa0a
   makes it when it is 0, and the kit select site runs during boot, before
   stock makes it; a call there makes it too early and the boot hangs
