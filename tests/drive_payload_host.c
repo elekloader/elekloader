@@ -25,6 +25,11 @@
  *                        failed" and the set's CRCs after it, "CRCS name=crc ..."
  *   failrename PATH      the made-up rename of PATH (below DL_DIR) to anything fails
  *   tree                 -> "TREE name=text ; ..." (below DL_DIR, sorted; a newline as "|")
+ *   cut N                a power cut after the next N ekFS changes (an open to write, a write, a
+ *                        delete, a rename): later ones change nothing and fail; -1 none
+ *   changes              -> "CHANGES n", the ekFS changes made since the last cut line
+ *   boot                 the next boot's swap: the cut ends, dl_read_active, its "name crc" lines
+ *                        to dl_apply_updates -> as updates
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,6 +54,18 @@ void dl_unlock(void) { locked--; }
 static struct { char path[DL_PATH_MAX + 8]; char *data; unsigned n; } fsn[MAXF];
 static int nfs, reads;
 static char failing[DL_PATH_MAX + 8];
+static int cut_left = -1, changes;       /* cut: the changes the power holds for, -1 all */
+
+/* an ekFS change: 0 to make it, -1 when the power was cut before it */
+static int change(void)
+{
+    if (!cut_left)
+        return -1;
+    if (cut_left > 0)
+        cut_left--;
+    changes++;
+    return 0;
+}
 
 static int find(const char *p)
 {
@@ -79,11 +96,11 @@ static int put(const char *name, const char *data, unsigned n)
 }
 
 int dl_fs_file_size(const char *p) { int i = find(p); return i < 0 ? -1 : (int)fsn[i].n; }
-int dl_fs_delete(const char *p) { int i = find(p); if (i < 0) return -1; fsn[i].path[0] = 0; return 0; }
+int dl_fs_delete(const char *p) { int i = find(p); if (i < 0 || change()) return -1; fsn[i].path[0] = 0; return 0; }
 int dl_fs_rename(const char *a, const char *b)
 {
     int i = find(a);
-    if (i < 0 || find(b) >= 0 || !strcmp(a, failing))
+    if (i < 0 || find(b) >= 0 || !strcmp(a, failing) || change())
         return -1;
     strcpy(fsn[i].path, b);
     return 0;
@@ -91,7 +108,9 @@ int dl_fs_rename(const char *a, const char *b)
 int dl_fs_open(dl_file *f, const char *p, int write)
 {
     int *s = (int *)f->raw, i = find(p);
-    if (write) {                         /* made, or emptied */
+    if (write && change())
+        i = -1;
+    else if (write) {                    /* made, or emptied */
         if (i < 0) {
             i = nfs++;
             strcpy(fsn[i].path, p);
@@ -122,7 +141,7 @@ int dl_fs_read(dl_file *f, void *buf, unsigned n)
 int dl_fs_write(dl_file *f, const void *buf, unsigned n)
 {
     int i = ((int *)f->raw)[0];
-    if (i < 0)
+    if (i < 0 || change())
         return -1;
     fsn[i].data = realloc(fsn[i].data, fsn[i].n + n + 1);
     memcpy(fsn[i].data + fsn[i].n, buf, n);
@@ -282,6 +301,35 @@ int main(void)
                 }
                 strncpy(ch[n].name, a, sizeof ch[n].name - 1);
             }
+            dl_apply_updates(ch, n);
+            printf("UPDATES %u %u\nCRCS", dl_updates[0], dl_updates[1]);
+            for (k = 0; k < n; k++)
+                printf(" %s=%08x", ch[k].name, ch[k].crc);
+            printf("\n");
+        } else if (!strncmp(line, "cut ", 4)) {
+            cut_left = atoi(line + 4);
+            changes = 0;
+        } else if (!strcmp(line, "changes")) {
+            printf("CHANGES %d\n", changes);
+        } else if (!strcmp(line, "boot")) {
+            char *text, *e;
+            s32 len;
+            int n = 0, k;
+            cut_left = -1;
+            memset(ch, 0, sizeof ch);
+            len = dl_read_active(&text);
+            for (a = text; len > 0 && a < text + len && n < 256; a = e + 1) {
+                char name[DL_PATH_MAX];
+                unsigned crc;
+                e = memchr(a, '\n', (size_t)(text + len - a));
+                if (!e)
+                    e = text + len;
+                if (*a != '#' && sscanf(a, "%63s %x", name, &crc) == 2) {
+                    strncpy(ch[n].name, name, sizeof ch[n].name - 1);
+                    ch[n++].crc = crc;
+                }
+            }
+            dl_free(text);
             dl_apply_updates(ch, n);
             printf("UPDATES %u %u\nCRCS", dl_updates[0], dl_updates[1]);
             for (k = 0; k < n; k++)

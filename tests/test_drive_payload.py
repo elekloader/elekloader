@@ -141,11 +141,55 @@ class Table(unittest.TestCase):
                                'b.elemod %s|c.elemod %s| ; b.elemod=OLDB ; c.elemod=OLDC ; '
                                'c.elemod.new=NEWC ; x.elemod.new=STRAY' % (crc('NEWA'), crc('OLDB'), crc('OLDC'))])
 
-    def test_a_failed_swap_counts_and_active_stays(self):
+    def test_a_failed_swap_counts_and_its_line_takes_back_the_old_crc(self):
+        # active is written with the new CRC before the renames, and again with the old one when
+        # the swap fails
         out = self.run_('file a.elemod OLDA', 'file a.elemod.new NEWA', 'file active a.elemod 1',
                         'failrename a.elemod.new', 'updates a.elemod=1', 'tree')
         self.assertEqual(out, ['UPDATES 0 1', 'CRCS a.elemod=00000001',
-                               'TREE a.elemod=OLDA ; a.elemod.new=NEWA ; active=a.elemod 1'])
+                               'TREE a.elemod=OLDA ; a.elemod.new=NEWA ; '
+                               'active=# updates applied at boot|a.elemod 00000001|'])
+
+    def test_an_active_that_cant_be_written_swaps_nothing(self):
+        crc = lambda t: '%08x' % zlib.crc32(t.encode())
+        out = self.run_('file a.elemod OLDA', 'file a.elemod.new NEWA', 'file active a.elemod ' + crc('OLDA'),
+                        'failrename active.tmp', 'updates a.elemod=' + crc('OLDA'), 'tree',
+                        'failrename none', 'boot', 'tree')
+        # the rename over active failed after the delete: the next boot puts the whole .tmp in
+        self.assertEqual(out, ['UPDATES 0 1', 'CRCS a.elemod=' + crc('OLDA'),
+                               'TREE a.elemod=OLDA ; a.elemod.new=NEWA ; '
+                               'active.tmp=# updates applied at boot|a.elemod %s|' % crc('NEWA'),
+                               'UPDATES 1 0', 'CRCS a.elemod=' + crc('NEWA'),
+                               'TREE a.elemod=NEWA ; active=# updates applied at boot|a.elemod %s|' % crc('NEWA')])
+
+    def test_a_stale_active_tmp_beside_active_goes(self):
+        out = self.run_('file a.elemod OLDA', 'file active a.elemod 1', 'file active.tmp a.el', 'boot', 'tree')
+        self.assertEqual(out, ['UPDATES 0 0', 'CRCS a.elemod=00000001', 'TREE a.elemod=OLDA ; active=a.elemod 1'])
+
+    def test_a_power_cut_at_any_point_of_the_swap_never_leaves_the_new_file_under_the_old_crc(self):
+        """A4-dl's fix on the Rytm: /mods/active takes the new CRC before the renames. A cut after
+        each ekFS change, then the next boot: the update always lands, under its own CRC."""
+        crc = lambda t: '%08x' % zlib.crc32(t.encode())
+        setup = ('file a.elemod OLDA', 'file a.elemod.new NEWA', 'file b.elemod OLDB',
+                 'file active a.elemod %s|b.elemod %s' % (crc('OLDA'), crc('OLDB')))
+        go = 'updates a.elemod=%s b.elemod=%s' % (crc('OLDA'), crc('OLDB'))
+        total = int(self.run_(*setup, 'cut -1', go, 'changes')[2].split()[1])
+        self.assertGreater(total, 4)
+        final = ('TREE a.elemod=NEWA ; active=# updates applied at boot|a.elemod %s|b.elemod %s| ; '
+                 'b.elemod=OLDB' % (crc('NEWA'), crc('OLDB')))
+        for n in range(total + 1):
+            with self.subTest(cut_after=n):
+                out = self.run_(*setup, 'cut %d' % n, go, 'tree', 'boot', 'tree')
+                files = dict(f.split('=', 1) for f in out[2][5:].split(' ; '))
+                act = files.get('active', files.get('active.tmp', ''))
+                lines = dict(l.split() for l in act.split('|') if l and not l.startswith('#'))
+                if 'a.elemod.new' not in files and 'a.elemod' in files:
+                    # what the cut left links as it is: the file under its own CRC
+                    self.assertEqual(lines['a.elemod'], crc(files['a.elemod']))
+                self.assertEqual(out[3].split()[2], '0')          # the next boot fails nothing
+                # a cut after the .new went in but before the .old went leaves the .old, which the
+                # file's next update removes
+                self.assertEqual(out[5].replace(' ; a.elemod.old=OLDA', ''), final)
 
     def test_an_update_with_no_old_file_is_renamed_and_its_crc_taken(self):
         crc = '%08x' % zlib.crc32(b'FIRST')

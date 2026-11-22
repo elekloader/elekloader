@@ -62,8 +62,10 @@ static u8 booting;
 
 void dl_breathe(void)
 {
+#ifndef DL_HOST                          /* the host tests (tests/drive_payload_host.c) sleep nowhere */
     if (!booting)
         SLEEP_US(1000);
+#endif
 }
 
 struct dl_choice *dl_boot_choice;        /* the boot's set: dl_status[i] is line i's */
@@ -92,11 +94,16 @@ static void add_new(char *path)
 
 /* The updates an upload over a file in use left (route.c, <name>.new), before the boot stages
  * anything: each /mods/active line's <name>.new goes over <name> (the old file to <name>.old
- * first, as ekFS's rename takes no target that is there, and back when the .new won't rename; a
- * failure keeps the old file and the .new for the next boot, and counts in dl_updates[1]). A line
- * whose update went in takes the new file's CRC, in the set and in /mods/active, since the line
- * still names the old file's (stock's and Transfer's uploads never write active; the emulator,
- * 2026-11-22: the boot dropped the update, code 2); dl_updates[1] counts an active not rewritten. */
+ * first, as ekFS's rename takes no target that is there, and back when the .new won't rename). A
+ * line with an update takes the new file's CRC, since it still names the old file's (stock's and
+ * Transfer's uploads never write active; the emulator, 2026-11-22: the boot dropped the update,
+ * code 2), and /mods/active is written with the new CRCs before any rename: a power cut then
+ * leaves the .new for the next boot with active already naming its CRC, never the new file under
+ * an active naming the old CRC. A cut between the two renames leaves no <name>: the next boot
+ * keeps the <name>.old and renames the .new in; one after them leaves a <name>.old that the file's
+ * next update removes. A swap that fails keeps the old file and the .new
+ * for the next boot, its line takes back the old CRC and active is written again; an active that
+ * can't be written renames nothing. dl_updates[1] counts each. */
 u32 dl_updates[2];
 extern unsigned char *volatile dl_stage_at;   /* route.c: the live stage */
 extern volatile unsigned dl_stage_len;
@@ -159,40 +166,73 @@ static int write_active(const struct dl_choice *ch, int n)
     return r ? -1 : 0;
 }
 
-void dl_apply_updates(struct dl_choice *ch, int n)
+/* <name>.new over <name> (the old file to <name>.old meanwhile). -> 0, or -1 with the old file
+ * at <name> and the .new kept */
+static int swap_in(const char *name)
 {
     char path[DL_PATH_MAX + 4], nw[DL_PATH_MAX + 4], old[DL_PATH_MAX + 4];
-    int i, changed = 0;
     u32 k;
+    path_of(path, name);
+    dl_memcpy(nw, path, sizeof path);
+    add_new(nw);
+    dl_memcpy(old, path, sizeof path);
+    k = dl_strlen(old);
+    old[k] = '.', old[k + 1] = 'o', old[k + 2] = 'l', old[k + 3] = 'd', old[k + 4] = 0;
+    if (dl_fs_file_size(path) >= 0) {    /* else a cut between the renames: the old file is .old */
+        dl_fs_delete(old);
+        if (dl_fs_rename(path, old))
+            return -1;
+    }
+    if (dl_fs_rename(nw, path)) {
+        dl_fs_rename(old, path);
+        return -1;
+    }
+    dl_fs_delete(old);
+    return 0;
+}
+
+void dl_apply_updates(struct dl_choice *ch, int n)
+{
+    char nw[DL_PATH_MAX + 4];
+    u32 *old, k;
+    int i, changed = 0, back = 0;
     dl_updates[0] = dl_updates[1] = 0;
-    for (i = 0; i < n; i++) {
-        path_of(path, ch[i].name);
-        dl_memcpy(nw, path, sizeof path);
+    old = n > 0 ? dl_alloc((u32)n * 8) : 0;  /* each line's CRC before, and 1 for a line with an update */
+    if (!old)
+        return;
+    for (i = 0; i < n; i++) {             /* the new files' CRCs: dl_read_open reads <name>.new */
+        path_of(nw, ch[i].name);
         add_new(nw);
+        old[2 * i] = ch[i].crc;
         if (dl_fs_file_size(nw) < 0)
             continue;
-        dl_memcpy(old, path, sizeof path);
-        k = dl_strlen(old);
-        old[k] = '.', old[k + 1] = 'o', old[k + 2] = 'l', old[k + 3] = 'd', old[k + 4] = 0;
-        dl_fs_delete(old);
-        if (dl_fs_file_size(path) >= 0 && dl_fs_rename(path, old)) {
-            dl_updates[1]++;
-            continue;
-        }
-        if (dl_fs_rename(nw, path)) {
-            dl_fs_rename(old, path);
-            dl_updates[1]++;
-            continue;
-        }
-        dl_fs_delete(old);
-        dl_updates[0]++;
+        old[2 * i + 1] = 1;
         if (staged_crc(ch[i].name, &k) == 0 && k != ch[i].crc) {
             ch[i].crc = k;
             changed = 1;
         }
     }
-    if (changed && write_active(ch, n))
+    if (changed && write_active(ch, n)) { /* the old files stay with the active that names them */
+        for (i = 0; i < n; i++)
+            ch[i].crc = old[2 * i];
         dl_updates[1]++;
+        dl_free(old);
+        return;
+    }
+    for (i = 0; i < n; i++) {
+        if (!old[2 * i + 1])
+            continue;
+        if (swap_in(ch[i].name) == 0) {
+            dl_updates[0]++;
+            continue;
+        }
+        dl_updates[1]++;
+        back |= ch[i].crc != old[2 * i];
+        ch[i].crc = old[2 * i];           /* the old file stays: its CRC */
+    }
+    if (back && write_active(ch, n))
+        dl_updates[1]++;
+    dl_free(old);
 }
 
 /* dl_stage_file's reads (skip.h): from the file at `at` (dl_fs_seek), 32 KB at most, 1 ms for the
@@ -365,13 +405,23 @@ void dl_boot(void)
     dl_boot_us[DL_T_INIT] = dl_bus_us(t_link, t1);
 }
 
-/* /mods/active, read whole into the heap (the caller frees it). -> its length, <= 0 none. */
-static s32 read_active(char **text)
+/* /mods/active, read whole into the heap (the caller frees it). -> its length, <= 0 none. Every
+ * write of it (here, the MODS page's save, the route) checks active.tmp's size before it deletes
+ * active and renames the .tmp over it, so an active.tmp with no active is a whole one a power cut
+ * left between the two: it goes in. One beside an active is a cut write's: it goes. */
+s32 dl_read_active(char **text)
 {
-    char path[DL_PATH_MAX];
+    char path[DL_PATH_MAX], tmp[DL_PATH_MAX];
     s32 size, len;
     *text = 0;
     path_of(path, "active");
+    path_of(tmp, "active.tmp");
+    if (dl_fs_file_size(tmp) >= 0) {
+        if (dl_fs_file_size(path) >= 0)
+            dl_fs_delete(tmp);
+        else
+            dl_fs_rename(tmp, path);
+    }
     size = dl_fs_file_size(path);
     if (size <= 0)
         return 0;
@@ -484,7 +534,7 @@ static void boot(void)
         return;
     }
     t_checks = DTCN0;
-    len = read_active(&active);
+    len = dl_read_active(&active);
     n = len > 0 ? dl_parse_active(active, (u32)len, 0) : 0;   /* how many lines, first */
     if (n > 0) {
         dl_boot_choice = dl_alloc((u32)n * sizeof *dl_boot_choice);
