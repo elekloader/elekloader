@@ -439,6 +439,30 @@ int ds_file(const char *path, unsigned *sector, unsigned *size)
     return i < 0 ? -1 : 0;
 }
 
+int ds_swap(const char *path, const char *newpath)
+{
+    char a[DS_PATH], b[DS_PATH];
+    int i, k, r = -1;
+    LOCK(ds_mutex);
+    if (norm(a, path) || norm(b, newpath) || mount() || (k = find(b)) < 0 || (ents[k].flags & DS_F_DIR))
+        goto out;
+    i = find(a);
+    if (i >= 0 && (ents[i].flags & DS_F_DIR))
+        goto out;
+    if (i < 0) {                          /* no old file: the .new is renamed */
+        mzero(ents[k].path, DS_PATH);
+        mcopy(ents[k].path, a, slen(a));
+    } else {                              /* the old entry takes the new run, the .new's entry goes */
+        ents[i].sector = ents[k].sector;
+        ents[i].size = ents[k].size;
+        drop((unsigned)k);
+    }
+    r = write_dir();
+out:
+    UNLOCK(ds_mutex);
+    return r;
+}
+
 int dl_fs_open(dl_file *f, const char *path, int write)
 {
     char p[DS_PATH];

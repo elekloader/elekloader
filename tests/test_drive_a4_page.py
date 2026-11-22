@@ -123,6 +123,41 @@ class Page(unittest.TestCase):
         self.assertEqual(self.texts(frames[-1]), ['ADD', '*', 'a'])   # no second row for its parked data
         self.assertEqual(states[-1]['pending'], '6')        # FORGET DATA? on the ticked build row
 
+    def run_lines(self, script, tag, *files):
+        out = subprocess.run([self.exe, script] + list(files), capture_output=True, text=True,
+                             check=True).stdout.splitlines()
+        return [line[len(tag) + 1:] for line in out if line.startswith(tag + ' ')]
+
+    PAY = ['a.elemod', 'b.elemod', 'c.elemod', '@active=a.elemod', '@active=c.elemod', '@boot=a.elemod',
+           '@boot=b.elemod', '@boot=c.elemod', '@inuse=a.elemod', '@inuse=b.elemod', '@update=a.elemod',
+           '@lost=c.elemod']
+
+    def test_files_in_use_show_their_update_and_lost_payload_and_refuse_delete(self):
+        """drive-loader-a4mk2 0.2, as the Rytm's 0.12: a loaded mod whose payload the table keeps is
+        in use. An upload over it waits as <name>.new (UPDATE in both lists, a line in INFO), one
+        whose payload found the table full reads LOST, and DELETE refuses a file in use even after
+        it left the saved build."""
+        self.assertEqual(self.run_lines('oc', 'C', *self.PAY), ['a.elemod=UPDATE|b.elemod=|c.elemod='])
+        self.assertEqual(self.run_lines('olyc', 'C', *self.PAY), ['a.elemod=UPDATE|c.elemod=LOST|b.elemod=DROP'])
+        self.assertEqual(self.run_lines('ow', 'W', *self.PAY),
+                         ['a.elemod=MOD IN USE|c.elemod=MOD IN USE|b.elemod=IN USE: RESTART FIRST'])
+        self.assertEqual(self.run_lines('olyi', 'I', *self.PAY),
+                         ['/mods~a.elemod~UPDATE AT NEXT RESTART', '/mods~c.elemod~PAYLOAD LOST: TABLE FULL',
+                          '/mods~b.elemod'])
+        self.assertEqual(self.run_lines('ow', 'W', 'b.elemod', '@boot=b.elemod'), ['b.elemod=ok'])   # no payload kept
+
+    def test_the_star_column_makes_room_for_update_only_while_a_row_shows_it(self):
+        files = ['a.elemod', 'b.elemod', '@active=a.elemod', '@active=b.elemod', '@boot=a.elemod',
+                 '@boot=b.elemod', '@inuse=a.elemod', '@store=a', '@store=b']
+        frames, _takes, _states = self.run_page('olyf', *files)
+        self.assertEqual([x for x, _y, _i, t in frames[-1] if t == '*'], [95, 95])   # as before 0.2
+        frames, _takes, _states = self.run_page('olyf', *files, '@update=a.elemod')
+        rows = [(x, t) for x, _y, _i, t in frames[-1]]
+        self.assertIn((94, 'UPDATE'), rows)
+        star = [x for x, t in rows if t == '*']
+        self.assertEqual(star, [87, 87])                    # one column, left of UPDATE
+        self.assertLessEqual(star[0] + 4, 94)
+
     def test_the_cursor_scrolls_with_up_down_func_and_the_data_encoder(self):
         files = ['m%02d.elemod' % i for i in range(10)]
         _frames, _takes, states = self.run_page('odddddddsUs++-sus', *files)

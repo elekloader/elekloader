@@ -138,7 +138,8 @@ room in the area. The `.elemod` stays one JSON file.
   the size alone: `sector` is 0), so a reader still checks the sha256 of
   what it ships. A file staged twice (pass 2) counts once, and after the
   link `drive_payloads_lost` counts only the loaded mods' lost payloads.
-- **The API** (drive-loader-ar2 0.12; `analog-rytm-mk2/drivepay.h`). The
+- **The API** (drive-loader-ar2 0.12, drive-loader-a4mk2 0.2;
+  `analog-rytm-mk2/drivepay.h`, `analog-four-mk2/drivepay.h`, the same calls). The
   word `drive_payload_abi` (1) and `drive_payload_count`, `drive_payload_at`,
   `drive_payload_find`, `drive_payload_info` (id, length, sha256) and
   `dl_payload_read` on an opaque handle; `struct drive_payload` stays the
@@ -147,7 +148,7 @@ room in the area. The `.elemod` stays one JSON file.
   names. At the Pi's connect it walks `core_payloads` (a flashed mod's, in
   RAM), then entries 0..count-1, sends {id, length, sha256} for each and
   streams the ones the Pi lacks; caching on the Pi by hash is its side.
-- **In use** (drive-loader-ar2 0.12). A file the boot loaded whose payload
+- **In use** (drive-loader-ar2 0.12, drive-loader-a4mk2 0.2). A file the boot loaded whose payload
   the table keeps can't be deleted or moved until the next boot: its route
   entry and listing have no Clear, a `.mv` of it or of a folder holding it
   is refused (`In use: restart first`), and the MODS page's DELETE refuses
@@ -159,9 +160,15 @@ room in the area. The `.elemod` stays one JSON file.
   power cut never leaves the new file under the old CRC: the next boot
   finishes the swap. A failed swap keeps the old file and the `.new` and
   puts the old CRC back; an `active.tmp` a cut left with no `active` goes
-  in at the next boot. Stock's
+  in at the next boot.
+  On the A4 the swap is one write of the store's directory (`ds_swap`), with no
+  `.old`, and `/mods/active` takes the new CRCs before the swaps; a name below
+  `/mods` with no room for `.new` in the A4 store's paths (over 118 bytes)
+  refuses an upload over a file in use (`In use: restart first`). On the Rytm,
+  stock's
   SAMPLES browser and Transfer can still change such a file:
-  `dl_payload_read`'s -2 is the backstop. `.status` lists `payloads: N
+  `dl_payload_read`'s -2 is the backstop; on the A4 nothing else reaches the
+  store, so -2 follows only a FORMAT +DRIVE while mods run. `.status` lists `payloads: N
   kept, M lost`, `updates at boot: N applied, M failed` after a boot that
   had any, a `payload ID LEN PATH` line per entry and a `pending PATH` line
   per waiting update.

@@ -70,6 +70,11 @@ unsigned ds_reserve(unsigned size, unsigned *token);
 int ds_commit(const char *path, unsigned token, unsigned size);
 /* a file's first sector and size, -> 0, or -1 when there is no such file */
 int ds_file(const char *path, unsigned *sector, unsigned *size);
+/* The boot's update (boot.c dl_apply_updates): path takes newpath's sectors and size, and newpath
+ * goes, in one directory write; with no file at path, newpath is renamed to it. The old file's
+ * sectors are free once the directory lands. A cut leaves the old pair or the new file, never
+ * neither. -> 0, or -1 (both as they were) */
+int ds_swap(const char *path, const char *newpath);
 
 /* ---- the Rytm loader's calls (fs.h on drive-loader-ar2) ----------------------------------- */
 /* A file open for reading streams from its sectors; one open for writing takes the largest free

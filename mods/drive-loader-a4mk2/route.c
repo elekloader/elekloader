@@ -97,6 +97,12 @@ extern volatile int dl_check_all __attribute__((weak)); /* ... of the open folde
 extern char dl_check_dir[] __attribute__((weak));       /* ... that folder, below DL_DIR */
 extern unsigned char dl_store_io __attribute__((weak)); /* /mods/.store: 0 none, 1 kept, 2 written, 3 failed */
 extern unsigned dl_store_info[] __attribute__((weak));  /* ... the live layout ID, fields, parked fields */
+/* the Drive payload table (payload.c, skip.h): files in use, and .status's payload lines */
+extern int dl_payload_held(const char *path, int dir) __attribute__((weak));
+extern unsigned dl_payload_status_size(void) __attribute__((weak));
+extern char *dl_payload_status(char *at, char *end) __attribute__((weak));
+#define IN_USE "In use: restart first"
+#define NEW_SUFFIX ".new"                      /* skip.h DL_NEW */
 
 static char dl_note[64];
 int dl_last_io[4];                             /* the last commit: payload size, sector, its result */
@@ -198,6 +204,25 @@ static void note(const char *what, const char *name)
 {
     char *end = dl_note + sizeof dl_note, *at = cat(dl_note, end, what);
     cat(cat(at, end, " "), end, name);
+}
+
+/* DL_DIR "/" rel is a loaded mod's file whose payload the table keeps (dir 0), or a folder holding
+ * one (dir 1): its Clear and move are refused and an upload over it waits as <name>.new (skip.h,
+ * dl_payload_held). The table is fixed once the boot ends, so any task may ask. */
+static int held(const char *rel, int dir)
+{
+    char path[DL_PATH_MAX];
+    if (!&dl_payload_held)
+        return 0;
+    path_of(path, rel, "");
+    return dl_payload_held(path, dir);
+}
+
+/* an upload over a file in use goes to <name>.new: the store's paths (DS_PATH, below its root)
+ * must hold the longer name */
+static int new_fits(const char *rel)
+{
+    return len(DL_DIR "/") - 1 + len(rel) + len(NEW_SUFFIX) < DS_PATH;
 }
 
 static void set_str(unsigned char *slot, const char *msg)
@@ -306,6 +331,10 @@ unsigned dl_pre(unsigned char *res, void **f, unsigned char *entry)
             return (unsigned)res;
         }
     } else {
+        if (held(c->name, 0) && !new_fits(c->name)) {
+            set_str(res + 4, IN_USE);     /* no room in the name for <name>.new */
+            return (unsigned)res;
+        }
         ds_room(&largest, &total);
         if (size > largest && !(c->exists && size == c->size)) {
             set_str(res + 4, "No room on the +Drive (see /mods/.status, room)");
@@ -395,14 +424,15 @@ extern volatile unsigned dl_fs_gen;
 extern volatile int dl_move_seen;
 static const char *move(unsigned n);
 
-/* +0x4c: after an upload (the header) or a Clear (0). It can't refuse: a failure is noted for
- * .status. */
+/* +0x4c: after an upload (the header) or a Clear (0). An upload is committed over <name>, or over
+ * <name>.new when <name> is in use (held), which the next boot swaps in (boot.c). It can't refuse:
+ * a failure is noted for .status. */
 void dl_change(void **f, const unsigned char *h)
 {
     struct clo *c = *f;
-    char path[DL_PATH_MAX];
+    char path[DL_PATH_MAX], nw[DL_PATH_MAX];
     unsigned n;
-    int r;
+    int r, pend;
     if (c->what == C_DIR && !h) {          /* a Clear of a folder: empty only */
         path_of(path, c->name, "");
         dl_lock();
@@ -439,6 +469,11 @@ void dl_change(void **f, const unsigned char *h)
         return;
     path_of(path, c->name, "");
     dl_lock();
+    if (!h && held(c->name, 0)) {          /* its entry has no P_CLEAR (file_perm): stock refuses first */
+        note(IN_USE ":", c->name);
+        dl_unlock();
+        return;
+    }
     if (!h) {
         note(dl_fs_delete(path) ? "delete failed:" : "deleted", c->name);
         dl_fs_gen++;
@@ -455,8 +490,12 @@ void dl_change(void **f, const unsigned char *h)
         note("commit failed: no folder for", c->name);
         r = -3;
     } else {
-        r = ds_commit(path, up.token, n);
-        note(r ? "commit failed:" : "saved", c->name);
+        path_of(nw, c->name, NEW_SUFFIX);
+        pend = held(c->name, 0);           /* in use: the next boot swaps <name>.new in for it */
+        r = pend && !new_fits(c->name) ? -4 : ds_commit(pend ? nw : path, up.token, n);
+        if (!r && !pend)
+            dl_fs_delete(nw);              /* an update left from before is not the file now */
+        note(r ? "commit failed:" : pend ? "pending restart:" : "saved", c->name);
     }
     dl_last_io[2] = r;
     zero(&up, sizeof up);
@@ -480,7 +519,8 @@ static int status_text(void)
     if (!&dl_status || !dl_status)
         n = 0;
     want = STATUS_HEAD + STATUS_LINE * (unsigned)n
-         + STATUS_SITE * (&dl_applied_n && &dl_sites && dl_sites ? dl_applied_n : 0);
+         + STATUS_SITE * (&dl_applied_n && &dl_sites && dl_sites ? dl_applied_n : 0)
+         + (&dl_payload_status_size ? dl_payload_status_size() : 0);
     if (want > dl_status_cap) {              /* the records are the boot's: this happens once */
         char *t = NEW(want);
         if (!t)
@@ -541,6 +581,8 @@ static int status_text(void)
         at = cat(at, end, dl_store_io < 4 ? io[dl_store_io] : "-");
         at = cat(at, end, "\n");
     }
+    if (&dl_payload_status)              /* the Drive payload table (skip.h) */
+        at = dl_payload_status(at, end);
     if (&dl_skip_reason && dl_skip_reason) {
         at = cat(at, end, "skipped: ");
         if (dl_skip_reason < sizeof dl_skip_names / sizeof dl_skip_names[0])
@@ -815,6 +857,8 @@ static const char *move(unsigned n)
     dir = dl_fs_file_size(a) < 0;
     if (dir && !is_folder(from))
         return "Not there";
+    if (held(from, dir))
+        return IN_USE;
     if (dir)
         measure(from, rel_folders(from) + 1, &levels, &longest);
     why = move_why(from, to, dir, levels, longest);
@@ -856,6 +900,8 @@ static const char *file_perm(const char *name, int *size, int *perm)
     if (*size < 0)
         *size = 0;
     *perm = big_perm(*size, writable(name) ? P_READ | P_WRITE | P_CLEAR : P_READ | P_CLEAR);
+    if (held(name, 0))
+        *perm &= ~P_CLEAR;                 /* in use: no Clear until a restart */
     return 0;
 }
 
@@ -1070,7 +1116,7 @@ static int walk(unsigned char *at, const char *rel, int folders, struct dl_ent *
                 path_of(path, p, "");
                 size = dl_fs_file_size(path);
                 item(at + 0x14 * k, k + 1, nm, size,
-                     big_perm(size, P_READ | P_CLEAR | (writable(p) ? P_WRITE : 0)));
+                     big_perm(size, P_READ | (held(p, 0) ? 0 : P_CLEAR) | (writable(p) ? P_WRITE : 0)));
             }
         }
         k++;
