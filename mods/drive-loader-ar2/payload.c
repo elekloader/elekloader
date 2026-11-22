@@ -282,19 +282,39 @@ static int nib(u8 c)
          : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
 }
 
+/* hex[0..2k) decoded into out[0..k), forward: out may be hex itself, since byte i reads hex 2i and
+ * 2i + 1, never below i. -> 0, or -3 for a byte that isn't hex */
+static s32 decode(u8 *out, const u8 *hex, u32 k)
+{
+    u32 i;
+    for (i = 0; i < k; i++) {
+        int a = nib(hex[2 * i]), b = nib(hex[2 * i + 1]);
+        if (a < 0 || b < 0)
+            return -3;
+        out[i] = (u8)(a << 4 | b);
+    }
+    return 0;
+}
+
+/* One seek, then the hex read straight into the caller's buffer and decoded in place (0.12): the
+ * free part of out, [got, n), takes that many hex bytes, which decode into its first half, so each
+ * read moves half the free part (2 KB for a 4 KB buffer at first, halving), with no RAM of the
+ * loader's. The last few bytes (DL_PAY_TAIL or fewer, and an odd one) go through a small buffer on
+ * the stack. The reads follow on from each other (ekFS adds each read to the file's position), so
+ * only the first seeks. */
+#define DL_PAY_TAIL 64
 s32 dl_payload_read(const struct drive_payload *p, u32 at, u8 *out, u32 n)
 {
     dl_file f;
-    unsigned sector, size;
-    u8 hex[128];
-    u32 got = 0, k, i;
+    unsigned size;
+    u8 hex[2 * DL_PAY_TAIL];
+    u32 got = 0, k;
     s32 r = 0;
     if (!handle_ok(p) || at > p->len)
         return -1;
     if (n > p->len - at)
         n = p->len - at;
     dl_lock();
-    (void)sector;
     size = (unsigned)dl_fs_file_size(p->path);
     if (size >= 0x80000000u || size != p->size || p->off > size || p->len > (size - p->off) / 2) {
         dl_unlock();
@@ -303,22 +323,16 @@ s32 dl_payload_read(const struct drive_payload *p, u32 at, u8 *out, u32 n)
     dl_memset(&f, 0, sizeof f);
     if (dl_fs_open(&f, p->path, 0) < 0)
         r = -2;
+    else if (n)
+        dl_fs_seek(&f, p->off + 2 * at);       /* ekFS reads from where the file object says */
     while (!r && got < n) {
-        dl_fs_seek(&f, p->off + 2 * at + 2 * got);   /* ekFS reads from where the file object says */
-        k = n - got < sizeof hex / 2 ? n - got : sizeof hex / 2;
-        if (dl_fs_read(&f, hex, 2 * k) != (int)(2 * k)) {
+        u32 left = n - got;
+        u8 *dst = left > DL_PAY_TAIL ? out + got : hex;
+        k = left > DL_PAY_TAIL ? left / 2 : left;   /* payload bytes this read: hex fills dst */
+        if (dl_fs_read(&f, dst, 2 * k) != (int)(2 * k))
             r = -3;
-            break;
-        }
-        for (i = 0; i < k; i++) {
-            int a = nib(hex[2 * i]), b = nib(hex[2 * i + 1]);
-            if (a < 0 || b < 0) {
-                r = -3;
-                break;
-            }
-            out[got + i] = (u8)(a << 4 | b);
-        }
-        got += k;
+        else if ((r = decode(out + got, dst, k)) == 0)
+            got += k;
     }
     dl_fs_close(&f);
     dl_unlock();

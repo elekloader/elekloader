@@ -70,6 +70,28 @@ class Table(unittest.TestCase):
                           'READ -1 ok', 'READ 1 ok'])
         self.assertTrue(all('GUARD ok' in o for o in out))
 
+    def test_in_place_decode_reads_every_stretch_whole_with_few_reads(self):
+        """drive-loader-ar2 0.12's faster read: one seek, the hex read into the caller's buffer and
+        decoded in place, the last 64 bytes or fewer through the stack. Every length and start,
+        odd ones too, decodes right and writes nothing past n; a 4 KB read takes 7 ekFS reads, not 64,
+        and a ~530 KB payload read in 4 KB calls moves at least 512 bytes a read."""
+        reqs = ['hexfile a.elemod 700', 'note a.elemod 700', 'keep a.elemod=modA=L']
+        cases = [(at, n) for at in (0, 1, 2, 63, 64, 65, 333) for n in list(range(0, 140)) + [255, 256, 257, 367]]
+        reqs += ['read 0 %d %d' % c for c in cases]
+        out = self.run_(*reqs)
+        for (at, n), o in zip(cases, out):
+            want = max(0, min(n, 700 - at))
+            self.assertTrue(o.startswith('READ %d ok GUARD ok' % want), (at, n, o))
+        size = 530 * 1024
+        reqs = ['hexfile b.elemod %d' % size, 'note b.elemod %d' % size, 'keep b.elemod=modB=L', 'read 0 0 4096']
+        reqs += ['read 0 %d 4096' % at for at in range(0, size, 4096)]
+        out = self.run_(*reqs)
+        self.assertEqual(out[0], 'READ 4096 ok GUARD ok READS 7')
+        self.assertTrue(all(' ok GUARD ok' in o for o in out[1:]))
+        reads = sum(int(o.split()[-1]) for o in out[1:])
+        self.assertLessEqual(reads, 7 * len(out[1:]))
+        self.assertGreaterEqual(size / reads, 512)
+
     def test_a_changed_file_or_bad_hex_is_refused(self):
         out = self.run_(*self.SET, 'badhex a.elemod 501', 'read 0 0 200', 'read 0 200 100', 'touch a.elemod',
                         'read 0 0 4')

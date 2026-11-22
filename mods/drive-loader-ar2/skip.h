@@ -155,7 +155,8 @@ char *dl_payload_status(char *at, char *end);
 /* Read n bytes of a payload from byte at, decoded from the file's hex. Takes dl_lock: call it from
  * a task, never an interrupt. -> bytes read (fewer than n at the payload's end), -1 bad arguments,
  * -2 the file is not the one the boot linked (replaced, moved or deleted since), -3 a read error or
- * a byte that isn't hex. The caller still checks the sha256 of what it ships. */
+ * a byte that isn't hex. The caller still checks the sha256 of what it ships. From 0.12 out holds the
+ * hex while it is decoded (payload.c), so all n bytes of it may be written whatever the result. */
 s32 dl_payload_read(const struct drive_payload *p, u32 at, u8 *out, u32 n);
 
 #endif
