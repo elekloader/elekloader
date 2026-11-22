@@ -80,13 +80,14 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   (`MOD NOT LOADED` for a ticked mod the build does not hold), and INFO, which shows the
   cursor's mod's folder (`/mods/drums/kicks`, clipped from the left behind a `<` past 30
   characters) and its file name below it (30 characters a line) in a box closed with NO, and
-  FORGET DATA (below, "Parked data").
-- **Parked data.** After the build's rows the build list shows each mod `/mods/.store` keeps
-  parked fields, lock codes or CCs of (docs/DRIVE.md, "+Drive storage"), by its id, with `PARK`
-  in the state column, in the order they were parked. Ticking one, or INFO on it, shows
-  `PARKED DATA` and its bits per scope (`sound: 12 bits, kit: 4 bits`, two a line), then the
-  lock codes and CCs kept for it. FORGET DATA asks `FORGET DATA? (n MODS)` for the ticked
-  parked rows (`NO PARKED MOD SELECTED` with none, `NO PARKED DATA` when there is none), then
+  FORGET DATA (below, "Saved data").
+- **Saved data.** The `*` marks and the parked-only rows are the A4's
+  (mods/drive-loader-a4mk2/PAGE.md, "Saved data"; decided 2026-11-18, in place of `PARK`),
+  made with the list's rows (`page_rows`): stock's row count never changes under it.
+  Ticking a parked-only row, or INFO on it, shows `PARKED DATA` and its bits per
+  scope (`sound: 12 bits, kit: 4 bits`, two a line), then the lock codes and CCs kept for it.
+  FORGET DATA asks `FORGET DATA? (n MODS)` for the ticked rows with parked data, a build row's
+  or a parked-only one (`NO PARKED MOD SELECTED` with none, `NO PARKED DATA` when there is none), then
   rewrites `/mods/.store` without their parked fields, codes and CCs, one step a tick as a save
   does: the file read, `.store.tmp` written, the old file deleted and the tmp renamed, each under
   `dl_lock`; a box says `FORGETTING DATA`, then `DATA FORGOTTEN (n MODS)`. The rest of the file
@@ -95,6 +96,10 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   file that is missing or doesn't read (its CRC, its records) parks nothing. With `/mods` empty
   and data parked, the panels open so that VIEW BUILD and FORGET DATA can be reached; the file
   list keeps its `NO MODS ON +DRIVE` row.
+- **APPLY & RESTART** is the A4's (mods/drive-loader-a4mk2/PAGE.md, "APPLY & RESTART"), with
+  core-ar2's calls (`analog-rytm-mk2/system.h`); `dl_key` takes keys while `RESTARTING`
+  shows. The action panel is rebuilt with the list (`page_rows`), whose clear puts its cursor
+  on row 0, so it never stays on the row once it has gone.
 - **No files.** With no `.elemod` and no folder in `/mods` the list has one row,
   `NO MODS ON +DRIVE`, which YES does nothing to, and neither panel opens unless data is parked.
   A build list with no row (nothing in the build and nothing parked, or after CLEAR BUILD,

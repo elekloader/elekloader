@@ -73,6 +73,14 @@ class Park(unittest.TestCase):
         self.assertEqual(ds.decode(bytes.fromhex(g[7:]))["knobs"], st["knobs"])
         self.assertEqual(self.ask(bytes.fromhex(g[7:]), "count"), ["COUNT 0"])
 
+    def test_store_has_any_live_or_parked_mod(self):
+        for st in (state(kinded=False), knobbed(state(kinded=False))):
+            raw = ds.encode(st)
+            out = self.ask(raw, "has ~T live", "has ~T ae-cover", "has ~T rand", "has ~T cc-mod", "has ~T other",
+                           "has ~T liv", "hasp ~T liv", "hasp ~T x")
+            self.assertEqual(out, ["HAS 1", "HAS 1", "HAS 1", "HAS 1", "HAS 0", "HAS 0", "HAS 1", "HAS 0"])
+            self.assertEqual(self.ask(raw[:-1], "has ~T live"), ["HAS 0"])   # a bad file keeps nothing
+
     def test_the_a4_formats_are_refused(self):
         for st in (state(), knobbed(state())):
             self.assertEqual(self.ask(ds.encode(st), "count", "forget ~T rand"), ["COUNT -1", "FORGET -1"])

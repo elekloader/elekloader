@@ -402,6 +402,14 @@ static void boot(void)
             ((v_fn)dl_inits[i])();
 }
 
+/* The MODS page's APPLY & RESTART, under dl_lock: the guard comes off before the reboot, as
+ * dl_tick would take it off had the page not shown (page.c, restart_tick) */
+void dl_guard_off(void)
+{
+    armed = 0;
+    remove_file(".armed");
+}
+
 /* ev_tick: the MODS page's frames (page.c), and the crash guard comes off 10 s into
  * ticking; after a boot that applied a site (dl_applied_n), 60 s in and once the MODS page
  * doesn't show, whichever is later, so a site that breaks a page or the audio is caught. */
