@@ -130,6 +130,22 @@ class BuildRows(unittest.TestCase):
         got = self.run_page(['boot ~T FCR/~T SRC/~T fnm-02-0.1.elemod|' + FCR_ACTIVE[0][:27], 'build'])
         self.assertEqual(got, [NAMES])   # a long path's prefix is no id either
 
+    def test_files_in_use_show_their_update_and_lost_payload_and_refuse_delete(self):
+        """drive-loader 0.12: a loaded mod whose payload the table keeps is in use. An upload over it
+        waits as <name>.new (UPDATE in both lists, a line in INFO), one whose payload found the table
+        full reads LOST, and DELETE refuses a file in use even after it left the saved build."""
+        tree, active = ['a.elemod', 'b.elemod', 'c.elemod'], ['a.elemod', 'c.elemod']
+        setup = ['boot a.elemod|a', 'boot b.elemod|b', 'boot c.elemod|c', 'inuse a.elemod', 'inuse b.elemod',
+                 'update a.elemod', 'lost c.elemod', 'open']
+        self.assertEqual(self.lines(setup + ['drive'], 'DRIVE', tree, active), ['a=UPDATE|b=|c='])
+        self.assertEqual(self.lines(setup + ['bcols'], 'BCOLS', tree, active), ['a=UPDATE|c=LOST|b=DROP'])
+        self.assertEqual(self.lines(setup + ['delwhy a.elemod', 'delwhy b.elemod', 'delwhy c.elemod'], 'DELWHY',
+                                    tree, active), ['MOD IN USE', 'IN USE: RESTART FIRST', 'MOD IN USE'])
+        self.assertEqual(self.lines(setup + ['binfo 0', 'binfo 1'], 'INFO', tree, active),
+                         ['/mods~a.elemod~UPDATE AT NEXT RESTART', '/mods~c.elemod~PAYLOAD LOST: TABLE FULL'])
+        self.assertEqual(self.lines(['boot b.elemod|b', 'open', 'delwhy b.elemod'], 'DELWHY', tree, active),
+                         ['ok'])         # loaded, no payload kept: deletable as before
+
     def test_a_short_path_prefix_is_not_an_id(self):
         got = self.run_page(['boot x.elemod|x.elemod', 'build'], tree=['x.elemod'], active=['x.elemod'])
         self.assertEqual(got, [['x']])
@@ -364,6 +380,18 @@ class Reader(unittest.TestCase):
     def test_a_file_over_the_stage_is_measured_not_kept(self):
         self.assertEqual(self.read(0x10001, 0x10000), (-2, 0x10001, True, 'ok'))
         self.assertEqual(self.read(1060000, 0x10000), (-2, 1060000, True, 'ok'))
+
+    def test_a_pending_update_is_read_in_place_of_the_file(self):
+        """drive-loader 0.12: an upload over a file in use waits as <name>.new, which the next boot
+        renames over it; the page checks and CRCs that one, so a save names the file the boot links."""
+        out = subprocess.run([self.exe, '1000', str(0x10000), '700'], capture_output=True, text=True,
+                             check=True).stdout.split()
+        self.assertEqual((int(out[1]), int(out[3])), (1, 700))
+        self.assertEqual(int(out[5], 16), zlib.crc32(bytes((i * 11 + 5) & 0xff for i in range(700))))
+        self.assertTrue(out[9].endswith('/x.elemod.new'), out[9])
+        out = subprocess.run([self.exe, '1000', str(0x10000)], capture_output=True, text=True,
+                             check=True).stdout.split()
+        self.assertTrue(out[9].endswith('/x.elemod'), out[9])
 
 if __name__ == '__main__':
     unittest.main()

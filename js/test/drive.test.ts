@@ -286,6 +286,7 @@ test('Mods.move uploads "FROM\\nTO" to .mv, then reads both listings, as the Pyt
       listing['/mods/~T C'] = [['x.elemod', 2, 9]]; listing['/mods/~T A'] = []
     },
     async ls(path: string) { calls.push(`ls ${path}`); return listing[path] },
+    async get(path: string): Promise<Uint8Array> { calls.push(`get ${path}`); throw new datarpc.RpcError('no .status') },
   } as unknown as datarpc.Client
   const mods = new datarpc.Mods(client)
   const head = { family: 2, device: 5, release: 0x30313736 } as container.Head
@@ -298,6 +299,46 @@ test('Mods.move uploads "FROM\\nTO" to .mv, then reads both listings, as the Pyt
     ['~T A', 'a/b/c/d', true], ['~T A', '.x', true], ['~T A', '~T A', true], ['a.elemod', 'a/b/c/d/a.elemod', false]] as [string, string, boolean][])
     await assert.rejects(mods.move(from, to, head, folder), ModError, `${from} ${to}`)
   assert.equal(calls.length, 0)
+})
+
+test('a file in use: its upload is pending, active reads its update, rm and move say to restart, as the Python does', async () => {
+  const head = { family: 2, device: 5, release: 0x30313736 } as container.Head
+  const files: Record<string, Uint8Array> = { 'x.elemod': enc.encode('OLD'), 'y.elemod': enc.encode('Y') }
+  let last = '-'
+  const held = new Set(['x.elemod'])
+  const status = () => enc.encode(`drive-loader route\nlast: ${last}\npayloads: 1 kept, 0 lost\n` +
+    [...held].map(n => `payload 0000abcd 3 /mods/${n}\n`).join(''))
+  const client = {
+    async put(path: string, data: Uint8Array) {
+      const name = path.slice('/mods/'.length), body = container.parse(data)[1]
+      if (held.has(name)) { files[name + '.new'] = body; last = `pending restart: ${name}` } else { files[name] = body; last = `saved ${name}` }
+    },
+    async get(path: string) {
+      const name = path.slice('/mods/'.length)
+      const body = name === '.status' ? status() : files[name]
+      if (!body) throw new datarpc.RpcError('no such file')
+      return container.wrap(body, 2, 5, 0x30313736)
+    },
+    async ls(path: string) { return path === '/mods' ? Object.keys(files).map(n => [n, 2, files[n].length]) : [] },
+    async clear(path: string) {
+      const name = path.slice('/mods/'.length)
+      if (held.has(name)) throw new datarpc.RpcError('the unit refused command 0x5c')
+      delete files[name]; last = `deleted ${name}`
+    },
+  } as unknown as datarpc.Client
+  const mods = new datarpc.Mods(client)
+  assert.equal(await mods.upload('y.elemod', enc.encode('Y2'), head), 'saved')
+  assert.equal(await mods.upload('x.elemod', enc.encode('NEW'), head), 'pending')
+  assert.deepEqual([new TextDecoder().decode(files['x.elemod']), new TextDecoder().decode(files['x.elemod.new'])], ['OLD', 'NEW'])
+  assert.equal(new TextDecoder().decode((await mods.getNext('x.elemod'))[1]), 'NEW')
+  assert.equal(new TextDecoder().decode((await mods.getNext('y.elemod'))[1]), 'Y2')
+  assert.equal(await mods.inUse('x.elemod'), true)
+  assert.equal(await mods.inUse('x.elemod.new'), false)
+  await assert.rejects(mods.rm('x.elemod'), (e: Error) => e instanceof ModError && !(e instanceof datarpc.RpcError) &&
+    e.message === '/mods/x.elemod is in use (its mod runs with a payload the unit keeps): restart the unit first')
+  await assert.rejects(mods.move('x.elemod', 'z.elemod', head, false), /is in use .* restart the unit first/)
+  await mods.rm('x.elemod.new')
+  assert.equal(files['x.elemod.new'], undefined)
 })
 
 test('a name starting with a space is refused before sending, as the Python does (decided 2026-11-09)', async () => {

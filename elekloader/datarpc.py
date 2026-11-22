@@ -257,20 +257,51 @@ class Mods:
     def upload(self, name, raw, head):
         """`put`, then make sure the unit kept the file: the route can't refuse once the upload is
         in (a commit that fails, as into a folder that can't be made, still answers the upload), so
-        the `last:` line of `.status` says what happened to it, or without one, the listing."""
+        the `last:` line of `.status` says what happened to it, or without one, the listing.
+        -> 'saved', or 'pending' when the file is in use (drive-loader-ar2 0.12: a running mod's
+        file whose payload the unit keeps): the unit keeps the upload as <name>.new and its next
+        boot puts it in place."""
         self.put(name, raw, head)
         try:                                    # latin-1, as the route's names go out and come back
             last = last_of(self.get('.status')[1].decode('latin-1'))
         except (RpcError, ModError):
             last = None
         if last is not None:
+            if last == _note(PENDING, name):
+                return 'pending'
             if last != _note('saved', name):
                 raise ModError('the unit did not save %s: %s' % (self.path(name), last))
         elif not any(n == _base(name) and kind == 2 for n, kind, _s in self._ls(_parent(name))):
             raise ModError('the unit did not save %s (see %s/.status)' % (self.path(name), self.folder))
+        return 'saved'
+
+    def in_use(self, name):
+        """The file or folder `name` (below the folder) is in use or holds a file that is: a running
+        mod's file whose payload the unit keeps (`.status`'s `payload` lines, drive-loader-ar2
+        0.12). The unit refuses to delete or move it until the next boot."""
+        path = self.path(name)
+        for line in (self.status() or '').splitlines():
+            w = line.split(' ', 3)
+            if len(w) == 4 and w[0] == 'payload' and (w[3] == path or w[3].startswith(path + '/')):
+                return True
+        return False
+
+    def get_next(self, name):
+        """-> (header, bytes) of the file the unit's next boot links for `name`: its pending update
+        (<name>.new, an upload over a file in use) when there is one, else the file."""
+        if any(n == _base(name) + NEW and kind == 2 for n, kind, _s in self._ls(_parent(name))):
+            return self.get(name + NEW)
+        return self.get(name)
 
     def rm(self, name):
-        self.c.clear(self.path(name))
+        try:
+            self.c.clear(self.path(name))
+        except RpcError:
+            if self.in_use(name):
+                raise ModError(IN_USE % self.path(name))
+            raise
+        if last_of(self.status()) == _note(ROUTE_IN_USE + ':', name):
+            raise ModError(IN_USE % self.path(name))
 
     def folder_path(self, sub):
         """`sub`: a folder below the folder, up to DEPTH deep ("drums/kicks")."""
@@ -328,12 +359,18 @@ class Mods:
         self.put(MOVE, ('%s\n%s' % (frm, to)).encode('latin-1'), head)
         there = any(n == _base(to) and kind == (1 if folder else 2) for n, kind, _s in self._ls(_parent(to)))
         gone = not any(n == _base(frm) for n, _k, _s in self._ls(_parent(frm)))
+        if (not there or not gone) and self.in_use(frm):
+            raise ModError(IN_USE % self.folder_path(frm) if folder else IN_USE % self.path(frm))
         if not there or not gone:
             raise ModError('the unit did not move %s/%s to %s/%s (see %s/.status)'
                            % (self.folder, frm, self.folder, to, self.folder))
 
 
 NOTE_MAX = 63                                   # route.c's dl_note: 64 bytes with its 0
+PENDING = 'pending restart:'                    # route.c's note for an upload over a file in use
+ROUTE_IN_USE = 'In use: restart first'          # route.c IN_USE: a Clear or move of one refused
+NEW = '.new'                                    # skip.h DL_NEW: the update waiting for the next boot
+IN_USE = '%s is in use (its mod runs with a payload the unit keeps): restart the unit first'
 
 
 def _note(what, name):
@@ -485,8 +522,9 @@ def run(a, mods, log=print):
             log('REFUSED: nothing was uploaded')
             return 1
         for name, raw in files:
-            mods.upload(name, raw, head)
-            log('UPLOADED %s (%d bytes, CRC-32 %08x)' % (mods.path(name), len(raw), drive.file_crc(raw)))
+            kept = mods.upload(name, raw, head)
+            log('UPLOADED %s (%d bytes, CRC-32 %08x)%s' % (mods.path(name), len(raw), drive.file_crc(raw),
+                '; in use, so it replaces the running file at the next restart' if kept == 'pending' else ''))
         return 0
     chosen = []                                 # active
     for n in a.names:
@@ -494,7 +532,7 @@ def run(a, mods, log=print):
             with open(n, 'rb') as fh:
                 chosen.append((os.path.basename(n), fh.read()))
         else:
-            chosen.append((n, mods.get(n)[1]))
+            chosen.append((n, mods.get_next(n)[1]))   # a pending update: what the boot links
     r = drive.check(build, chosen)
     drive.print_result(r, log)
     if not all(c.state == drive.LOADED for c in r.choices):

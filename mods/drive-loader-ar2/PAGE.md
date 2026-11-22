@@ -1,16 +1,15 @@
 # drive-loader: the MODS page
 
-The MODS page of the Analog Rytm MKII's Drive Loader (`page.c`, `page.s`), in SETTINGS >
-GLOBAL. The loader's route and boot link are in [README.md](README.md).
+The Analog Rytm MKII Drive Loader's MODS page (`page.c`, `page.s`); the route and boot link are in
+[README.md](README.md).
 
 A MODS row at the bottom of SETTINGS > GLOBAL (`ev_settings`, `core_additem`) opens a page
-on the `.elemod` files in the folder. The MODS row has a 9 x 9 lightning-bolt icon like the
-other submenu rows: its draw callback (`dl_mods_icon`, `page.s`) is stock's icon thunk,
+on the `.elemod` files in the folder. The row's 9 x 9 lightning-bolt icon's draw callback (`dl_mods_icon`, `page.s`) is stock's icon thunk,
 tail-calling the bitmap blit `0x400716e0` with a Bitmap of stock's layout (one long a column,
 top row the lowest bit, a full mask).
 
-The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built on
-(`0x400734f2`), and works like SAMPLES:
+The page is stock's two-pane file view (`0x400734f2`, as SAMPLES and PROJECTS) and works like
+SAMPLES:
 
 - **The file list.** One row a file: its id (its file name until one is known) and, on the
   right where SAMPLES puts sizes, its size in whole KB once the check has read it (blank
@@ -61,7 +60,7 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
 - **SELECT ALL and DESELECT ALL** tick or untick the open folder's files, as SAMPLES'
   (`0x400e6620`): no folder row, nothing below.
 - **DELETE** deletes the open folder's ticked files after its confirm, refusing a file that is
-  in the saved build (`MOD IN USE`: unload it first). With none of the open folder's files
+  in the saved build (`MOD IN USE`: unload it first) or in use (`IN USE: RESTART FIRST`). With none of the open folder's files
   ticked and the cursor on a folder, it reads DELETE DIR and asks `DELETE DIR?`, as SAMPLES
   (`0x400e9ee6`, `0x400e77b2`): stock's rmdir removes an empty folder only, and a folder with
   anything in it gives `ERROR (NOT EMPTY?)`. Stock never deletes a folder's files for you, and
@@ -75,7 +74,8 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   behind a `<`, measured with stock's font so that it ends before the state column
   (`clip.inc`, `tests/test_drive_page.py`). Each row shows what the next boot does: `KEEP`
   (loaded, stays), `ADD` (loads at the next boot), `DROP` (loaded, gone after the next boot;
-  these rows stay until the reboot) or `!` (the last boot refused it). Its action panel has
+  these rows stay until the reboot), `!` (the last boot refused it), `UPDATE` or `LOST` (docs/DRIVE.md,
+  "Payloads on the +Drive"). Its action panel has
   UNLOAD, which saves the build without the ticked mods through the same checks
   (`MOD NOT LOADED` for a ticked mod the build does not hold), and INFO, which shows the
   cursor's mod's folder (`/mods/drums/kicks`, clipped from the left behind a `<` past 30

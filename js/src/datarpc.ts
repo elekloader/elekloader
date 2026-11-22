@@ -26,6 +26,10 @@ export const NAME_MAX = 127, SEG_MAX = 63   // a path below FOLDER, one name in 
 const parentOf = (p: string) => { const i = p.lastIndexOf('/'); return i < 0 ? '' : p.slice(0, i) }
 const baseOf = (p: string) => p.slice(p.lastIndexOf('/') + 1)
 export const NOTE_MAX = 63              // the route's note (route.c dl_note): 64 bytes with its 0
+export const PENDING = 'pending restart:'        // route.c's note for an upload over a file in use
+export const ROUTE_IN_USE = 'In use: restart first'   // route.c IN_USE: a Clear or move of one refused
+export const NEW = '.new'               // skip.h DL_NEW: the update waiting for the next boot
+const inUseMsg = (p: string) => `${p} is in use (its mod runs with a payload the unit keeps): restart the unit first`
 /** The route's note for `name` (route.c `note`), cut as it cuts it. datarpc._note. */
 const note = (what: string, name: string) => `${what} ${name}`.slice(0, NOTE_MAX)
 
@@ -248,21 +252,65 @@ export class Mods {
 
   /** `put`, then make sure the unit kept the file: the route can't refuse once the upload is in (a commit that fails, as
    * into a folder that can't be made, still answers the upload), so the `last:` line of `.status` says what happened
-   * to it, or without one, the listing. datarpc.Mods.upload. */
-  async upload(name: string, raw: Uint8Array, head: container.Head, progress?: (sent: number, total: number) => void): Promise<void> {
+   * to it, or without one, the listing. -> 'saved', or 'pending' when the file is in use (drive-loader-ar2 0.12: a
+   * running mod's file whose payload the unit keeps): the unit keeps the upload as <name>.new and its next boot puts
+   * it in place. datarpc.Mods.upload. */
+  async upload(name: string, raw: Uint8Array, head: container.Head, progress?: (sent: number, total: number) => void): Promise<'saved' | 'pending'> {
     await this.put(name, raw, head, progress)
     let last: string | null = null
     try {                               // latin-1, as the route's names go out and come back
-      last = lastOf(Array.from((await this.get('.status'))[1], b => String.fromCharCode(b)).join(''))
+      last = lastOf(await this.statusText())
     } catch (e) { if (!(e instanceof ModError)) throw e }
     if (last !== null) {
+      if (last === note(PENDING, name)) return 'pending'
       if (last !== note('saved', name)) throw new ModError(`the unit did not save ${this.path(name)}: ${last}`)
     } else if (!(await this.lsOrNone(parentOf(name))).some(([n, kind]) => n === baseOf(name) && kind === 2)) {
       throw new ModError(`the unit did not save ${this.path(name)} (see ${this.folder}/.status)`)
     }
+    return 'saved'
   }
 
-  rm(name: string): Promise<void> { return this.c.clear(this.path(name)) }
+  private async statusText(): Promise<string> {
+    return Array.from((await this.get('.status'))[1], b => String.fromCharCode(b)).join('')
+  }
+
+  private async statusOrNull(): Promise<string | null> {
+    try { return await this.statusText() } catch (e) { if (e instanceof ModError) return null; throw e }
+  }
+
+  /** The file or folder `name` (below the folder) is in use or holds a file that is: a running mod's file whose payload
+   * the unit keeps (`.status`'s `payload` lines, drive-loader-ar2 0.12). The unit refuses to delete or move it until the
+   * next boot. datarpc.Mods.in_use. */
+  async inUse(name: string): Promise<boolean> {
+    const path = this.path(name)
+    for (const line of ((await this.statusOrNull()) ?? '').split(/\r?\n/)) {
+      const w = line.split(' ')
+      if (w.length >= 4 && w[0] === 'payload') {
+        const p = w.slice(3).join(' ')
+        if (p === path || p.startsWith(path + '/')) return true
+      }
+    }
+    return false
+  }
+
+  /** -> [header, bytes] of the file the unit's next boot links for `name`: its pending update (<name>.new, an upload
+   * over a file in use) when there is one, else the file. datarpc.Mods.get_next. */
+  async getNext(name: string): Promise<[container.Head, Uint8Array]> {
+    if ((await this.lsOrNone(parentOf(name))).some(([n, kind]) => n === baseOf(name) + NEW && kind === 2))
+      return this.get(name + NEW)
+    return this.get(name)
+  }
+
+  /** Delete a file, or an empty folder; a file in use is the error that says to restart. datarpc.Mods.rm. */
+  async rm(name: string): Promise<void> {
+    try {
+      await this.c.clear(this.path(name))
+    } catch (e) {
+      if (e instanceof RpcError && await this.inUse(name)) throw new ModError(inUseMsg(this.path(name)))
+      throw e
+    }
+    if (lastOf(await this.statusOrNull()) === note(ROUTE_IN_USE + ':', name)) throw new ModError(inUseMsg(this.path(name)))
+  }
 
   /** `sub`: a folder below the folder, up to DEPTH deep ("drums/kicks"). datarpc.Mods.folder_path. */
   folderPath(sub: string): string {
@@ -315,6 +363,8 @@ export class Mods {
     await this.put(MOVE, latin1(`${from}\n${to}`), head)
     const there = (await this.lsOrNone(parentOf(to))).some(([n, kind]) => n === baseOf(to) && kind === (folder ? 1 : 2))
     const gone = !(await this.lsOrNone(parentOf(from))).some(([n]) => n === baseOf(from))
+    if ((!there || !gone) && await this.inUse(from))
+      throw new ModError(inUseMsg(folder ? this.folderPath(from) : this.path(from)))
     if (!there || !gone)
       throw new ModError(`the unit did not move ${this.folder}/${from} to ${this.folder}/${to} (see ${this.folder}/.status)`)
   }

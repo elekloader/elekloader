@@ -13,8 +13,6 @@ It holds the `/mods` route, links the mods `/mods/active` names into the +Drive
 mods' area at boot, and adds the MODS page in SETTINGS > GLOBAL, which writes `/mods/active`.
 What a +Drive mod may hold, the refusal codes and skip reasons are docs/FORMAT.md's,
 "+Drive mods"; the link's checks and order are docs/DRIVE.md's, "The boot link".
-The files in `/mods` carry a 16-byte header (below, "Files on the +Drive"), and the MODS page
-works like stock's SAMPLES browser (below, "The MODS page").
 
 ## The /mods route
 
@@ -29,7 +27,7 @@ a third `RouteTypeHandler`, so the unit's Data root listing shows `mods`:
 | `/mods/<folder>/.../.dir` | upload only: an upload (of nothing, `elekloader mods mkdir`) makes the folder, and any parents not there yet, empty, up to 3 deep. No file is written, and a folder already there is kept |
 | `/mods/.mv` | upload only: an upload of `FROM\nTO` (paths below `/mods`; `elekloader mods mv`) moves or renames a `.elemod` file or a folder with everything in it, and rewrites `/mods/active`'s lines naming FROM or a file below it. No file is written |
 | `/mods/.build` | read only: the build descriptor, byte for byte (`python -m elekloader.desc dump`) |
-| `/mods/.status` | read only: plain text, the route's last commit or delete, the MODS page's check (`check: n/N /mods/FOLDER`), the boot's time, then the boot linker's records |
+| `/mods/.status` | read only: plain text, the route's last commit, the MODS page's check, the boot's time, payloads, then the boot linker's records |
 | `/mods/.store` | read only, when there is one: docs/DRIVE.md, "+Drive storage" |
 
 Each transfer goes through stock's data container (31-byte header, body, 12-byte footer with
@@ -37,7 +35,7 @@ CRC-32). An upload's header must say family 2, file type `0x454d4f44` (`'EMOD'`)
 compressed, and a payload no larger than the stage (STAGE.md). Anything else is refused at the header, and
 nothing is written. The router checks the CRC at the footer, and only a transfer that passes
 every check reaches the commit: the body goes to `<name>.tmp`, the old file is deleted, and the
-tmp file is renamed over it.
+tmp file is renamed over it (over a file in use, `<name>.new`: docs/DRIVE.md, "Payloads on the +Drive").
 
 ### Files on the +Drive
 
@@ -201,6 +199,7 @@ background checks and firmware calls are in [PAGE.md](PAGE.md).
   `tests/test_drive_route.py`.
 - `flush.s`, `boot.c`, `dlink.c`, `json.c`, `sha256.c`: the boot link. Tests: `tests/drive_link_host.c`,
   `tests/test_drive_link.py`, `tests/test_drive_top_stage.py`.
+- `skip.c`, `payload.c`: payloads. Tests: `tests/test_drive_payload_skip.py`, `tests/test_drive_payload.py`.
 - `page.c`, `page.s`, `clip.inc` (the build list's label clip), `park.c` (parked data, the build list's saved data `*`): the
   MODS page. Tests: `tests/drive_page_clip_host.c`, `tests/drive_build_rows_host.c` (the build
   list after folder changes and moves over USB, parked data against `elekloader/drive_store.py`),
@@ -213,5 +212,5 @@ emulator through its `--usb-midi-tcp` port.
 ```bash
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build mods/drive-loader-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
-python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.14.elemod --mod drive-loader-0.10.elemod --out dl.syx --version 1.74
+python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.14.elemod --mod drive-loader-0.12.elemod --out dl.syx --version 1.74
 ```

@@ -79,6 +79,12 @@ dl_holder:
 dl_handler:
         .long   dl_vtable
         .space  0x44                            | zeros, as large as stock's ProjectHandler
+| the Drive payload table's API version (analog-rytm-mk2/drivepay.h), a word: sidecar-core imports
+| it weakly, so it reads 0 with no loader (core_zero) and 1 for drive_payload_count, _at, _find,
+| _info and dl_payload_read
+        .globl  drive_payload_abi
+drive_payload_abi:
+        .long   1
 
         .bss
         .align  16

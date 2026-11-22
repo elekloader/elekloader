@@ -133,9 +133,32 @@ room in the area. The `.elemod` stays one JSON file.
   loader's mutex, from a task only; it refuses (-2) when the file's sector
   or size changed since the boot (on the Rytm's ekFS, which has no sector,
   the size alone: `sector` is 0), so a reader still checks the sha256 of
-  what it ships. sidecar-core looks a payload up in `core_payloads` (a
-  flashed mod's, in RAM) and then here; caching on the Pi by hash is its
-  side.
+  what it ships. A file staged twice (pass 2) counts once, and after the
+  link `drive_payloads_lost` counts only the loaded mods' lost payloads.
+- **The API** (drive-loader-ar2 0.12; `analog-rytm-mk2/drivepay.h`). The
+  word `drive_payload_abi` (1) and `drive_payload_count`, `drive_payload_at`,
+  `drive_payload_find`, `drive_payload_info` (id, length, sha256) and
+  `dl_payload_read` on an opaque handle; `struct drive_payload` stays the
+  loader's. sidecar-core imports them weakly, so `drive_payload_abi` reads
+  0 without a loader, and a flashed or +Drive sidecar-core uses the same
+  names. At the Pi's connect it walks `core_payloads` (a flashed mod's, in
+  RAM), then entries 0..count-1, sends {id, length, sha256} for each and
+  streams the ones the Pi lacks; caching on the Pi by hash is its side.
+- **In use** (drive-loader-ar2 0.12). A file the boot loaded whose payload
+  the table keeps can't be deleted or moved until the next boot: its route
+  entry and listing have no Clear, a `.mv` of it or of a folder holding it
+  is refused (`In use: restart first`), and the MODS page's DELETE refuses
+  it (`IN USE: RESTART FIRST`). An upload over it is kept as `<name>.new`
+  (the route's note `pending restart: <name>`); the next boot renames each
+  `/mods/active` line's `<name>.new` over `<name>` before staging (the old
+  file to `<name>.old` first; a failure keeps the old file and the `.new`).
+  The MODS page and `elekloader mods active` read the `.new` in its place,
+  so `/mods/active` names the CRC of the file the next boot links. Stock's
+  SAMPLES browser and Transfer can still change such a file:
+  `dl_payload_read`'s -2 is the backstop. `.status` lists `payloads: N
+  kept, M lost`, `updates at boot: N applied, M failed` after a boot that
+  had any, a `payload ID LEN PATH` line per entry and a `pending PATH` line
+  per waiting update.
 
 ## +Drive collections
 
