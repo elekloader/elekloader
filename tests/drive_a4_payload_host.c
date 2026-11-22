@@ -4,6 +4,8 @@
  * (store.c, -DDL_HOST) on a card in RAM: tests/test_drive_a4_payload.py builds it with the host's
  * cc and drives it. The requests are tests/drive_payload_host.c's, over the store:
  *   file NAME TEXT       DL_DIR "/" NAME holds TEXT ("|" a newline), written through the store
+ *   pad K                the next hexfiles (and their badhex, note) put K spaces before HEAD, so
+ *                        the hex starts at another place in a sector (HEAD is 64 bytes)
  *   hexfile NAME N       DL_DIR "/" NAME holds HEAD, then N payload bytes as hex (byte i is
  *                        (i * 13 + 1) & 0xff), then TAIL; the payload's hex starts at HEADLEN
  *   badhex NAME K        byte K of NAME's hex becomes 'g', on the card (the file stays where it is)
@@ -38,6 +40,8 @@
 
 #define HEAD "{\"sections\":{\".payload\":{\"len\":0,\"sha256\":\"00\",\"parts\":[[\"hex\",\""
 #define TAIL "\"]]}}}"
+static unsigned headpad;                 /* spaces before HEAD (pad) */
+#define HEADLEN (headpad + (unsigned)strlen(HEAD))
 
 void dl_memcpy(void *d, const void *s, u32 n) { memmove(d, s, n); }
 void dl_memset(void *d, int c, u32 n) { memset(d, c, n); }
@@ -177,14 +181,17 @@ int main(void)
                 if (*c == '|')
                     *c = '\n';
             put(name, text, (unsigned)strlen(text));
+        } else if (!strncmp(line, "pad ", 4)) {
+            headpad = (unsigned)strtoul(line + 4, 0, 0);
         } else if (!strncmp(line, "hexfile ", 8)) {
             char *name = line + 8, *num = strchr(name, ' '), *buf;
             u32 n, i, k;
             *num++ = 0;
             n = (u32)strtoul(num, 0, 0);
-            buf = malloc(sizeof HEAD + 2 * n + sizeof TAIL);
-            k = (u32)strlen(HEAD);
-            memcpy(buf, HEAD, k);
+            buf = malloc(headpad + sizeof HEAD + 2 * n + sizeof TAIL);
+            memset(buf, ' ', headpad);
+            memcpy(buf + headpad, HEAD, strlen(HEAD));
+            k = HEADLEN;
             for (i = 0; i < n; i++)
                 k += (u32)sprintf(buf + k, i & 1 ? "%02X" : "%02x", pay_byte(i));   /* both cases */
             memcpy(buf + k, TAIL, strlen(TAIL));
@@ -196,7 +203,7 @@ int main(void)
             *num++ = 0;
             full(path, name);
             ds_file(path, &sector, &size);
-            card[(size_t)sector * 512 + strlen(HEAD) + strtoul(num, 0, 0)] = 'g';
+            card[(size_t)sector * 512 + HEADLEN + strtoul(num, 0, 0)] = 'g';
         } else if (!strncmp(line, "touch ", 6)) {
             unsigned n;
             char *b;
@@ -212,7 +219,7 @@ int main(void)
             u32 i;
             *num++ = 0;
             memset(&pay, 0, sizeof pay);
-            pay.off = (u32)strlen(HEAD);
+            pay.off = HEADLEN;
             pay.len = (u32)strtoul(num, 0, 0);
             for (i = 0; i < 32; i++)
                 pay.sha256[i] = (u8)i;

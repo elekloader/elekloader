@@ -82,6 +82,48 @@ class Table(unittest.TestCase):
                           'READ -1 ok', 'READ 1 ok'])
         self.assertTrue(all('GUARD ok' in o for o in out))
 
+    def test_in_place_decode_reads_every_stretch_whole(self):
+        """0.2's faster read (the Rytm's 0.12): the hex read into the caller's buffer and decoded in
+        place, reads of a sector or more cut to end on a card sector, a byte's first hex character
+        carried when the hex sits at an odd place, the last 64 bytes or fewer through the stack.
+        Every length and start, at every parity and place in a sector, decodes right and writes
+        nothing past n."""
+        cases = [(at, n) for at in (0, 1, 2, 63, 64, 65, 333) for n in list(range(0, 140)) + [255, 256, 257, 367]]
+        cases += [(at, n) for at in (0, 1, 190, 191, 255, 256, 257) for n in (511, 512, 513, 1023, 1024, 1500, 2600)]
+        for pad in (0, 1, 447, 448, 449, 511):
+            reqs = ['pad %d' % pad, 'hexfile a.elemod 3000', 'note a.elemod 3000', 'keep a.elemod=modA=L']
+            reqs += ['read 0 %d %d' % c for c in cases]
+            out = self.run_(*reqs)
+            for (at, n), o in zip(cases, out):
+                want = max(0, min(n, 3000 - at))
+                self.assertTrue(o.startswith('READ %d ok GUARD ok' % want), (pad, at, n, o))
+
+    def test_a_4k_read_takes_a_few_card_reads_not_64(self):
+        """0.1 read 128 hex bytes a time, each through a whole sector: 64 card reads a 4 KB read on
+        a sector, 80 off one. From 0.2: 7 on a sector, 10 off one, odd places too; a ~530 KB
+        payload read in 4 KB calls moves at least 400 bytes a card read."""
+        size = 530 * 1024
+        for pad, first, most in ((448, 7, 7), (449, 10, 10), (0, 10, 10), (1, 10, 10)):
+            reqs = ['pad %d' % pad, 'hexfile b.elemod %d' % size, 'note b.elemod %d' % size,
+                    'keep b.elemod=modB=L', 'read 0 0 4096']
+            reqs += ['read 0 %d 4096' % at for at in range(0, size, 4096)]
+            out = self.run_(*reqs)
+            self.assertEqual(out[0], 'READ 4096 ok GUARD ok READS %d' % first, pad)
+            self.assertTrue(all(' ok GUARD ok' in o for o in out[1:]), pad)
+            self.assertLessEqual(max(int(o.split()[-1]) for o in out[1:]), most, pad)
+            self.assertGreaterEqual(size / sum(int(o.split()[-1]) for o in out[1:]), 400, pad)
+
+    def test_bad_hex_anywhere_in_a_long_read_is_refused(self):
+        """a bad character in a sector read straight into the buffer, in the carried character, or
+        in the stack's tail: -3 each time, at both parities"""
+        for pad in (448, 449):
+            for bad in (0, 1, 1023, 1024, 3000, 4095, 7000, 8100, 8191, 8192, 8193, 9999):
+                out = self.run_('pad %d' % pad, 'hexfile a.elemod 5000', 'badhex a.elemod %d' % bad,
+                                'note a.elemod 5000', 'keep a.elemod=modA=L', 'read 0 0 4096', 'read 0 4096 904')
+                want = ['READ -3 ok', 'READ 904 ok'] if bad < 8192 else ['READ 4096 ok', 'READ -3 ok']
+                self.assertEqual([o.split(' GUARD')[0] for o in out], want, (pad, bad))
+                self.assertTrue(all('GUARD ok' in o for o in out), (pad, bad))
+
     def test_a_changed_file_or_bad_hex_is_refused(self):
         """bad hex where the file stays is -3; the file written again (a new run and size) is -2"""
         out = self.run_(*self.SET, 'badhex a.elemod 501', 'read 0 0 200', 'read 0 200 100', 'touch a.elemod',

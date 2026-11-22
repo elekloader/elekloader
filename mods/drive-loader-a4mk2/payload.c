@@ -283,12 +283,38 @@ static int nib(u8 c)
          : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
 }
 
+/* hex[0..2k) decoded into out[0..k), forward: out may be hex itself, since byte i reads hex 2i and
+ * 2i + 1, never below i. -> 0, or -3 for a byte that isn't hex */
+static s32 decode(u8 *out, const u8 *hex, u32 k)
+{
+    u32 i;
+    for (i = 0; i < k; i++) {
+        int a = nib(hex[2 * i]), b = nib(hex[2 * i + 1]);
+        if (a < 0 || b < 0)
+            return -3;
+        out[i] = (u8)(a << 4 | b);
+    }
+    return 0;
+}
+
+/* The hex read straight into the caller's buffer and decoded in place (0.2, the Rytm's 0.12): the
+ * free part of out, [got, n), takes that many hex bytes, which decode into its first half, so each
+ * read moves half the free part (2 KB for a 4 KB buffer at first, halving), with no RAM of the
+ * loader's. The last few bytes (DL_PAY_TAIL or fewer) go through a small buffer on the stack.
+ * A read of a sector's worth or more is cut to end on a card sector (DL_PAY_SECTOR; a file starts
+ * on one), so dl_fs_read (store.c) sends whole sectors straight into out and the next read starts
+ * on one, with no partial sector through its buffer: a 4 KB read takes 7 to 10 card reads, not 64
+ * to 80. Hex at an odd place in the file then ends a read half way through a byte: that character
+ * is carried to the front of the next read's place, so the reads stay on sectors. Reads follow on
+ * from f.pos, set once. */
+#define DL_PAY_TAIL 64
+#define DL_PAY_SECTOR 512u
 s32 dl_payload_read(const struct drive_payload *p, u32 at, u8 *out, u32 n)
 {
     dl_file f;
     unsigned sector, size;
-    u8 hex[128];
-    u32 got = 0, k, i;
+    u8 hex[2 * DL_PAY_TAIL], carry = 0;
+    u32 got = 0, c = 0, k, h, e;         /* c: 1 when carry holds a byte's first hex character */
     s32 r = 0;
     if (!handle_ok(p) || at > p->len)
         return -1;
@@ -305,20 +331,22 @@ s32 dl_payload_read(const struct drive_payload *p, u32 at, u8 *out, u32 n)
         r = -2;
     f.pos = p->off + 2 * at;             /* a file open for reading streams from f.pos (store.c) */
     while (!r && got < n) {
-        k = n - got < sizeof hex / 2 ? n - got : sizeof hex / 2;
-        if (dl_fs_read(&f, hex, 2 * k) != (int)(2 * k)) {
+        u32 left = n - got;
+        u8 *dst = left > DL_PAY_TAIL ? out + got : hex;
+        h = left > DL_PAY_TAIL ? left - c : 2 * left - c;   /* hex bytes this read: fills dst */
+        if (h >= DL_PAY_SECTOR && (e = ((f.pos + h) & ~(DL_PAY_SECTOR - 1)) - f.pos) != 0)
+            h = e;                       /* end on a sector */
+        dst[0] = carry;
+        if (dl_fs_read(&f, dst + c, h) != (int)h) {
             r = -3;
             break;
         }
-        for (i = 0; i < k; i++) {
-            int a = nib(hex[2 * i]), b = nib(hex[2 * i + 1]);
-            if (a < 0 || b < 0) {
-                r = -3;
-                break;
-            }
-            out[got + i] = (u8)(a << 4 | b);
-        }
-        got += k;
+        h += c;                          /* hex in dst: k whole bytes, and maybe one character */
+        k = h / 2;
+        c = h & 1;
+        carry = dst[h - 1];
+        if ((r = decode(out + got, dst, k)) == 0)
+            got += k;
     }
     dl_fs_close(&f);
     dl_unlock();

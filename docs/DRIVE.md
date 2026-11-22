@@ -132,7 +132,10 @@ room in the area. The `.elemod` stays one JSON file.
   `dl_payload_read(p, at, out, n)` decodes n bytes from byte at, under the
   loader's mutex, from a task only (drive-loader-ar2 0.12: one seek a call,
   the hex read into `out` and decoded in place, so a 4 KB buffer moves 2 KB
-  a read at first, halving, and the last 64 bytes go through the stack);
+  a read at first, halving, and the last 64 bytes go through the stack;
+  drive-loader-a4mk2 0.2 the same, with each read of a sector or more cut
+  to end on a card sector, so the store reads whole sectors straight into
+  `out`: a 4 KB read takes 7 to 10 card reads, not 64 to 80);
   it refuses (-2) when the file's sector
   or size changed since the boot (on the Rytm's ekFS, which has no sector,
   the size alone: `sector` is 0), so a reader still checks the sha256 of
