@@ -141,8 +141,9 @@ int dl_payload_held(const char *path, int dir);
 /* a loaded mod's file whose payload found the table full (after the boot's keep) */
 int dl_payload_lost_of(const char *path);
 /* the boot's <name>.new swaps (boot.c, before staging): each of the n lines' <name>.new over
- * <name>; dl_updates counts them applied and failed (the old file kept, the .new left) */
-void dl_apply_updates(const struct dl_choice *ch, int n);
+ * <name>, a line swapped taking the new file's CRC (in ch and /mods/active); dl_updates counts
+ * them applied and failed (the old file kept, the .new left, or active not rewritten) */
+void dl_apply_updates(struct dl_choice *ch, int n);
 extern u32 dl_updates[2];
 
 /* .status's payload lines (route.c): "payloads: N kept, M lost", the boot's updates, one line per

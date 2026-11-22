@@ -8,11 +8,13 @@ ekFS.
     python tests/test_drive_payload.py
 
 Needs a C compiler (cc)."""
+import hashlib
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
+import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -31,9 +33,10 @@ class Table(unittest.TestCase):
     def setUpClass(cls):
         cls.work = tempfile.TemporaryDirectory()
         cls.exe = os.path.join(cls.work.name, 'drive_payload_host')
-        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-DDL_HOST', '-o', cls.exe,
+        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-DDL_HOST', '-DDL_HOST_HEAP', '-o', cls.exe,
                         os.path.join(HERE, 'drive_payload_host.c'), os.path.join(AR2, 'payload.c'),
-                        os.path.join(AR2, 'boot.c'), '-Wl,--unresolved-symbols=ignore-all'], check=True)
+                        os.path.join(AR2, 'boot.c'), os.path.join(AR2, 'skip.c'),
+                        '-Wl,--unresolved-symbols=ignore-all'], check=True)
 
     @classmethod
     def tearDownClass(cls):
@@ -124,15 +127,47 @@ class Table(unittest.TestCase):
         self.assertEqual(out[6], 'COUNT 0 LOST 0')
 
     def test_the_boot_swaps_each_lines_update_and_keeps_the_old_on_failure(self):
+        crc = lambda t: '%08x' % zlib.crc32(t.encode())
         out = self.run_('file a.elemod OLDA', 'file a.elemod.new NEWA', 'file b.elemod OLDB',
                         'file c.elemod OLDC', 'file c.elemod.new NEWC', 'file x.elemod.new STRAY',
-                        'failrename c.elemod.new', 'updates a.elemod b.elemod c.elemod', 'tree')
+                        'failrename c.elemod.new',
+                        'updates a.elemod=%s b.elemod=%s c.elemod=%s' % (crc('OLDA'), crc('OLDB'), crc('OLDC')),
+                        'tree')
+        # a swapped line takes the new file's CRC, in the set and in /mods/active (the emulator,
+        # 2026-11-22: active still naming the old CRC made the boot drop the update)
         self.assertEqual(out, ['UPDATES 1 1',
-                               'TREE a.elemod=NEWA ; b.elemod=OLDB ; c.elemod=OLDC ; c.elemod.new=NEWC ; '
-                               'x.elemod.new=STRAY'])
-        out = self.run_('file n.elemod.new FIRST', 'updates n.elemod', 'tree')   # no old file: just renamed
-        self.assertEqual(out, ['UPDATES 1 0', 'TREE n.elemod=FIRST'])
+                               'CRCS a.elemod=%s b.elemod=%s c.elemod=%s' % (crc('NEWA'), crc('OLDB'), crc('OLDC')),
+                               'TREE a.elemod=NEWA ; active=# updates applied at boot|a.elemod %s|'
+                               'b.elemod %s|c.elemod %s| ; b.elemod=OLDB ; c.elemod=OLDC ; '
+                               'c.elemod.new=NEWC ; x.elemod.new=STRAY' % (crc('NEWA'), crc('OLDB'), crc('OLDC'))])
 
+    def test_a_failed_swap_counts_and_active_stays(self):
+        out = self.run_('file a.elemod OLDA', 'file a.elemod.new NEWA', 'file active a.elemod 1',
+                        'failrename a.elemod.new', 'updates a.elemod=1', 'tree')
+        self.assertEqual(out, ['UPDATES 0 1', 'CRCS a.elemod=00000001',
+                               'TREE a.elemod=OLDA ; a.elemod.new=NEWA ; active=a.elemod 1'])
+
+    def test_an_update_with_no_old_file_is_renamed_and_its_crc_taken(self):
+        crc = '%08x' % zlib.crc32(b'FIRST')
+        out = self.run_('file n.elemod.new FIRST', 'updates n.elemod', 'tree')
+        self.assertEqual(out, ['UPDATES 1 0', 'CRCS n.elemod=' + crc,
+                               'TREE active=# updates applied at boot|n.elemod %s| ; n.elemod=FIRST' % crc])
+
+    def test_an_active_already_naming_the_new_crc_is_left_as_it_is(self):
+        crc = '%08x' % zlib.crc32(b'NEWA')
+        out = self.run_('file a.elemod OLDA', 'file a.elemod.new NEWA', 'file active a.elemod ' + crc,
+                        'updates a.elemod=' + crc, 'tree')
+        self.assertEqual(out, ['UPDATES 1 0', 'CRCS a.elemod=' + crc,
+                               'TREE a.elemod=NEWA ; active=a.elemod ' + crc])
+
+    def test_a_payload_files_crc_is_its_staged_ones(self):
+        """the new file's CRC skips its payload's hex (skip.h), as the page's and the host's do"""
+        body = bytes(range(40))
+        head = '{"id": "p", "sections": {".payload": {"len": %d, "sha256": "%s", "parts": [["hex", "' % (
+            len(body), hashlib.sha256(body).hexdigest())
+        tail = '"]]}}}'
+        out = self.run_('file p.elemod.new ' + head + body.hex() + tail, 'updates p.elemod')
+        self.assertEqual(out[1], 'CRCS p.elemod=%08x' % zlib.crc32((head + tail).encode()))
 
 if __name__ == '__main__':
     unittest.main()

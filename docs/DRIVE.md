@@ -154,9 +154,9 @@ room in the area. The `.elemod` stays one JSON file.
   it (`IN USE: RESTART FIRST`). An upload over it is kept as `<name>.new`
   (the route's note `pending restart: <name>`); the next boot renames each
   `/mods/active` line's `<name>.new` over `<name>` before staging (the old
-  file to `<name>.old` first; a failure keeps the old file and the `.new`).
-  The MODS page and `elekloader mods active` read the `.new` in its place,
-  so `/mods/active` names the CRC of the file the next boot links. Stock's
+  file to `<name>.old` first; a failure keeps the old file and the `.new`),
+  and a line swapped takes the new file's CRC, so the boot links it and
+  rewrites `/mods/active` with it. Stock's
   SAMPLES browser and Transfer can still change such a file:
   `dl_payload_read`'s -2 is the backstop. `.status` lists `payloads: N
   kept, M lost`, `updates at boot: N applied, M failed` after a boot that

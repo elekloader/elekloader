@@ -21,9 +21,10 @@
  *                        guard bytes around it -> "READ r ok|bad GUARD ok|bad READS k": ok when the
  *                        bytes match the payload's, k the ekFS reads it made
  *   touch NAME           NAME grows by one byte (the size the boot noted no longer holds)
- *   updates NAME ...     dl_apply_updates on that set -> "UPDATES applied failed"
+ *   updates NAME[=CRC] ...  dl_apply_updates on that set (CRC hex, else 0) -> "UPDATES applied
+ *                        failed" and the set's CRCs after it, "CRCS name=crc ..."
  *   failrename PATH      the made-up rename of PATH (below DL_DIR) to anything fails
- *   tree                 -> "TREE name ; name ..." (below DL_DIR, sorted)
+ *   tree                 -> "TREE name=text ; ..." (below DL_DIR, sorted; a newline as "|")
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,7 +91,15 @@ int dl_fs_rename(const char *a, const char *b)
 int dl_fs_open(dl_file *f, const char *p, int write)
 {
     int *s = (int *)f->raw, i = find(p);
-    (void)write;
+    if (write) {                         /* made, or emptied */
+        if (i < 0) {
+            i = nfs++;
+            strcpy(fsn[i].path, p);
+        }
+        free(fsn[i].data);
+        fsn[i].data = 0;
+        fsn[i].n = 0;
+    }
     s[0] = i;
     s[1] = 0;
     return i < 0 ? -1 : 0;
@@ -110,7 +119,31 @@ int dl_fs_read(dl_file *f, void *buf, unsigned n)
     s[1] += (int)n;
     return (int)n;
 }
+int dl_fs_write(dl_file *f, const void *buf, unsigned n)
+{
+    int i = ((int *)f->raw)[0];
+    if (i < 0)
+        return -1;
+    fsn[i].data = realloc(fsn[i].data, fsn[i].n + n + 1);
+    memcpy(fsn[i].data + fsn[i].n, buf, n);
+    fsn[i].n += n;
+    return 0;
+}
 void dl_fs_close(dl_file *f) { (void)f; }
+int dl_fs_size(dl_file *f) { int i = ((int *)f->raw)[0]; return i < 0 ? -1 : (int)fsn[i].n; }
+void *dl_alloc(u32 n) { return calloc(1, n); }
+void dl_free(void *p) { free(p); }
+static unsigned char stage[64];          /* small: a file staged past it still gives its CRC */
+unsigned char *volatile dl_stage_at = stage;
+volatile unsigned dl_stage_len = sizeof stage;
+u32 dl_crc32_add(u32 c, const u8 *p, u32 n)
+{
+    u32 k;
+    while (n--)
+        for (c ^= *p++, k = 0; k < 8; k++)
+            c = c & 1 ? 0xEDB88320u ^ (c >> 1) : c >> 1;
+    return c;
+}
 
 static u8 pay_byte(u32 i) { return (u8)((i * 13 + 1) & 0xff); }
 
@@ -239,11 +272,21 @@ int main(void)
         } else if (!strncmp(line, "failrename ", 11)) {
             full(failing, line + 11);
         } else if (!strncmp(line, "updates", 7)) {
-            int n = 0;
-            for (a = strtok(line + 7, " "); a && n < 256; a = strtok(0, " "), n++)
+            int n = 0, k;
+            memset(ch, 0, sizeof ch);
+            for (a = strtok(line + 7, " "); a && n < 256; a = strtok(0, " "), n++) {
+                char *eq = strchr(a, '=');
+                if (eq) {
+                    *eq = 0;
+                    ch[n].crc = (u32)strtoul(eq + 1, 0, 16);
+                }
                 strncpy(ch[n].name, a, sizeof ch[n].name - 1);
+            }
             dl_apply_updates(ch, n);
-            printf("UPDATES %u %u\n", dl_updates[0], dl_updates[1]);
+            printf("UPDATES %u %u\nCRCS", dl_updates[0], dl_updates[1]);
+            for (k = 0; k < n; k++)
+                printf(" %s=%08x", ch[k].name, ch[k].crc);
+            printf("\n");
         } else if (!strcmp(line, "tree")) {
             char *v[MAXF];
             int i, n = 0;
@@ -254,7 +297,13 @@ int main(void)
             qsort(v, (size_t)n, sizeof *v, cmp);
             printf("TREE");
             for (i = 0; i < n; i++)
-                printf("%s%s=%.*s", i ? " ; " : " ", v[i] + k, (int)fsn[find(v[i])].n, fsn[find(v[i])].data);
+            {
+                int j = find(v[i]);
+                unsigned q;
+                printf("%s%s=", i ? " ; " : " ", v[i] + k);
+                for (q = 0; q < fsn[j].n; q++)    /* a newline as "|", as `file` takes it */
+                    putchar(fsn[j].data[q] == '\n' ? '|' : fsn[j].data[q]);
+            }
             printf("\n");
         }
         if (locked)
