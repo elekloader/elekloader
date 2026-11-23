@@ -1955,10 +1955,8 @@ in an older build of another layout) can take it over once, through
 
 It covers storage fields only: lock rows (p-locks) and scene entries of
 another layout are dropped as before. A mod that wants its older build to
-keep reading the same projects places its fields on its older bytes, by
-seeding its lockfile with their offsets (the lockfile below); the handler
-then has nothing to move. Those places hold only while no other mod adds
-a field to that scope: a scope that fills up is packed again from bit 0.
+keep reading the same projects pins its fields to its older bytes with `offset` ("A field on fixed bits",
+above); the handler then has nothing to move.
 
 **When a project changes.** A mod that keeps its own copy of a field, or
 sets things up per project, subscribes to `ev_project`:
