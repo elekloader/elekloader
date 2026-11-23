@@ -1,0 +1,25 @@
+{
+ "id": "adopt-check",
+ "version": "1.0",
+ "title": "Adopt check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A probe for core-ar2 0.20's ev_store_adopt: it counts the sounds and kits handed to it, with and without a layout ID, and takes the first bytes another layout stored in each as its own sound and kit fields. Bars at the bottom of the screen show the counts and whether the current sound and kit hold an adopted value.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": ["check.c"],
+ "cflags": ["-DFILLRECT_AT=0x40070726"],
+ "storage": [
+  {"sym": "ad_sound", "scope": "sound", "bits": 24},
+  {"sym": "ad_kit", "scope": "kit", "bits": 32}
+ ],
+ "subscribe": [
+  {"event": "ev_tick", "fn": "ad_tick", "order": 60},
+  {"event": "ev_draw", "fn": "ad_draw", "order": 60},
+  {"event": "ev_project", "fn": "ad_project", "order": 60},
+  {"event": "ev_store_adopt", "fn": "ad_adopt", "order": 60}
+ ],
+ "resources": {"core": "0.20"},
+ "requires": ["core"]
+}

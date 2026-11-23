@@ -498,6 +498,45 @@ int st_sound_save(unsigned char *dst, unsigned char *live, int a)
     return r;
 }
 
+/* ---- ev_store_adopt (0.20): a sound's or kit's data from before core ----
+ * A sound or kit whose stored layout ID and generation this build does not
+ * read loads with its fields at zero (their inits). Just after that, and
+ * before anything reads them, core calls each ev_store_adopt handler
+ * f(scope, live, src, id): scope SC_SOUND or SC_KIT, live the live sound or
+ * kit just loaded, src the stored sound (162 B) or stored kit (2610 B) it was
+ * loaded from, and id the layout ID src carries (0: none, so saved by stock,
+ * by a build with no sound or kit fields, or by a build from before core
+ * kept mod storage; else a layout this build has no ancestor for, or one
+ * whose generation for this scope was bumped, or a project file of an
+ * older project version). A handler that recognises
+ * its own pre-core bytes in src sets its fields in live with
+ * core_store_set. Every handler is called; return values are ignored.
+ *
+ * It runs on every path a sound or kit loads (a project load, the boot's
+ * load, a library or pool sound, a SysEx dump, a copy), from the task doing
+ * the load, with nothing written to src. core_store_set does not write the
+ * adopting item through to its stored copy here: the fields reach storage
+ * with the item's next stock save or the next core_store_set on it, which
+ * also writes this build's ID, so the item is adopted once. Until then each
+ * load adopts it again from the same bytes. A handler should only read src,
+ * and leave alone what it doesn't recognise. */
+typedef void (*ev_store_adopt_t)(unsigned scope, void *live, const unsigned char *src, unsigned id);
+extern const ev_store_adopt_t ev_store_adopt[];
+
+/* the live item being adopted: core_store_set leaves its stored copy as is */
+static unsigned char *volatile adopting;
+
+static void adopt(unsigned scope, unsigned char *live, const unsigned char *src, unsigned id)
+{
+    const ev_store_adopt_t *f;
+    if (!*ev_store_adopt)
+        return;
+    adopting = live;
+    for (f = ev_store_adopt; *f; f++)
+        (*f)(scope, live, src, id);
+    adopting = 0;
+}
+
 int st_sound_load(unsigned char *live, unsigned char *src)
 {
     int r = st_sound_load_body(live, src), j;
@@ -508,6 +547,8 @@ int st_sound_load(unsigned char *live, unsigned char *src)
         for (j = 0; j < SOUND_BYTES; j++)
             live[SOUND_HOME + sound_at(j)] =
                 ok ? src[j < 3 ? SOUND_SPARE + j : SOUND_SPARE2 + j - 3] : 0;
+        if (!ok)
+            adopt(SC_SOUND, live, src, rd32(src + SOUND_SPARE + 3));
         core_routes_load(live, ok);
         if (LFO_DST) {
             if (live[LIVE_DST] >= 42 && live[LIVE_DST] <= 127)
@@ -693,6 +734,8 @@ int st_kit_load(unsigned char *live, unsigned char *src)
                  src[KIT_SPARE + 12] == gen(SC_KIT);
         for (j = 0; j < 8; j++)
             live[KIT_HOME + j] = ok ? src[KIT_SPARE + j] : 0;
+        if (!ok)
+            adopt(SC_KIT, live, src, rd32(src + KIT_SPARE + 8));
         if (FX_LFO_DST) {
             if (live[LIVE_FX_DST] >= 42 && live[LIVE_FX_DST] <= 127)
                 live[LIVE_FX_DST] = FX_DST_NONE;
@@ -1326,7 +1369,8 @@ void core_store_set(unsigned field, void *item, int index, unsigned value)
         else
             *p &= ~bit;
     }
-    write_through(scope, item, index);
+    if ((unsigned char *)item != adopting)    /* (0.20) not while ev_store_adopt sets it */
+        write_through(scope, item, index);
     irq_restore(sr);
 }
 
