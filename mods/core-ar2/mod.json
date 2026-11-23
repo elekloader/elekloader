@@ -202,7 +202,7 @@
   {"addr": "0x400aba7e", "stock": "4feffff448d7040c", "op": "jmp", "target": "core_scale_mode"},
   {"addr": "0x400ab096", "stock": "2f0a2f02246f000c", "op": "jmp", "target": "core_len_change"},
   {"addr": "0x40083dd8", "stock": "4feffff048d70c0c", "op": "jmp", "target": "core_sysex_site"},
-  {"addr": "0x400029e0", "stock": "4fefffe47201", "op": "jmp", "target": "core_usb_send_site"},
+  {"addr": "0x400029e0", "len": 6, "stock_sha256": "2dbe98a7e84431a2d98f4806f77e9e192e5a03db375e7a68b6512508b8d2e334", "op": "jmp", "target": "core_usb_send_site"},
   {"addr": "0x400a65f6", "stock": "4fefffe048d73c3c", "op": "jmp", "target": "core_kit_select"},
   {"addr": "0x4011f90a", "stock": "4fefffe848d73c0c", "op": "jmp", "target": "core_kit_push"},
   {"addr": "0x40034bd2", "stock": "72ff202f0008", "op": "jmp", "target": "core_slot_clear"},
