@@ -259,7 +259,13 @@ def test_core_a4mk2_sites():
         ('0x40103dda', 'keep2', '5c9c590e21b87701b529e5e723fb2005a885a9fb5cfd119dad6ea29ea98fc21a'),
         ('0x400ffe04', 'jmp', 'd55b13612d182ef0959ac6d738f07b263d1bd09059d1ad1d76fb7235a847d138'),
         ('0x400ffe50', 'jmp', 'c67d4c6618f227fb0f987c50bb947413f64b7356f40599c30a2533d390e5ce5a')]
-    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + len(drive) + len(seq_sites)         + len(moments_sites) + len(live_sites) + len(audio)
+    # and the USB-MIDI sender's entry (0.11, usbring.s): a jmp over its first two instructions
+    usb = [x for x in mod['sites'] if x.get('target') == 'core_usb_send_site']
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in usb] == [
+        ('0x40003578', 'jmp', '2dbe98a7e84431a2d98f4806f77e9e192e5a03db375e7a68b6512508b8d2e334')]
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'usbring.s')) as fh:
+        assert 'jmp     0x4000357e' in fh.read()
+    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + len(drive) + len(seq_sites)         + len(moments_sites) + len(live_sites) + len(audio) + len(usb)
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in midi] == \
         [('0x4009ff56', 'jmp', 'ba7573adceae0b4d98e7fca043628b41525f9bf3ec50663e051c89a57a79cb35'), ('0x400a0b62', 'jmp', '61767a52ec7cf722a3778309a6df16a655ee5b19ddbd6f1d0d24986a897cd064')]
@@ -292,7 +298,7 @@ def test_core_a4mk2_sites():
     locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in first} and x not in midi
              and x not in new06 and x not in std07 and x not in voice07 and x not in ui
              and x not in track08 and x not in drive and x not in seq_sites
-             and x not in moments_sites and x not in live_sites and x not in audio]
+             and x not in moments_sites and x not in live_sites and x not in audio and x not in usb]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6

@@ -245,9 +245,8 @@ What it does not do:
   pattern-track and pattern fields with them; core clears the target slot's.
 - The spare sound and FX words reach the engine through stock's parameter
   pushes, into the slot every unused parameter goes to; that nothing reads
-  that slot is inferred from the code, and on a unit (21 Oct 2026) a
-  pattern sounded the same by ear before and after store-check set
-  every sound's markers.
+  that slot is inferred from the code; on a unit (21 Oct 2026) a pattern
+  sounded the same with store-check's markers in every sound.
 
 ## Restarts
 
@@ -260,6 +259,10 @@ upgrade's restart") at 0x4007db24; on the A4 it is unchecked.
 image (0x4045c870) with stock's full repack job (0x40096d90) and writes it to
 the next +Drive copy (0x40106f04), so a restart after it keeps a mod's own
 fields, which no project event announces.
+
+## The USB-MIDI sender's wrap (0.11)
+
+`usbring.c`'s comments.
 
 ## Lockable parameters (0.5)
 
@@ -611,7 +614,7 @@ a sound pool or `ev_project_slot`.
 
 ## Checked so far
 
-The runs' logs are in their pull requests; what they established:
+Logs are in the runs' PRs:
 
 - **On a unit** (OS 1.56) [hw]: core with
   [hooks-check](../../examples/hooks-check-a4mk2) passed every event;
