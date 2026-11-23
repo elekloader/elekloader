@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { allocate, ccEntries, checkFlags, checkLock, fresh, knobs, machines, poolIds, codeEntries, dumps, fromImage, handleEntries, initEntries, layoutId, parseCcs, parseCvs, parseDecls, parseHandles, parseInits, parseLfos, parseLocks, parseRough, parseRoutes, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
+import { allocate, ccEntries, checkFlags, checkLock, fresh, knobs, machines, poolIds, codeEntries, dumps, fromImage, handleEntries, initEntries, layoutId, parseCcs, parseCvs, parseDecls, parseHandles, parseInits, parseLfos, parseOffsets, parseLocks, parseRough, parseRoutes, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
 
 const V = JSON.parse(readFileSync(new URL('./store-vectors.json', import.meta.url), 'utf8'))
 const DEV = 'analog-rytm-mk2'
@@ -136,6 +136,29 @@ test('inits: the same lockfiles, descriptors, table entries and notes', () => {
   }
 })
 
+test('pinned fields ("offset"): the same lockfiles, notes, symbols and IDs, and the same refusals', () => {
+  for (const [name, run] of Object.entries<any>(V.pin_runs)) {
+    let lock: Lock | null = null
+    run.steps.forEach(([decls, pins, core]: [Decl[], [string, string, number][], string | null], i: number) => {
+      const want = run.results[i]
+      if (want.error) {
+        assert.throws(() => allocate(lock, decls, DEV, core, [], [], [], [], null, pins), (e: Error) => e.message === want.error,
+          `${name} step ${i}`)
+        return
+      }
+      const [l, notes] = allocate(lock, decls, DEV, core, [], [], [], [], null, pins)
+      lock = l
+      assert.deepEqual(l, want.lock, `${name} step ${i}: lockfile`)
+      assert.deepEqual(notes, want.notes, `${name} step ${i}: notes`)
+      const [syms, tab] = symbols(l)
+      assert.deepEqual(Object.fromEntries(syms), want.symbols, `${name} step ${i}: symbols`)
+      assert.deepEqual(tab.map(hex), want.ids, `${name} step ${i}: IDs`)
+      assert.equal(layoutId(l), want.layout_id, `${name} step ${i}: layout ID`)
+      assert.equal(dumps(l), want.json, `${name} step ${i}: JSON`)
+    })
+  }
+})
+
 test('handles (core-ar2 0.11): core_handles as store.py lists it, with the lockfile and layout of the same fields', () => {
   for (const [name, c] of Object.entries<any>(V.handle_runs)) {
     const [l] = allocate(null, c.decls, DEV)
@@ -165,6 +188,7 @@ test('a mod\'s "storage": what it reads, and what it refuses', () => {
       assert.deepEqual(parseCvs(c.doc), c.cvs, name)
       assert.deepEqual(Object.fromEntries(parseInits(c.doc)), c.inits, name)
       assert.deepEqual(parseHandles(c.doc), c.handles, name)
+      assert.deepEqual(Object.fromEntries(parseOffsets(c.doc)), c.offsets, name)
     }
   }
 })

@@ -432,7 +432,9 @@ no `init`, otherwise); it is refused with a core that has no table
 lockable one or one with an `init` can take `"handle": true` (core-ar2
 0.11): it holds a mod's handle on something kept elsewhere, 0 for none;
 the mark is not in the lockfile or the layout ID, and it is refused with
-a core that has no table `core_handles`. Only a core
+a core that has no table `core_handles`. Any field can take `"offset": N`,
+its first bit in the scope: the allocator places it there and nowhere else
+(below). Only a core
 that imports `__store_gen` takes them (core-ar2 from 0.2, core-a4mk2); with another
 core a mod that declares storage is refused. A scope's room can depend on
 the core's version (a sound's: 24 bits with core-ar2 0.2, 56 from 0.3,
@@ -442,7 +444,11 @@ linker:
 - reads the build's lockfile, or starts one, and places every field
   (`elekloader/store.py`, `js/src/store.ts`: the same bytes from both)
   within what the build's core keeps; a field an earlier build placed past
-  that (with a newer core) repacks its scope;
+  that (with a newer core) repacks its scope. A field with an `offset` is
+  placed at that bit, and a repack packs the scope's other fields around it,
+  each at the lowest bits clear (in `mod`, `sym` order, then widest first
+  where that leaves one out); a pin on another field's bits, or on a freed
+  field's, repacks the scope, and docs/ADAPTING.md has the pins it refuses;
 - defines each `sym` as `scope << 28 | bits << 22 | slot << 16 | offset`,
   the offset in bits from the start of the scope's bytes, most significant
   bit first (no scope keeps 2^16 bits), and `slot` the field's place in
@@ -469,14 +475,16 @@ linker:
 The lockfile is JSON: `elekloader_store` (1, or 2 once a field has an
 `init`, which an older elekloader refuses), `device`, `id`, `ancestors`,
 `split` (`track`, `pattern`: bytes per item in the tagged store),
-`generation` and `next` (per scope: its generation and its first bit no
-field ever used), `fields` (`mod`, `sym`, `scope`, `offset`, `bits`, and
+`generation` and `next` (per scope: its generation and the bit after the
+last any field used; below it, only gaps a pinned field left were never
+used, and a new field may take them), `fields` (`mod`, `sym`, `scope`, `offset`, `bits`, and
 `init` when it is not 0) and
 `freed` (fields a build dropped: no other field is given their bits until
 the scope's generation is bumped, and a field back with the same `mod`,
 `sym`, `scope`, `bits` and `init` takes its old place again). A field keeps its
 place while its mod, `sym`, `scope`, `bits` and `init` stay the same: a
-field whose `init` changes is a new field, as its old bits mean other values. `id` is the
+field whose `init` changes is a new field, as its old bits mean other values. A pin is not in
+the lockfile: a field keeps its place while its place is its `offset`. `id` is the
 first 4 bytes of a SHA-256 of the layout (`store.layout_id`: the format, the
 device, `split`, `generation`, `next`, `fields` and `freed`, each field's
 `init` only where it has one, so older IDs stay; not the ID or

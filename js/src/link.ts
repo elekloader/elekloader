@@ -155,6 +155,7 @@ export class Mod2 implements AnyMod {
   routes: string[]
   cvs: string[]
   inits: Map<string, number>
+  offsets: Map<string, number>
   handles: string[]
   regions: Region[]
   names: string[]
@@ -326,6 +327,7 @@ export class Mod2 implements AnyMod {
       this.routes = store.parseRoutes(doc)
       this.cvs = store.parseCvs(doc)
       this.inits = store.parseInits(doc)
+      this.offsets = store.parseOffsets(doc)
       this.handles = store.parseHandles(doc)
     } catch (e) {
       if (e instanceof ModError) throw new ModError(`${name}: ${e.message}`)
@@ -1079,7 +1081,8 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       const users = [...new Set(handles.map(k => k[0]))].sort(cmp)
       throw new ModError(`${users.join(', ')} mark${users.length === 1 ? 's' : ''} storage fields as handles, which ${core.label()} does not keep (no table ${store.HANDLES_TABLE})`)
     }
-    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs, drive)
+    const pins = order.flatMap(m => [...m.offsets].map(([sym, v]) => [m.id, sym, v] as [string, string, number]))
+    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs, drive, pins)
     let ids: Uint8Array[]
     ;[storeSyms, ids] = store.symbols(newLock)
     if (!storeSyms.has(store.LOCK_DST)) storeSyms.set(store.LOCK_DST, 0)    // not placed: no LFO field

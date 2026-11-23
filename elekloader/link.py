@@ -346,6 +346,7 @@ class Mod2:
             self.routes = store.parse_routes(doc)
             self.cvs = store.parse_cvs(doc)
             self.inits = store.parse_inits(doc)
+            self.offsets = store.parse_offsets(doc)
             self.handles = store.parse_handles(doc)
         except ModError as e:
             raise ModError('%s: %s' % (name, e))
@@ -1118,7 +1119,9 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
             users = sorted({k[0] for k in handles})
             raise ModError('%s mark%s storage fields as handles, which %s does not keep (no table %s)'
                            % (', '.join(users), 's' if len(users) == 1 else '', core.label(), store.HANDLES_TABLE))
-        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs, drive)
+        pins = {(m.id, sym): v for m in order for sym, v in m.offsets.items()}
+        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs, drive,
+                                               pins)
         store_syms, ids = store.symbols(new_lock, dev.key)
         store_syms.setdefault(store.LOCK_DST, 0)    # not placed: no LFO field
         store_syms.setdefault(store.FX_LOCK_DST, 0)

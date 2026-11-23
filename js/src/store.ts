@@ -255,6 +255,13 @@ export function parseInits(m: Record<string, any>): Map<string, number> {
   return new Map(st.filter((f: unknown) => isDict(f) && f.init).map((f: Record<string, any>) => [f.sym, f.init]))
 }
 
+/** A mod document's "storage" -> {sym: offset} of its fields with an "offset" (their pinned first bit).
+ * store.parse_offsets. */
+export function parseOffsets(m: Record<string, any>): Map<string, number> {
+  const st = Object.hasOwn(m, 'storage') && Array.isArray(m.storage) ? m.storage : []
+  return new Map(st.filter((f: unknown) => isDict(f) && Object.hasOwn(f, 'offset')).map((f: Record<string, any>) => [f.sym, f.offset]))
+}
+
 /** A mod document's "storage" -> the syms of its fields declared "handle": true, in order. store.parse_handles. */
 export function parseHandles(m: Record<string, any>): string[] {
   const st = Object.hasOwn(m, 'storage') && Array.isArray(m.storage) ? m.storage : []
@@ -268,7 +275,7 @@ export function parseDecls(m: Record<string, any>): [string, string, number][] {
   const st = Object.hasOwn(m, 'storage') ? m.storage : []
   if (!Array.isArray(st)) throw new ModError('"storage" is a list of fields')
   for (const f of st) {
-    if (!isDict(f) || Object.keys(f).some(k => !['sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod', 'track', 'init', 'handle'].includes(k)))
+    if (!isDict(f) || Object.keys(f).some(k => !['sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod', 'track', 'init', 'handle', 'offset'].includes(k)))
       throw new ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
     for (const k of ['lock', 'cc', 'lfo', 'smooth', 'mod', 'handle'])
       if (Object.hasOwn(f, k) && typeof f[k] !== 'boolean')
@@ -300,6 +307,8 @@ export function parseDecls(m: Record<string, any>): [string, string, number][] {
       throw new ModError(`storage field ${sym}: bits ${repr(bits)} (1 to ${MAX_BITS})`)
     if (Object.hasOwn(f, 'init') && (!whole(f.init) || !(f.init >= 0 && f.init < 2 ** bits)))
       throw new ModError(`storage field ${sym}: init ${repr(f.init)} (0 to ${2 ** bits - 1}, what its ${bits} bits hold)`)
+    if (Object.hasOwn(f, 'offset') && (!whole(f.offset) || f.offset < 0))
+      throw new ModError(`storage field ${sym}: offset ${repr(f.offset)} (its first bit in the scope, 0 or more)`)
     if (seen.has(sym)) throw new ModError(`storage field ${sym} is declared twice`)
     seen.add(sym)
     out.push([sym, scope as string, bits])
@@ -705,15 +714,54 @@ const bump = (g: number) => (g >= 255 ? 1 : g + 1)
 const byModSym = (a: { mod: string; sym: string }, b: { mod: string; sym: string }) =>
   a.mod < b.mod ? -1 : a.mod > b.mod ? 1 : a.sym < b.sym ? -1 : a.sym > b.sym ? 1 : 0
 const ceilDiv = (a: number, b: number) => Math.floor((a + b - 1) / b)
+const bySpan = (a: [number, number], b: [number, number]) => a[0] - b[0] || a[1] - b[1]
+
+/** The lowest bit where `bits` bits lie clear of the spans taken and inside cap, or null. store._first_fit. */
+function firstFit(taken: [number, number][], bits: number, cap: number): number | null {
+  let at = 0
+  for (const [a, b] of [...taken].sort(bySpan)) {
+    if (at + bits <= a) break
+    at = Math.max(at, b)
+  }
+  return at + bits <= cap ? at : null
+}
+
+/** Place fields from bit 0: the pinned ones at their offsets, then the others in (mod id, symbol) order, each at the
+ * lowest bits clear of those placed; where that leaves one out, the others widest first. -> {mod id \0 sym: offset},
+ * or null where they don't fit in cap bits. store._pack. */
+function pack(fs: { mod: string; sym: string; bits: number }[], pins: Map<string, number>, cap: number): Map<string, number> | null {
+  const free = fs.filter(f => !pins.has(f.mod + '\0' + f.sym))
+  type F = { mod: string; sym: string; bits: number }
+  for (const order of [byModSym, (a: F, b: F) => b.bits - a.bits || byModSym(a, b)]) {
+    const out = new Map<string, number>(), taken: [number, number][] = []
+    for (const f of fs) {
+      const k = f.mod + '\0' + f.sym
+      if (pins.has(k)) {
+        out.set(k, pins.get(k)!)
+        taken.push([pins.get(k)!, pins.get(k)! + f.bits])
+      }
+    }
+    let ok = true
+    for (const f of [...free].sort(order)) {
+      const at = firstFit(taken, f.bits, cap)
+      if (at === null) { ok = false; break }
+      out.set(f.mod + '\0' + f.sym, at)
+      taken.push([at, at + f.bits])
+    }
+    if (ok) return out
+  }
+  return null
+}
 
 /** lock: a lockfile, or null for a new one; decls: [mod id, sym, scope, bits]; locks: [mod id, sym] of the lockable
  * fields; ccs: those of them with a CC; inits: [mod id, sym, init] of the fields with an init other than 0 (core-ar2
  * 0.10); cvs: those declared "track": "cv" (core-a4mk2 0.5); drive: what the unit's +Drive keeps (drivestore.reserve),
- * null to keep the lockfile's, false to drop it. -> [the new lockfile, notes]. The lockfile given is not changed.
+ * null to keep the lockfile's, false to drop it; pins: [mod id, sym, offset] of the fields declared with an "offset",
+ * placed at that bit and nowhere else. -> [the new lockfile, notes]. The lockfile given is not changed.
  * store.allocate. */
 export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core: string | null = null,
   locks: [string, string][] = [], ccs: [string, string][] = [], inits: [string, string, number][] = [],
-  cvs: [string, string][] = [], drive: Drive | false | null = null): [Lock, string[]] {
+  cvs: [string, string][] = [], drive: Drive | false | null = null, pins0: [string, string, number][] = []): [Lock, string[]] {
   const notes: string[] = []
   const initOf = new Map(inits.filter(([, , v]) => v).map(([m, sy, v]) => [m + '\0' + sy, v]))
   let lock: Lock
@@ -739,10 +787,26 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
     if ([...want.keys()].some(k => k.split('\0')[1] === sym)) throw new ModError(`the storage field ${sym} is declared by two mods`)
     want.set(keyOf(mid, sym), [scope, bits, initOf.get(keyOf(mid, sym)) ?? 0])
   }
+  const pins = new Map(pins0.map(([m, sy, v]) => [keyOf(m, sy), v] as [string, number]).filter(([k]) => want.has(k)))
+  const pinKeys = [...pins.keys()].map(k => { const [mod, sym] = k.split('\0'); return { mod, sym } }).sort(byModSym)
+    .map(({ mod, sym }) => keyOf(mod, sym))
+  // pinned fields of a scope must lie apart: nothing the allocator does can move one off the other
+  for (const s of SCOPES) {
+    const ps = pinKeys.filter(k => want.get(k)![0] === s).map(k => [pins.get(k)!, pins.get(k)! + want.get(k)![1], k] as [number, number, string])
+      .sort((a, b) => a[0] - b[0] || a[1] - b[1] || (a[2] < b[2] ? -1 : a[2] > b[2] ? 1 : 0))
+    for (let i = 1; i < ps.length; i++) {
+      const [a0, a1, ka] = ps[i - 1], [b0, b1, kb] = ps[i]
+      if (b0 < a1) {
+        const [ma, sa] = ka.split('\0'), [mb, sb] = kb.split('\0')
+        throw new ModError(`the storage fields ${sa} (${ma}, bits ${a0}..${a1 - 1}) and ${sb} (${mb}, bits ${b0}..${b1 - 1}) are both pinned on bits ${b0}..${Math.min(a1, b1) - 1} of ${s} storage`)
+      }
+    }
+  }
+  const pinOk = (f: { mod: string; sym: string; offset: number }) => !pins.has(keyOf(f.mod, f.sym)) || pins.get(keyOf(f.mod, f.sym)) === f.offset
   const kept: Field[] = [], gone: Field[] = []
   for (const f of lock.fields) {
     const w = want.get(keyOf(f.mod, f.sym))
-    if (w && w[0] === f.scope && w[1] === f.bits && w[2] === (f.init ?? 0)) kept.push(f)
+    if (w && w[0] === f.scope && w[1] === f.bits && w[2] === (f.init ?? 0) && pinOk(f)) kept.push(f)
     else gone.push(f)
   }
   const have = new Set(kept.map(f => keyOf(f.mod, f.sym)))
@@ -759,7 +823,7 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
   const back = new Set<string>()
   for (const f of added) {
     const same = lock.freed.filter(g => g.mod === f.mod && g.sym === f.sym && g.scope === f.scope && g.bits === f.bits
-      && (g.init ?? 0) === (f.init ?? 0))
+      && (g.init ?? 0) === (f.init ?? 0) && pinOk(g))
     if (same.length) {
       const g = same[same.length - 1]
       f.offset = g.offset
@@ -777,15 +841,21 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
     repacked.add(scope)
     lock.generation[scope] = bump(lock.generation[scope])
     lock.freed = lock.freed.filter(f => f.scope !== scope)
-    let at = 0
-    for (const f of fields.filter(f => f.scope === scope).sort(byModSym)) {
-      f.offset = at
-      at += f.bits
-    }
-    lock.next[scope] = at
+    const fs = fields.filter(f => f.scope === scope)
+    const at = pack(fs, pins, cap[scope])   // without pins, need() checked it fits
+    if (at === null)
+      throw new ModError(`the mods' ${scope} fields do not fit in the ${cap[scope]} bits of ${scope} storage the ${devKey} has, their pinned fields at their offsets`)
+    for (const f of fs) f.offset = at.get(keyOf(f.mod, f.sym))!
+    lock.next[scope] = Math.max(0, ...fs.map(f => f.offset + f.bits))
     notes.push(`${scope} storage repacked (generation ${lock.generation[scope]}): older projects and sounds load it at defaults`)
   }
-  const need = (scope: string) => fields.filter(f => f.scope === scope).reduce((n, f) => n + f.bits, 0)
+  // the bits the scope's fields take packed: their sum, or with pins where the packing ends
+  const need = (scope: string) => {
+    const fs = fields.filter(f => f.scope === scope)
+    if (!fs.some(f => pins.has(keyOf(f.mod, f.sym)))) return fs.reduce((n, f) => n + f.bits, 0)
+    const at = pack(fs, pins, 2 ** 30)!
+    return Math.max(0, ...fs.map(f => at.get(keyOf(f.mod, f.sym))! + f.bits))
+  }
   const pending = (scope: string) => added.filter(f => f.scope === scope && f.offset === null)
 
   const sp = spec(devKey)
@@ -806,10 +876,20 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
     notes.push(`the tagged store now keeps ${split.track} B per pattern track and ${split.pattern} B per pattern`)
     for (const k of moved) repack(k)
   }
-  for (const s of SCOPES) {
-    if (need(s) > cap[s]) {
+  for (const k of pinKeys) {
+    const [s, bits] = want.get(k)!
+    const at = pins.get(k)!
+    if (at + bits > cap[s]) {
       const more = capacity(devKey, lock.split)[s]
-      throw new ModError(`the mods need ${need(s)} bits of ${s} storage; the ${devKey} has ${cap[s]}${more > cap[s] ? ` with core ${core} (${more} with core ${roomCore(devKey, lock.split, s, core as string)})` : ''}`)
+      const [m, sy] = k.split('\0')
+      throw new ModError(`${m}: storage field ${sy}: offset ${at} with ${bits} bits ends past the ${cap[s]} bits of ${s} storage the ${devKey} keeps for mods${more > cap[s] && at + bits <= more ? ` with core ${core} (${more} with core ${roomCore(devKey, lock.split, s, core as string)})` : ''}`)
+    }
+  }
+  for (const s of SCOPES) {
+    const sum = fields.filter(f => f.scope === s).reduce((n, f) => n + f.bits, 0)
+    if (sum > cap[s]) {
+      const more = capacity(devKey, lock.split)[s]
+      throw new ModError(`the mods need ${sum} bits of ${s} storage; the ${devKey} has ${cap[s]}${more > cap[s] ? ` with core ${core} (${more} with core ${roomCore(devKey, lock.split, s, core as string)})` : ''}`)
     }
     if (fields.some(f => f.scope === s && f.offset !== null && f.offset + f.bits > cap[s])) {
       repack(s)                   // placed by a newer core, past what this one keeps
@@ -817,17 +897,36 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
     }
     const pend = pending(s)
     if (!pend.length) continue
-    if (lock.next[s] + pend.reduce((a, f) => a + f.bits, 0) <= cap[s]) {
-      for (const f of pend) {
-        f.offset = lock.next[s]
-        lock.next[s] += f.bits
+    // bits a field holds or held (a freed one's values are still there) are taken; the gaps pinned fields leave below
+    // the used bits never held anything, so a new field may take them
+    const taken: [number, number][] = [...fields.filter(f => f.scope === s && f.offset !== null), ...lock.freed.filter(f => f.scope === s)]
+      .map(f => [f.offset, f.offset + f.bits] as [number, number]).sort(bySpan)
+    const placed: [typeof pend[number], number][] = []
+    let ok = true
+    for (const f of [...pend].sort((a, b) => Number(!pins.has(keyOf(a.mod, a.sym))) - Number(!pins.has(keyOf(b.mod, b.sym))))) {
+      let at: number | null
+      if (pins.has(keyOf(f.mod, f.sym))) {
+        at = pins.get(keyOf(f.mod, f.sym))!
+        const a0 = at
+        if (taken.some(([a, b]) => a0 < b && a < a0 + f.bits)) { ok = false; break }   // the scope is packed again
+      } else {
+        at = firstFit(taken, f.bits, cap[s])
+        if (at === null) { ok = false; break }
+      }
+      placed.push([f, at])
+      taken.push([at, at + f.bits])
+    }
+    if (ok) {
+      for (const [f, at] of placed) {
+        f.offset = at
+        lock.next[s] = Math.max(lock.next[s], at + f.bits)
       }
     } else repack(s)
   }
   for (const f of gone) {
     const w = want.get(keyOf(f.mod, f.sym))
     if (w || repacked.has(f.scope))
-      notes.push(`${f.mod} ${f.sym} (${f.scope}): ${!w ? 'no longer in the build' : w[0] === f.scope && w[1] === f.bits ? 'changed its init' : 'changed size'}, its data is dropped`)
+      notes.push(`${f.mod} ${f.sym} (${f.scope}): ${!w ? 'no longer in the build' : w[0] === f.scope && w[1] === f.bits && w[2] === (f.init ?? 0) ? 'moved to its offset' : w[0] === f.scope && w[1] === f.bits ? 'changed its init' : 'changed size'}, its data is dropped`)
     else notes.push(`${f.mod} ${f.sym} (${f.scope}): no longer in the build; its bits are kept, so it gets its values back if it returns`)
   }
   for (const f of added) {

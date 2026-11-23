@@ -181,6 +181,13 @@ def main():
         check('a CV field is a format refusal, in C and twin',
               (sm['status'][0]['code'], r.choices[0].code) == (drive.CODE['format'],) * 2
               and not compare(F, sm, ram, st, r), sm['status'])
+        # a pinned field ("offset"): the boot allocator places +Drive fields itself, so pass 1 refuses it
+        pinned = storage_mod(B, {'id': 'pin', 'storage': [{'sym': 'pn1', 'scope': 'sound', 'bits': 4, 'offset': 40}]})
+        sm, ram, st = boot(exe, F, [pinned, mods['lfo']], None, work)
+        r = twin(F, [pinned, mods['lfo']], None)
+        check('a pinned field is a format refusal, in C and twin',
+              (sm['status'][0]['code'], r.choices[0].code) == (drive.CODE['format'],) * 2
+              and not compare(F, sm, ram, st, r), sm['status'])
         # two mods with one storage symbol: an export clash
         clash = storage_mod(B, {'id': 'zz', 'storage': [{'sym': 'lr_a', 'scope': 'global', 'bits': 1}]})
         sm, ram, st = boot(exe, F, [mods['lfo'], clash], None, work)

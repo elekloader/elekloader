@@ -1935,6 +1935,35 @@ itself can't give it back: it never sends its OS out. On a unit with the
 Drive Loader, `--drive-store` keeps the lock codes and CCs its +Drive mods
 hold free (docs/DRIVE.md, "+Drive storage").
 
+**A field on fixed bits.** A mod moving data an older build of its own
+kept in these bytes can pin a field to the bits it used, so a project
+saved by either build reads the same, with `offset`, the field's first bit
+in its scope (bit 0 is the top bit of the scope's first byte; a field is
+big-endian):
+
+```json
+"storage": [{"sym": "sc_arp", "scope": "sound", "bits": 10, "offset": 30},
+            {"sym": "sc_tag", "scope": "sound", "bits": 14, "offset": 42}]
+```
+
+The allocator places a pinned field at its offset in every lockfile, the
+first build's too, and other mods' fields fill the bits around it: a repack
+puts the pinned fields back where they ask and packs the rest around them.
+Pins are for that, not for choosing places: they cost room another mod
+could use. Leave `init` out of a field that must read an older build's
+bits, as core keeps the value XOR the init. The linker refuses:
+
+| what | message |
+|---|---|
+| two pinned fields on one bit | `the storage fields A (m, bits 30..39) and B (n, bits 35..48) are both pinned on bits 35..39 of sound storage` |
+| a pin past the scope's room with the build's core (core's own bytes lie past it; the table above gives each scope's room) | `m: storage field A: offset 30 with 10 bits ends past the 24 bits of sound storage the analog-rytm-mk2 keeps for mods with core 0.2 (56 with core 0.3)` |
+| fields that don't fit around the pins | `the mods' sound fields do not fit in the 56 bits of sound storage the analog-rytm-mk2 has, their pinned fields at their offsets` |
+
+A pin on bits another field holds, or a freed field kept for its mod,
+repacks the scope (its generation goes up). A field whose `offset` changes
+moves there, and its data is dropped. +Drive mods can't pin fields: the
+Drive Loader places them itself, and refuses `offset` as a format error.
+
 **What is checked.** Sounds and kits carry the layout ID and their
 generation in their own spare bytes and are checked on every load. Pattern
 tracks, patterns, the project and globals are checked against the header of
