@@ -12,7 +12,11 @@
  * Every key and turn prints "TAKE key=... ret=n" when the page took it (n 1) or not (n 0).
  * argv[2..] are the files in /mods ("name:size", a folder as "dir/"; "dir/x.elemod:size" inside),
  * and /mods/.store's made-up content: "@park=ID" a mod with parked data, "@store=ID" one with
- * live data only. */
+ * live data only. From 0.2: "@active=PATH" a line of /mods/active, "@boot=PATH" the last boot
+ * loaded PATH, "@inuse=PATH" the Drive payload table keeps its payload (skip.h dl_payload_held),
+ * "@lost=PATH" its payload found the table full, "@update=PATH" PATH.new waits for the next boot;
+ * and the script's c (each list row's right-hand column, "C" line), w (DELETE's refusal of each
+ * file, "W" line), i (INFO with its payload line on each build row, "I" lines). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -171,10 +175,30 @@ int dl_list_dir(const char *rel, struct dl_ent *out, int max)
     return out ? (k < max ? k : max) : k;
 }
 
+/* the Drive payload table's answers and the pending updates, by path below DL_DIR */
+static char inuse[8][DL_NAME_MAX + 1], lostp[8][DL_NAME_MAX + 1], updates[8][DL_NAME_MAX + 1];
+static int ninuse, nlost, nupdates;
+static int named(char (*v)[DL_NAME_MAX + 1], int n, const char *rel)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        if (!strcmp(v[i], rel))
+            return 1;
+    return 0;
+}
+int dl_payload_held(const char *path, int dir) { return !dir && named(inuse, ninuse, rel_of(path)); }
+int dl_payload_lost_of(const char *path) { return named(lostp, nlost, rel_of(path)); }
+
 int dl_fs_file_size(const char *path)
 {
     const char *r = rel_of(path);
     struct ent *e;
+    size_t k = strlen(r);
+    if (k > 4 && !strcmp(r + k - 4, DL_NEW)) {
+        char b[DL_NAME_MAX + 1];
+        snprintf(b, sizeof b, "%.*s", (int)k - 4, r);
+        return named(updates, nupdates, b) ? 100 : -1;
+    }
     if (!strcmp(r, "active"))
         return active_len;
     if (!strcmp(r, "active.tmp"))
@@ -373,6 +397,11 @@ static void ticks_run(int n)
     }
 }
 
+static struct dl_status boot_st[8];
+static struct dl_choice boot_ch[8];
+static char boot_det[8][32];
+static int nboot;
+
 int main(int argc, char **argv)
 {
     const char *s;
@@ -387,6 +416,35 @@ int main(int argc, char **argv)
         }
         if (!strncmp(argv[i], "@store=", 7) && nlive < 8) {
             snprintf(live[nlive++], sizeof live[0], "%s", argv[i] + 7);
+            continue;
+        }
+        if (!strncmp(argv[i], "@active=", 8)) {
+            active_len = (active_len < 0 ? 0 : active_len)
+                       + sprintf(active + (active_len < 0 ? 0 : active_len), "%s 12345678\n", argv[i] + 8);
+            continue;
+        }
+        if (!strncmp(argv[i], "@boot=", 6) && nboot < 8) {
+            memset(&boot_st[nboot], 0, sizeof boot_st[nboot]);
+            snprintf(boot_ch[nboot].name, sizeof boot_ch[nboot].name, "%s", argv[i] + 6);
+            boot_st[nboot].state = DL_ST_LOADED;
+            id_of(boot_st[nboot].id, argv[i] + 6);
+            nboot++;
+            dl_status = boot_st;
+            dl_boot_choice = boot_ch;
+            dl_detail = boot_det;
+            dl_status_n = (u32)nboot;
+            continue;
+        }
+        if (!strncmp(argv[i], "@inuse=", 7) && ninuse < 8) {
+            snprintf(inuse[ninuse++], sizeof inuse[0], "%s", argv[i] + 7);
+            continue;
+        }
+        if (!strncmp(argv[i], "@lost=", 6) && nlost < 8) {
+            snprintf(lostp[nlost++], sizeof lostp[0], "%s", argv[i] + 6);
+            continue;
+        }
+        if (!strncmp(argv[i], "@update=", 8) && nupdates < 8) {
+            snprintf(updates[nupdates++], sizeof updates[0], "%s", argv[i] + 8);
             continue;
         }
         e = &ents[nents++];
@@ -415,6 +473,43 @@ int main(int argc, char **argv)
         case 't': ticks_run(20); break;
         case 'T': ticks_run(200); break;
         case 'f': frame(); break;
+        case 'c': {                      /* each row of this list: its label's file and column */
+            char t[16];
+            int j;
+            printf("C");
+            for (j = 0; j < list_n(); j++) {
+                int k = file_k(j);
+                row_column(j, t, t + sizeof t);
+                printf("%c%s=%s", j ? '|' : ' ', k >= 0 ? files[k].name : "-", t);
+            }
+            printf("\n");
+            break;
+        }
+        case 'w': {                      /* DELETE's refusal of each file alone */
+            int j;
+            const char *why;
+            printf("W");
+            for (j = 0; j < nfiles; j++) {
+                why = delete_why(&j, 1);
+                printf("%c%s=%s", j ? '|' : ' ', files[j].name, why ? why : "ok");
+            }
+            printf("\n");
+            break;
+        }
+        case 'i': {                      /* INFO on each build row, with its payload line */
+            static char t[192];
+            int j;
+            char *c;
+            for (j = 0; j < nbuild; j++) {
+                info_text(&files[build_rows[j]], t, t + sizeof t);
+                pay_info(&files[build_rows[j]], t, t + sizeof t);
+                for (c = t; *c; c++)
+                    if (*c == '\n')
+                        *c = '~';
+                printf("I %s\n", t);
+            }
+            break;
+        }
         case 's': {
             char b[sizeof box], a[8192];
             int j, k = 0;

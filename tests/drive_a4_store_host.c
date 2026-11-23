@@ -225,6 +225,38 @@ int main(void)
         CHECK(ok && m > 10, "files' runs are apart, aligned and inside the data range");
     }
 
+    /* the boot's update swap (0.2, ds_swap): the old name takes the .new's run in one write */
+    {
+        unsigned sn, zn, so, zo, l0, t0, l1, t1;
+        CHECK(put(DL_DIR "/sw.elemod", 5000, 21, 512) == 0 && put(DL_DIR "/sw.elemod.new", 9000, 22, 512) == 0,
+              "a file and its .new");
+        ds_file(DL_DIR "/sw.elemod.new", &sn, &zn);
+        ds_room(&l0, &t0);
+        CHECK(ds_swap(DL_DIR "/sw.elemod", DL_DIR "/sw.elemod.new") == 0
+              && same_as(DL_DIR "/sw.elemod", 9000, 22, 512) && dl_fs_file_size(DL_DIR "/sw.elemod.new") < 0,
+              "ds_swap puts the .new in its place and drops the .new");
+        ds_file(DL_DIR "/sw.elemod", &so, &zo);
+        ds_room(&l1, &t1);
+        CHECK(so == sn && zo == zn && t1 >= t0 + 5000, "... on the .new's run, the old run free");
+        remount();
+        CHECK(same_as(DL_DIR "/sw.elemod", 9000, 22, 512) && dl_fs_file_size(DL_DIR "/sw.elemod.new") < 0,
+              "... on the card");
+        CHECK(ds_swap(DL_DIR "/sw.elemod", DL_DIR "/sw.elemod.new") != 0, "no .new: refused");
+        CHECK(put(DL_DIR "/sw2.elemod.new", 700, 23, 100) == 0
+              && ds_swap(DL_DIR "/sw2.elemod", DL_DIR "/sw2.elemod.new") == 0
+              && same_as(DL_DIR "/sw2.elemod", 700, 23, 100) && dl_fs_file_size(DL_DIR "/sw2.elemod.new") < 0,
+              "no old file: the .new is renamed");
+        CHECK(put(DL_DIR "/sw.elemod.new", 3000, 24, 512) == 0, "another .new");
+        fail_at = writes;                 /* the directory's first write fails */
+        CHECK(ds_swap(DL_DIR "/sw.elemod", DL_DIR "/sw.elemod.new") != 0, "a failed write: refused");
+        fail_at = -1;
+        CHECK(same_as(DL_DIR "/sw.elemod", 9000, 22, 512) && same_as(DL_DIR "/sw.elemod.new", 3000, 24, 512),
+              "... both as they were");
+        remount();
+        CHECK(same_as(DL_DIR "/sw.elemod", 9000, 22, 512) && same_as(DL_DIR "/sw.elemod.new", 3000, 24, 512),
+              "... on the card too");
+    }
+
     /* FORMAT +DRIVE */
     ds_format();
     CHECK(dl_list_dir("", 0, 0) == 0 && dl_fs_file_size(DL_DIR "/f0.elemod") < 0, "format empties the store");

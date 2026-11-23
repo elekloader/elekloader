@@ -114,7 +114,11 @@ the boot stages each file without the payload's hex (`skip.c`, through `dl_read_
 the linker places nothing for it, and the descriptor's `F_PAYLOAD_SKIP` (`drive_payload_skip` in
 `route.s`) tells host tools to stage, check and CRC files the same way. After the link `payload.c`
 keeps the loaded mods' payloads in `drive_payloads`, and sidecar-core reads one with
-`dl_payload_read` from its own task when the Pi is ready. A relocation into `.payload` is refused, so
+`dl_payload_read` from its own task when the Pi is ready, through the versioned API
+(`analog-four-mk2/drivepay.h`, `drive_payload_abi` in `route.s`; 0.2). A loaded mod's file whose
+payload the table keeps is in use until the next boot, and an upload over it waits as `<name>.new`,
+which the boot swaps in with one directory write (`ds_swap` in `store.c`; docs/DRIVE.md, "Payloads on
+the +Drive"; tests/test_drive_a4_payload.py). A relocation into `.payload` is refused, so
 a mod that addresses its payload from code (sidecar-codetest's `abs32`) loads only flashed. Uploads
 were never bounded by a stage here: `/mods` takes a file up to the largest free run.
 
@@ -182,7 +186,7 @@ kind 4. `F_KNOBS` (`drive_knobs` in `route.s`) tells host tools (tests/test_driv
 | `dlink.c` | storage fields as the A4 takes them: `"track": "cv"`, `"mod"` on a kit field, no `"lfo"`; `abs16`; std1; +Drive collections with `DL_COLLECTIONS`; knob ids with `DL_KNOBS`; the payload skip is built only with `DL_PAYLOAD_SKIP` | the linker |
 | `dstore.c`, `dstore.h` | lock codes per track kind (0x70..0x7f each), the A4's CC pool, `.store` formats 2 and 3 (tests/test_drive_a4_dstore_host.py) | +Drive storage |
 | `dl.h`, `flush.s` | comments, `DL_PAYLOAD_SKIP` and `DL_COLLECTIONS` | the linker's interface; the site writes and cache push (the A4 sets the Rytm's CACR and ACR0) |
-| `skip.c`, `skip.h`, `payload.c` | new | payload skip while staging (tests/test_drive_payload_skip.py), the Drive payload table and its reader |
+| `skip.c`, `skip.h`, `payload.c` | `payload.c` checks the file's sector too | payload skip while staging (tests/test_drive_payload_skip.py), the Drive payload table, its API and reader (tests/test_drive_a4_payload.py) |
 | `page.c`, `page.s`, `clip.inc` | model kept, view new (std1; stock addresses only for the row's label and icon, `page.s`) | the MODS page ([PAGE.md](PAGE.md); tests/test_drive_a4_page.py) |
 
 ## Still to prove
@@ -190,7 +194,8 @@ kind 4. `F_KNOBS` (`drive_knobs` in `route.s`) tells host tools (tests/test_driv
 In the emulator (elkbench on the PC), before any unit run: the route's list item layout (0x14 bytes
 on the Rytm) and a whole upload, read, Clear, mkdir and move through kind-2 entries; the boot link
 of a test set; the crash guard; FORMAT +DRIVE emptying the store; a set with a payload mod (the
-table filled, `dl_payload_read` against the file's bytes). On a unit: the `60 00` mode
+table filled, `dl_payload_read` against the file's bytes; an upload over a file in use kept as
+`.new` and swapped in at the next boot). On a unit: the `60 00` mode
 switch, the card's own sector count, boot time with a full area.
 
 ## Build
@@ -198,7 +203,7 @@ switch, the card's own sector count, boot time with a full area.
 ```bash
 python -m elekloader.sdk.build mods/core-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build mods/drive-loader-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
-python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx --mod core-0.8.elemod --mod drive-loader-0.1.elemod --out test.syx --version XXXX
+python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx --mod core-0.8.elemod --mod drive-loader-0.2.elemod --out test.syx --version XXXX
 ```
 
 `-DDL_TEST_DIR` keeps the mods in `/~T MODS` for a unit run under the test rules; `-DDL_TEST_ARMED`

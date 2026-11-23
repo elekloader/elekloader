@@ -57,11 +57,13 @@ As the Rytm's page, with these differences:
 - **Rows.** The file list: `..` (below `/mods`), the folders with `(D)` or `(n)` ticked
   below, then the `.elemod` files by file name without `.elemod`, their size in KB once the
   background check has read them, `!` for a file pass 1 refuses. The build list: each mod's id
-  with `KEEP`, `ADD`, `DROP` or `!`, and `*` before it when the mod has saved data (below),
+  with `KEEP`, `ADD`, `DROP` or `!` (from 0.2 `UPDATE` or `LOST` for a mod in use, docs/DRIVE.md,
+  "Payloads on the +Drive"; `UPDATE` in the file list too), and `*` before it when the mod has saved data (below),
   then the parked mods not in the build with `*` alone. Every label is clipped from the left
   behind `<` to the room before its right-hand column (`clip.inc`, `core_text_width`).
 - **Action panel** (x 62..127): SELECT ALL, DESELECT ALL, LOAD TO BUILD (UPDATE BUILD), CLEAR
-  BUILD, DELETE (DELETE DIR on a folder with nothing ticked here); in the build list SELECT ALL,
+  BUILD, DELETE (DELETE DIR on a folder with nothing ticked here; `IN USE: RESTART FIRST` for a
+  file in use); in the build list SELECT ALL,
   DESELECT ALL, UNLOAD, INFO, FORGET DATA, and APPLY & RESTART while the saved set differs
   from the running one (below). The panel stays open after its action, as stock's.
 - **Left panel** (x 0..55): VIEW BUILD in the file list, VIEW +DRIVE in the build list; YES
@@ -92,7 +94,8 @@ As the Rytm's page, with these differences:
 `/mods/.store` is read when the page opens and after FORGET DATA (`park.h`). A build row whose mod
 it keeps anything for (fields, lock codes or CCs, live or parked: `dl_store_has`) gets a `*`. The `*` has a column of its own, its
 right edge `STATE_GAP` left of the widest state word, so every row's `*` lines up whatever word
-follows it: `* KEEP`, `* ADD`, `* DROP`, `* !`.
+follows it: `* KEEP`, `* ADD`, `* DROP`, `* !`, `* LOST`; while a row reads `UPDATE`, the wider
+word, the column moves left of it.
 
 The parked mods (fields no chosen mod declares) that have no build row follow the
 build's rows, with the `*` alone in that column. A parked mod back in the build has no second
