@@ -68,6 +68,9 @@ struct file {                            /* a file the page knows: ticked, saved
     u8 boot_code;
     u16 boot_arg;                        /* the boot record's number (NO ROOM's KB, FULL's spare) */
     u8 checked;                          /* read and checked (crc, id, ver, file_code known) */
+    u8 held;                             /* loaded with its payload in the table: in use (skip.h) */
+    u8 pending;                          /* ... with an update waiting as <name>.new */
+    u8 lost;                             /* loaded, its payload lost to a full table */
     u8 big;                              /* larger than the live stage but not the +Drive area:
                                           * read for its size and CRC, and its pass 1 and layout
                                           * left to the next boot (STAGE.md) */
@@ -441,6 +444,25 @@ static int save_active(void)
     return r;
 }
 
+/* a loaded file's payload marks (skip.h), under dl_lock: in use, lost, and an update pending for
+ * one in use (one size read each, for the files in use alone, never for every listed file) */
+static void pay_marks(struct file *r)
+{
+    char path[DL_PATH_MAX + 4];
+    u32 k;
+    r->held = r->lost = r->pending = 0;
+    if (r->boot != DL_ST_LOADED)
+        return;
+    path_of(path, r->name);
+    r->held = (u8)dl_payload_held(path, 0);
+    r->lost = (u8)dl_payload_lost_of(path);
+    if (!r->held)
+        return;
+    k = dl_strlen(path);
+    copy_str(path + k, DL_NEW, sizeof DL_NEW);
+    r->pending = dl_fs_file_size(path) >= 0;
+}
+
 /* the boot linker's record of a file: the line of the boot's set that named its path */
 static void boot_record(struct file *r)
 {
@@ -584,6 +606,8 @@ static int read_folder(void)
         lrows[nlrows].kind = R_FILE;
         lrows[nlrows++].f = f;
     }
+    for (i = 0; i < nfiles; i++)         /* an upload over USB may have left an update since */
+        pay_marks(&files[i]);
     dl_unlock();
     dl_free(ents);
     count_sel();
@@ -1114,7 +1138,8 @@ static void publish_check(void)
  * buffer included). Folders and "..": "(D)", as SAMPLES; a folder with n ticked files below it
  * "(n)" in its place (decided 2026-11-09). Build: KEEP
  * (loaded now, stays), ADD (loads at the next boot), DROP (loaded now, gone after the next boot),
- * "!" (the last boot refused it). */
+ * "!" (the last boot refused it). From 0.12 a loaded mod in use with an upload waiting for the next
+ * boot reads UPDATE in either list, and one whose payload found the table full LOST in the build. */
 /* list row i's right-hand column into t -> 1 when the row also gets the saved data mark "*"
  * (.store keeps data of the mod, live or parked), drawn in a column of its own at star_x; a
  * parked mod not on the build has the "*" alone (decided 2026-11-18, the A4's, in place of PARK) */
@@ -1133,6 +1158,8 @@ static int row_column(int i, char *t, char *end)
     } else if (r = &files[k], mode == M_DRIVE) {
         if (r->file_code)
             cat(t, end, "!");
+        else if (r->pending)             /* in use, its upload waiting for the next boot */
+            cat(t, end, "UPDATE");
         else if (r->checked)             /* the size once the check has read the file */
             cat(num(t, end, (r->size + 1023) / 1024), end, "KB");
     } else {
@@ -1141,8 +1168,10 @@ static int row_column(int i, char *t, char *end)
             cat(t, end, "!");
         else if (!r->on)
             cat(t, end, "DROP");
-        else
-            cat(t, end, r->boot == DL_ST_LOADED ? "KEEP" : "ADD");
+        else if (r->boot != DL_ST_LOADED)
+            cat(t, end, "ADD");
+        else                             /* a lost payload, then an update, before KEEP */
+            cat(t, end, r->lost ? "LOST" : r->pending ? "UPDATE" : "KEEP");
     }
     return star;
 }
@@ -1688,15 +1717,31 @@ static void do_unload(void)
 
 /* DELETE: the open folder's ticked files, none of them in the saved build (as SAMPLES, whose
  * DELETE takes the ticked files of the folder it shows) */
+extern volatile unsigned dl_fs_gen;
+
+/* DELETE's refusal of the files s[0..n-1], or 0: one in the saved build (unload it first), or one
+ * in use (running with its payload in the table, skip.h: deletable after the next boot) */
+static const char *delete_why(const int *s, int n)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        if (files[s[i]].on)
+            return "MOD IN USE";
+    for (i = 0; i < n; i++)
+        if (files[s[i]].held)
+            return "IN USE: RESTART FIRST";
+    return 0;
+}
+
 static void do_delete(void)
 {
     char path[DL_PATH_MAX];
     int n = ticked(sel, 1), i, k, done = 0;
-    for (i = 0; i < n; i++)
-        if (files[sel[i]].on) {
-            show_box("MOD IN USE");          /* unload it first */
-            return;
-        }
+    const char *why = delete_why(sel, n);
+    if (why) {
+        show_box(why);
+        return;
+    }
     if (!dl_staging_take_idle(ticks, READ_STALL)) {   /* no read of a file open */
         show_box("BUSY: TRY AGAIN");
         return;
@@ -1709,6 +1754,7 @@ static void do_delete(void)
             files[sel[i]].pick = 0;      /* gone: read_folder drops it */
         }
     }
+    dl_fs_gen++;                         /* as the route's changes: a reader of the files sees it */
     dl_unlock();
     dl_staging_give();
     k = read_folder();
@@ -1732,6 +1778,8 @@ static void do_rmdir(void)
     path_of(path, p);
     dl_lock();
     r = dl_fs_rmdir(path);
+    if (!r)
+        dl_fs_gen++;
     dl_unlock();
     if (r) {
         show_box("ERROR (NOT EMPTY?)");
@@ -1847,11 +1895,20 @@ static void info_text(const struct file *r, char *out, char *end)
     *at = 0;
 }
 
+/* INFO's last line for a loaded mod's payload (0.12): lost to a full table, or an update waiting */
+static void pay_info(const struct file *r, char *out, char *end)
+{
+    if (r->lost)
+        cat(out + dl_strlen(out), end, "\nPAYLOAD LOST: TABLE FULL");
+    else if (r->pending)
+        cat(out + dl_strlen(out), end, "\nUPDATE AT NEXT RESTART");
+}
+
 /* INFO in the build list: the cursor's mod's folder and file name, in a box closed with NO; on a
  * parked mod, its parked data */
 static void do_info(void)
 {
-    static char info[160];
+    static char info[192];
     int row = cursor_row();
     if (park_k(row) >= 0) {
         park_text(&parks[park_k(row)], info, info + sizeof info);
@@ -1863,6 +1920,7 @@ static void do_info(void)
         return;
     }
     info_text(&files[build_rows[row]], info, info + sizeof info);
+    pay_info(&files[build_rows[row]], info, info + sizeof info);
     show_box(info);
 }
 
@@ -2177,7 +2235,6 @@ int dl_page_shown(void)
 
 /* The route's changes over USB (route.c): dl_fs_gen counts them, and a move leaves its FROM and TO
  * until the page takes them (dl_move_seen). */
-extern volatile unsigned dl_fs_gen;
 extern volatile int dl_move_seen;
 extern char dl_move_from[], dl_move_to[];
 static unsigned seen_gen;

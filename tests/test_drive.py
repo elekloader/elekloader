@@ -1129,6 +1129,74 @@ def test_an_upload_the_unit_did_not_save_is_an_error_not_uploaded():
     assert datarpc.last_of(None) is None
 
 
+class InUseUnit(NotingUnit):
+    """A NotingUnit with drive-loader-ar2 0.12's files in use (a running mod's file whose payload the
+    unit keeps): .status lists them as `payload` lines, a Clear of one is refused (its entry has no
+    P_CLEAR), and an upload over one is kept as <name>.new with the note `pending restart: <name>`."""
+
+    def __init__(self, build_blk, held=()):
+        super().__init__(build_blk)
+        self.held = set(held)
+
+    def note(self, text):
+        super().note(text)
+        self.files['.status'] += b''.join(b'payload 0000abcd 4 /mods/%s\n' % n.encode('latin-1')
+                                          for n in sorted(getattr(self, 'held', ())))
+
+    def send(self, raw):
+        msg = datarpc.unframe(raw)
+        if msg[4] == datarpc.CLEAR and self.rel(msg[5:]) in self.held:
+            seq = struct.unpack_from('>H', msg)[0]
+            self.out.append(datarpc.frame(struct.pack('>HH', 0, seq) + bytes((msg[4] | 0x80, 0))))
+            return
+        if msg[4] == datarpc.WCLOSE:
+            j = struct.unpack_from('>I', msg, 5)[0]
+            name = self.jobs[j][0]
+            if name in self.held:
+                old = self.files[name]
+                super().send(raw)
+                self.files[name + '.new'], self.files[name] = self.files[name], old
+                self.note(('pending restart: %s' % name)[:63])
+                return
+        super().send(raw)
+
+
+def test_a_file_in_use_takes_its_upload_at_the_next_boot_and_refuses_rm():
+    """drive-loader-ar2 0.12: `mods put` over a file in use says the upload replaces the running file
+    at the next restart; `mods active` names that update's CRC, the file the next boot links; `mods
+    rm` of one is the error that says to restart. A file not in use is put and removed as before."""
+    import argparse
+    with Bench('analog-rytm-mk2') as B:
+        out, b = built(B)
+        blk = out.image[desc.find(out.image)[0]:]
+        unit = InUseUnit(blk[:struct.unpack_from('>I', blk, 8)[0]])
+        mods = datarpc.Mods(datarpc.Client(unit, timeout=0.5))
+        log = []
+        with tempfile.TemporaryDirectory() as tmp:
+            name, raw = files(hello(B))[0]
+            p = os.path.join(tmp, name)
+            open(p, 'wb').write(raw)
+            assert datarpc.run(argparse.Namespace(op='put', files=[p]), mods, log.append) == 0
+            assert not log[-1].endswith('next restart')
+            unit.files[name] = raw[:-1] + b' '            # what the running mod's file holds
+            unit.held.add(name)
+            unit.note('-')
+            assert datarpc.run(argparse.Namespace(op='put', files=[p]), mods, log.append) == 0
+            assert log[-1].endswith('; in use, so it replaces the running file at the next restart'), log[-1]
+            assert unit.files[name + '.new'] == raw and unit.files[name] != raw
+            assert datarpc.run(argparse.Namespace(op='active', names=[name]), mods, log.append) == 0
+            assert drive.parse_active(unit.files['active'].decode()) == [(name, drive.file_crc(raw))]
+            try:
+                datarpc.run(argparse.Namespace(op='rm', name=name), mods, log.append)
+                assert False, 'a file in use was removed'
+            except ModError as e:
+                assert str(e) == datarpc.IN_USE % ('/mods/' + name), e
+            assert name in unit.files
+            assert mods.in_use(name) and not mods.in_use(name + '.new')
+            assert datarpc.run(argparse.Namespace(op='rm', name=name + '.new'), mods, log.append) == 0
+            assert name + '.new' not in unit.files       # an update not wanted: removed as any file
+
+
 def test_the_7_bit_packing_round_trips():
     for n in (0, 1, 6, 7, 8, 13, 14, 15, 300):
         data = bytes((i * 37 + 0x81) & 0xFF for i in range(n))

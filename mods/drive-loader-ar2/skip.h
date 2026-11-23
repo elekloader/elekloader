@@ -117,12 +117,51 @@ extern u32 drive_payloads_n, drive_payloads_lost;
  * for the loaded mods only */
 void dl_payload_note(const char *path, const struct dl_pay *pay);
 void dl_payload_keep(const struct dl_status *st, const struct dl_choice *ch, int n);
+/* the table emptied, at each boot's start */
+void dl_payload_reset(void);
+#define DL_LOST_IDS 64                   /* lost payloads known by path (dl_payload_lost_of) */
+
+/* The versioned API (0.12; analog-rytm-mk2/drivepay.h, route.s drive_payload_abi = 1). A handle
+ * is an entry's address; sidecar-core walks the table with count and at, or finds one by id, and
+ * reads it with dl_payload_read. Any task. */
+u32 drive_payload_count(void);
+const struct drive_payload *drive_payload_at(u32 i);          /* 0 past the end */
+/* the handle's id, length and sha256 (each may be 0: not wanted) -> 0, or -1 a bad handle */
+s32 drive_payload_info(const struct drive_payload *p, u32 *id, u32 *len, u8 *sha256);
 /* the entry for a payload id, or 0 */
 const struct drive_payload *drive_payload_find(u32 id);
+
+/* In use (0.12): a file the boot loaded whose payload the table keeps. path is the store's name
+ * (DL_DIR "/" ...). dir 0: that file; dir 1: a folder holding one at any depth. The route refuses
+ * a Clear or a move of one, and puts an upload over one in <name>.new (DL_NEW), which the next boot
+ * renames over it before staging (boot.c, dl_updates); the MODS page refuses DELETE. The table is
+ * fixed once the boot ends, so any task may ask. */
+#define DL_NEW ".new"
+int dl_payload_held(const char *path, int dir);
+/* a loaded mod's file whose payload found the table full (after the boot's keep) */
+int dl_payload_lost_of(const char *path);
+/* the boot's <name>.new swaps (boot.c, before staging): each of the n lines' <name>.new over
+ * <name>, a line with one taking the new file's CRC (in ch and /mods/active, written before the
+ * renames, so a power cut leaves no new file under the old CRC); dl_updates counts them applied
+ * and failed (the old file kept, the .new left, its old CRC back; or active not written) */
+void dl_apply_updates(struct dl_choice *ch, int n);
+extern u32 dl_updates[2];
+/* the boot's read of /mods/active whole into the heap (boot.c; the caller frees *text), an
+ * active.tmp a power cut left with no active put in first. -> its length, <= 0 none */
+s32 dl_read_active(char **text);
+
+/* .status's payload lines (route.c): "payloads: N kept, M lost", the boot's updates, one line per
+ * entry ("payload ID LEN PATH") and one per pending update ("pending PATH"). size: the most they
+ * take; status writes them from at (NUL-ended, never past end) -> the NUL's address */
+#define DL_PAY_STATUS_HEAD 96
+#define DL_PAY_STATUS_LINE (8 + 8 + 1 + 10 + 1 + DL_PATH_MAX + 1)
+u32 dl_payload_status_size(void);
+char *dl_payload_status(char *at, char *end);
 /* Read n bytes of a payload from byte at, decoded from the file's hex. Takes dl_lock: call it from
  * a task, never an interrupt. -> bytes read (fewer than n at the payload's end), -1 bad arguments,
  * -2 the file is not the one the boot linked (replaced, moved or deleted since), -3 a read error or
- * a byte that isn't hex. The caller still checks the sha256 of what it ships. */
+ * a byte that isn't hex. The caller still checks the sha256 of what it ships. From 0.12 out holds the
+ * hex while it is decoded (payload.c), so all n bytes of it may be written whatever the result. */
 s32 dl_payload_read(const struct drive_payload *p, u32 at, u8 *out, u32 n);
 
 #endif

@@ -24,6 +24,13 @@
  *   setid N ID    the set's record N names ID (a site refusal's other mod)
  *   reason C A D  the "!" box of refusal code C, arg A, detail D (the rest of the line), against
  *                 the set's records -> "REASON line1~line2"
+ *   inuse PATH    the Drive payload table keeps PATH's payload (skip.h dl_payload_held: in use)
+ *   lost PATH     PATH's payload found the table full (dl_payload_lost_of)
+ *   update PATH   PATH.new is there: an upload over the file in use waits for the next boot
+ *                 (the three take effect at the page's next folder read: "open")
+ *   delwhy PATH   DELETE's refusal of PATH alone (delete_why) -> "DELWHY text" or "DELWHY ok"
+ *   binfo N       INFO's box on build row N with its payload line (do_info) -> "INFO ..."
+ *   bcols         the build list's rows and right-hand column -> "BCOLS l1=c1|l2=c2|..."
  * Only the functions these call are stubbed; the rest of page.c is linked against nothing and
  * never runs. */
 #include <stdio.h>
@@ -92,7 +99,29 @@ void core_restart(void)                  /* never returns: the script ends here 
     printf("RESTART kept=%d locked=%d guard_off=%d\n", kept, locked, guard_off);
     exit(0);
 }
-int dl_fs_file_size(const char *path) { (void)path; return 100; }
+/* the Drive payload table's answers and the pending updates, by path below DL_DIR */
+static char inuse[8][DL_NAME_MAX + 2], lostp[8][DL_NAME_MAX + 2], updates[8][DL_NAME_MAX + 2];
+static int ninuse, nlost, nupdates;
+static int listed(char (*v)[DL_NAME_MAX + 2], int n, const char *path, const char *tail)
+{
+    size_t d = strlen(DL_DIR "/"), t = strlen(tail), k = strlen(path);
+    int i;
+    if (strncmp(path, DL_DIR "/", d) || k < d + t || strcmp(path + k - t, tail))
+        return 0;
+    for (i = 0; i < n; i++)
+        if (strlen(v[i]) == k - d - t && !strncmp(v[i], path + d, k - d - t))
+            return 1;
+    return 0;
+}
+int dl_payload_held(const char *path, int dir) { return !dir && listed(inuse, ninuse, path, ""); }
+int dl_payload_lost_of(const char *path) { return listed(lostp, nlost, path, ""); }
+int dl_fs_file_size(const char *path)
+{
+    size_t k = strlen(path);
+    if (k > 4 && !strcmp(path + k - 4, DL_NEW))
+        return listed(updates, nupdates, path, DL_NEW) ? 100 : -1;
+    return 100;
+}
 void *dl_alloc(u32 n) { return calloc(1, n ? n : 1); }   /* zeroed, as boot.c's */
 void dl_free(void *p) { free(p); }
 void dl_memcpy(void *d, const void *s, u32 n) { memmove(d, s, n); }
@@ -199,6 +228,38 @@ int main(void)
                 boot_record(&files[f]);
                 dl_status_n = 0;
             }
+        } else if (!strncmp(line, "inuse ", 6) && ninuse < 8) {
+            strcpy(inuse[ninuse++], line + 6);
+        } else if (!strncmp(line, "lost ", 5) && nlost < 8) {
+            strcpy(lostp[nlost++], line + 5);
+        } else if (!strncmp(line, "update ", 7) && nupdates < 8) {
+            strcpy(updates[nupdates++], line + 7);
+        } else if (!strcmp(line, "bcols")) {   /* the build list's rows with their right-hand column */
+            char t[16];
+            mode = M_BUILD;
+            printf("BCOLS");
+            for (i = 0; i < nbuild; i++) {
+                row_column(i, t, t + sizeof t);
+                printf("%c%s=%s", i ? '|' : ' ', (const char *)dl_page_text(i + 1), t);
+            }
+            printf("\n");
+            mode = M_DRIVE;
+        } else if (!strncmp(line, "delwhy ", 7)) {
+            int f = find_file(line + 7);
+            const char *why = f >= 0 ? delete_why(&f, 1) : "?";
+            printf("DELWHY %s\n", why ? why : "ok");
+        } else if (!strncmp(line, "binfo ", 6)) {
+            static char t[192];
+            char *c;
+            int row = atoi(line + 6);
+            if (row < 0 || row >= nbuild)
+                continue;
+            info_text(&files[build_rows[row]], t, t + sizeof t);
+            pay_info(&files[build_rows[row]], t, t + sizeof t);
+            for (c = t; *c; c++)
+                if (*c == '\n')
+                    *c = '~';
+            printf("INFO %s\n", t);
         } else if (!strncmp(line, "info ", 5)) {
             char t[160], *c;
             int row = atoi(line + 5);

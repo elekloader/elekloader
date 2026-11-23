@@ -192,6 +192,33 @@ class Moves(unittest.TestCase):
         self.assertNotIn('~T A/x.elemod', tree)
         self.assertEqual(active, '~T C/x.elemod 1234abcd|# a note|~T AB/y.elemod 00000001|~T A/~T B/z.elemod 00000002|')
 
+    def test_a_file_in_use_refuses_clear_and_move_and_its_upload_waits(self):
+        """drive-loader 0.12: a loaded mod's file whose payload the Drive payload table keeps is in use
+        (skip.h dl_payload_held). Its entry and listing have no Clear (a Clear that gets through is
+        noted, the file kept); a move of it or of a folder holding it is refused; an upload over it
+        goes to <name>.new for the next boot. A file not in use behaves as before, and its upload
+        removes an update left from before."""
+        tree = ['~T A/x.elemod=hello', '~T A/y.elemod=yy', '~T A/y.elemod.new=old', '~T A/~T B/z.elemod=zz',
+                '~T C/', 'active=~T A/x.elemod 1234abcd|']
+        got = self.run_('inuse ~T A/x.elemod', 'inuse ~T A/~T B/z.elemod', 'ops ~T A', 'entry ~T A/x.elemod',
+                        'entry ~T A/y.elemod', 'clear ~T A/x.elemod', 'mv ~T A/x.elemod|~T C/x.elemod',
+                        'mv ~T A/~T B|~T C/~T B', 'mv ~T A|~T D', 'mv ~T A/y.elemod|~T C/y.elemod',
+                        'stage 4096', 'put ~T A/x.elemod 100', 'put ~T A/~T B/z.elemod 7', tree=tree)
+        answers = [a for a, _, _ in got]
+        self.assertEqual(answers[2:10], [
+            'OPS x.elemod=rw- y.elemod=rwc y.elemod.new=r-c', 'ok 5 read write', 'ok 2 read write clear',
+            '5 In use: restart first: ~T A/x.elemod', 'In use: restart first', 'In use: restart first',
+            'In use: restart first', 'ok'])
+        self.assertEqual(answers[11:], ['pending restart: ~T A/x.elemod 5 GUARD ok',
+                                        'pending restart: ~T A/~T B/z.elemod 2 GUARD ok'])
+        tree_after = got[-1][1]
+        self.assertIn('~T A/x.elemod.new', tree_after)       # the upload, for the next boot
+        self.assertIn('~T A/~T B/z.elemod.new', tree_after)
+        self.assertIn('~T A/y.elemod.new', tree_after)       # a .new is no .elemod: a move leaves it
+        got = self.run_('stage 4096', 'put ~T A/y.elemod 50', tree=tree)
+        self.assertEqual(got[1][0], 'saved ~T A/y.elemod 50 GUARD ok')
+        self.assertNotIn('~T A/y.elemod.new', got[1][1])    # not in use: the old update goes
+
     def test_a_file_larger_than_staging_resolves_for_clear_and_listing(self):
         # dl_entry refused a file over DL_STAGING_SIZE for every use, Clear included, so one left by
         # a build with a larger buffer couldn't be deleted over Data. It resolves now without P_READ
@@ -341,6 +368,10 @@ class Moves(unittest.TestCase):
             def ls(self, path):
                 calls.append(('ls', path))
                 return listing[path]
+
+            def get(self, path):                               # no .status: nothing in use
+                calls.append(('get', path))
+                raise datarpc.RpcError('no such file')
         mods = datarpc.Mods(Client())
         head = {'family': 2, 'device': 5, 'release': 0x30313736}
         mods.move('~T A/x.elemod', '~T C/x.elemod', head)

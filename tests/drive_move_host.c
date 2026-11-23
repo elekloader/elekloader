@@ -21,6 +21,10 @@
  *   clear NAME     a Clear as stock 1.74 does it (0x4002d0b4): zero the entry's size from the stage,
  *                  then +0x4c with no header (entry_size, dl_change) -> "SIZE" (the entry's), the note
  *   readpre NAME   a read's +0x1c on the file's entry (entry_size, dl_pre) -> "ok" or the refusal
+ *   inuse NAME     the Drive payload table keeps NAME's payload (drive-loader 0.12: in use,
+ *                  skip.h dl_payload_held, a file or anything in a folder) -> "ok"
+ *   ops REL        the listing of folder REL ("-" DL_DIR itself) with each file's operations (walk)
+ *                  -> "OPS name=rwc ..." ("-" for an operation it lacks)
  * Each of the last seven ends its line in " GUARD ok" when no byte around the stage changed (" GUARD
  * bad" when one did); nothing with the stage left at the floor.
  * A tree line "NAME=@N" is a file of N bytes.
@@ -86,6 +90,19 @@ static void header(unsigned char *h, unsigned size)
     h[H_TYPE] = 'E', h[H_TYPE + 1] = 'M', h[H_TYPE + 2] = 'O', h[H_TYPE + 3] = 'D';
     h[H_PAYLOAD] = size >> 24, h[H_PAYLOAD + 1] = size >> 16, h[H_PAYLOAD + 2] = size >> 8;
     h[H_PAYLOAD + 3] = size;
+}
+
+/* the Drive payload table's files in use (payload.c dl_payload_held's rule), absolute paths */
+static char inuse_p[8][DL_PATH_MAX];
+static int ninuse;
+int dl_payload_held(const char *path, int dir)
+{
+    int i;
+    size_t k = strlen(path);
+    for (i = 0; i < ninuse; i++)
+        if (dir ? !strncmp(inuse_p[i], path, k) && inuse_p[i][k] == '/' : !strcmp(inuse_p[i], path))
+            return 1;
+    return 0;
 }
 
 unsigned char drive_staging[DL_STAGING_SIZE];
@@ -422,6 +439,28 @@ int main(void)
                 printf("%s", res[0] ? "ok" : host_str);
             }
             guard();
+            printf("\n");
+        } else if (!strncmp(line, "inuse ", 6) && ninuse < 8) {
+            path_of(inuse_p[ninuse++], line + 6, "");
+            printf("ok\n");
+        } else if (!strncmp(line, "ops ", 4)) {
+            char rel[DL_NAME_MAX + 1];
+            struct dl_ent ents[64];
+            unsigned char items[64 * 0x14];
+            int n, k, j, i;
+            strcpy(rel, strcmp(line + 4, "-") ? line + 4 : "");
+            n = dl_list_dir(rel, ents, 64);
+            k = walk(items, rel, rel[0] ? 1 : 0, ents, n);
+            printf("OPS");
+            for (j = 0, i = 0; j < k && i < n; i++) {   /* walk's items, in its order: no dot names */
+                unsigned ops = *(unsigned short *)(items + 0x14 * j + 0xc);
+                if (ents[i].name[0] == '.')
+                    continue;
+                if (!items[0x14 * j + 0x10])   /* a file, not a folder */
+                    printf(" %s=%c%c%c", ents[i].name, ops & P_READ ? 'r' : '-', ops & P_WRITE ? 'w' : '-',
+                           ops & P_CLEAR ? 'c' : '-');
+                j++;
+            }
             printf("\n");
         } else if (!strcmp(line, "status")) {
             const char *t;

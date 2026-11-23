@@ -475,12 +475,15 @@ async function upload(files) {
       say('dm-upload-msg', `REFUSED: nothing was uploaded. ${over.map(f => `${f.name} is ${kb(f.raw.length)}; the unit takes up to ${kb(S.room)} now`).join('; ')}`, 'bad');
       return;
     }
+    const pending = [];
     for (const f of files) {
       try {
-        await S.mods.upload(f.name, f.raw, S.head, (sent, total) => say('dm-upload-msg', `Uploading ${f.name}: ${Math.round(100 * sent / total)}%`));
+        if (await S.mods.upload(f.name, f.raw, S.head, (sent, total) => say('dm-upload-msg', `Uploading ${f.name}: ${Math.round(100 * sent / total)}%`)) === 'pending')
+          pending.push(f.name);          // in use: the unit's next boot puts it in place
       } catch (e) { say('dm-upload-msg', `${f.name}: ${e.message}`, 'bad'); await refresh(); return; }
     }
-    say('dm-upload-msg', `Uploaded ${files.map(f => S.mods.path(f.name)).join(', ')}. Add ${files.length === 1 ? 'it' : 'them'} to the build on the unit (MODS, LOAD TO BUILD).`, 'ok');
+    say('dm-upload-msg', `Uploaded ${files.map(f => S.mods.path(f.name)).join(', ')}. Add ${files.length === 1 ? 'it' : 'them'} to the build on the unit (MODS, LOAD TO BUILD).` +
+      (pending.length ? ` ${pending.join(', ')} ${pending.length === 1 ? 'is' : 'are'} in use: restart the unit to put the new file in place.` : ''), 'ok');
     await refresh();
   });
 }
