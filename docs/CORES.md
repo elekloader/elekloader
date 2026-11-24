@@ -258,7 +258,8 @@ the one a mod that uses it names in `resources.core`.
   "Standard events (0.17)"). A sound's or kit's data from before the mod
   used core storage, handed to its mod once as it loads (0.20,
   `ev_store_adopt`; ADAPTING.md, "Mod storage (core-ar2 0.2, Analog Rytm
-  MKII)").
+  MKII)"). The mods' area above stock's USB feedback ring (0.21;
+  DEVICES.md, "The Analog Rytm MKII (1.73, 1.74)").
 - **Analog Four MKII** ([mods/core-a4mk2](../mods/core-a4mk2), a proof of
   concept): core-ar2's events and mod storage at the A4's addresses
   (ADAPTING.md, "Mod storage (core-a4mk2 0.1)"), and parameter pages, whose

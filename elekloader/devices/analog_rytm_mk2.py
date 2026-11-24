@@ -68,8 +68,11 @@ addresses (docs/DEVICES.md says how far each moved).
   4 KB under 0x48000000 is the stack's. core-ar2 0.11 keeps its step tag
   tables at 0x47938000..0x47B00000, fixed,
   so from 0.11 the linker lays the mods out from 0x47B10000 to 0x47FFF000
-  (core_ddr), payloads included. The flash budget (the container below
-  0x300000) is the tighter limit for a payload: about 1 MB.
+  (core_ddr), payloads included; from core-ar2 0.21 from 0x47B48000, the
+  4 KB boundary above stock's USB audio feedback ring at
+  0x47B47440-0x47B47480 (docs/DEVICES.md, "The Analog Rytm MKII (1.73,
+  1.74)"). The flash budget (the container below 0x300000) is the tighter
+  limit for a payload: about 1 MB.
 - UI: the periodic UI routine (0x400A2AAA) advances its counter 20 per
   second (the Digitakt's at 30, 0x4000A75C), so ev_tick runs at about
   20 Hz. The tick target is the Digitakt's byte for byte (it returns the
@@ -204,7 +207,8 @@ DEVICE = Device(
         'big': (0x47938000, 0x47FFF000),          # verified 2026-11-05, see above
     },
     ddr=(0x47BE0000, 0x47C00000),
-    core_ddr=(('0.11', (0x47B10000, 0x47FFF000)),),   # core-ar2 0.11: 5 MB, above its step tags
+    core_ddr=(('0.11', (0x47B10000, 0x47FFF000)),     # core-ar2 0.11: 5 MB, above its step tags
+              ('0.21', (0x47B48000, 0x47FFF000))),    # core-ar2 0.21: above stock's USB feedback ring
     drive_align=0x1000,                           # the +Drive mods' area: what the flashed build
                                                   # leaves of core_ddr's, from a 4 KB boundary
     data_family=2,                                # the data container's family id (stock checks it)

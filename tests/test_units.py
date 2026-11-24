@@ -2716,6 +2716,22 @@ def test_the_rytm_pre_link_ranges_are_ordered_and_inside_the_main_os():
     assert not any(lo <= 0x401009e0 < hi for lo, hi, _k, _w in pre)
     assert sum(k == 1 and w.startswith('constructor') for lo, hi, k, w in pre) == 146   # the table's count
 
+def test_core_ar2_0_21_starts_the_mods_area_above_the_usb_feedback_ring():
+    """Stock 1.74 rewrites 0x47B47440-0x47B47480 (its USB audio feedback ring) while a host has the
+    audio alternate setting selected: from core-ar2 0.21 the linker's area starts at the 4 KB boundary
+    above it; 0.11..0.20 keep theirs."""
+    from elekloader.devices.analog_rytm_mk2 import DEVICE as dev
+    ring = (0x47B47440, 0x47B47480)
+    assert dev.ddr_for('0.10') == dev.ddr
+    assert dev.ddr_for('0.11') == dev.ddr_for('0.20') == (0x47B10000, 0x47FFF000)
+    lo, hi = dev.ddr_for('0.21')
+    assert (lo, hi) == (0x47B48000, 0x47FFF000) == dev.ddr_for('0.22')
+    assert lo % 0x1000 == 0 and lo >= ring[1]
+    old = dev.ddr_for('0.20')
+    assert old[0] < ring[1] and ring[0] < old[1]
+    assert json.load(open(os.path.join(os.path.dirname(__file__), '..', 'mods', 'core-ar2', 'mod.json')))['version'] == '0.21'
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0

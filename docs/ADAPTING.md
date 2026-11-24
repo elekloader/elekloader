@@ -2793,8 +2793,10 @@ my_blob:
   `core_payload_id("my-mod")` (the FNV-1a hash of the mod's id), so another
   mod can find it; `core_payloads` lists them all, `{id, addr, len}`, ending
   with a zero entry. One payload a mod.
-- Room: with core-ar2 0.11 the mods' area is 0x47B10000-0x47FFF000, 5 MB
-  for code, tables, payloads and `.bss`; a build past it is refused, with the
+- Room: with core-ar2 0.21 the mods' area is 0x47B48000-0x47FFF000, 4.7 MB
+  for code, tables, payloads and `.bss` (0.11..0.20: from 0x47B10000, 5 MB,
+  which reaches stock's USB feedback ring past 221 KB); a build past it is
+  refused, with the
   room left for payloads. The tighter limits are the OS file's: the payload
   is part of the main OS the bootloader unpacks in place, so its packed
   size comes out of the flash budget (about 1 MB with core alone), and a
