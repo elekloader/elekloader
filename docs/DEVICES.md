@@ -404,7 +404,7 @@ Digitakt's in the places elekloader depends on.
   `0x47937290`, the OS clears a block at `0x479372E0` at every boot, and the
   last 4 KB under `0x48000000` are the stack's. Stock 1.74 rewrites
   `0x47B47440`-`0x47B47480`, its USB audio feedback ring, while a host has the
-  audio alternate setting selected (not yet seen on a unit), so 0.21's area
+  audio alternate setting selected, so 0.21's area
   starts at the 4 KB boundary above it. core-ar2 keeps its step tag tables at
   fixed addresses from `0x47938000` (it claims the region up to
   `0x47B10000`). For a payload, the flash budget is the tighter limit.
