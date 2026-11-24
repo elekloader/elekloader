@@ -334,6 +334,40 @@ DECLS = {
     'smooth without lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'smooth': False}]},
     'smooth type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'smooth': 0}]},
     'twice': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 1}, {'sym': 'a', 'scope': 'kit', 'bits': 2}]},
+    'offset': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 10, 'offset': 30},
+                           {'sym': 'b', 'scope': 'sound', 'bits': 14, 'offset': 0}, {'sym': 'c', 'scope': 'kit', 'bits': 3}]},
+    'offset negative': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'offset': -1}]},
+    'offset type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'offset': '30'}]},
+    'offset bool': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'offset': True}]},
+}
+
+# pinned fields ("offset"): each run is steps of [decls, pins ([mod, sym, offset]), core]
+PS = [F('sc', 'arp', 'sound', 10), F('sc', 'tag', 'sound', 14)]
+PP = [['sc', 'arp', 30], ['sc', 'tag', 42]]
+PIN_RUNS = {
+    # sidecar-mods' sound fields on their old build's bits; other mods fill the gaps, and a repack keeps the pins
+    'pins, gaps, a repack': [[PS, PP, '0.19'], [PS + [F('o', 'x', 'sound', 8)], PP, '0.19'],
+                             [PS + [F('o', 'x', 'sound', 8), F('o', 'y', 'sound', 20)], PP, '0.19'],
+                             [PS + [F('o', 'y', 'sound', 20), F('o', 'w', 'sound', 9)], PP, '0.19'],
+                             [PS + [F('o', 'y', 'sound', 20), F('o', 'w', 'sound', 9), F('o', 'v', 'sound', 2)], PP,
+                              '0.19']],
+    'kit words': [[[F('fx', 'w%d' % i, 'kit', 16) for i in range(4)], [['fx', 'w%d' % i, 16 * i] for i in range(4)],
+                   None]],
+    'a pin on a placed field repacks': [[[F('a', 'z', 'sound', 8)], [], '0.19'],
+                                        [[F('a', 'z', 'sound', 8)] + PS, [['sc', 'arp', 0], ['sc', 'tag', 42]], '0.19']],
+    'a pin on freed bits repacks': [[[F('a', 'z', 'sound', 8), F('a', 'q', 'sound', 4)], [], '0.19'],
+                                    [[F('a', 'q', 'sound', 4)], [], '0.19'],
+                                    [[F('a', 'q', 'sound', 4)] + PS, [['sc', 'arp', 2], ['sc', 'tag', 42]], '0.19']],
+    'a pin that moves': [[PS, PP, '0.19'], [PS, [['sc', 'arp', 16], ['sc', 'tag', 42]], '0.19'],
+                         [PS, [['sc', 'tag', 42]], '0.19']],
+    'pins that overlap': [[PS, [['sc', 'arp', 30], ['sc', 'tag', 35]], '0.19']],
+    'a pin past the room of an older core': [[PS, PP, '0.2']],
+    'a pin past the room': [[PS, [['sc', 'arp', 30], ['sc', 'tag', 50]], '0.19']],
+    'pins leave too little room': [[PS + [F('o', 'x', 'sound', 8), F('o', 'y', 'sound', 30)], PP, '0.19'],
+                                   [PS + [F('o', 'x', 'sound', 8), F('o', 'y', 'sound', 23)], PP, '0.19']],
+    'pins, then the widest first': [[PS + [F('o', 'a', 'sound', 2), F('o', 'b', 'sound', 29)], PP, '0.19']],
+    'pins in a pattern track': [[[F('a', 'p', 'track', 4)], [['a', 'p', 12]], None],
+                                [[F('a', 'p', 'track', 4), F('b', 'r', 'track', 7)], [['a', 'p', 12]], None]],
 }
 
 
@@ -402,7 +436,7 @@ POOL_LOCKS = {
 def main():
     out = {'runs': {}, 'lock_runs': {}, 'cc_runs': {}, 'init_runs': {}, 'handle_runs': {}, 'kind_runs': {},
            'locks': {}, 'kind_locks': {}, 'flags': {}, 'decls': {}, 'knob_runs': {}, 'knob_locks': {},
-           'machine_runs': {}, 'machine_locks': {}, 'pool_runs': {}, 'pool_locks': {}}
+           'machine_runs': {}, 'machine_locks': {}, 'pool_runs': {}, 'pool_locks': {}, 'pin_runs': {}}
     def run(lock, steps, core, dev=DEV):
         res = []
         for decls in steps:
@@ -468,6 +502,18 @@ def main():
             except ModError as e:
                 res.append({'error': str(e)})
         out['init_runs'][name] = {'steps': [list(st) for st in steps], 'results': res}
+    for name, steps in PIN_RUNS.items():
+        lock, res = None, []
+        for decls, pins, core in steps:
+            try:
+                lock, notes = store.allocate(lock, [tuple(d) for d in decls], DEV, core,
+                                             pins={(m, s): v for m, s, v in pins})
+                syms, tab = store.symbols(lock, DEV)
+                res.append({'lock': lock, 'notes': notes, 'symbols': syms, 'ids': [t.hex() for t in tab],
+                            'json': store.dumps(lock), 'layout_id': store.layout_id(lock)})
+            except ModError as e:
+                res.append({'error': str(e)})
+        out['pin_runs'][name] = {'steps': [list(st) for st in steps], 'results': res}
     for name, (decls, handles) in HANDLE_RUNS.items():
         lock, notes = store.allocate(None, [tuple(d) for d in decls], DEV)
         out['handle_runs'][name] = {'decls': decls, 'handles': handles, 'lock': lock,
@@ -514,7 +560,8 @@ def main():
             out['decls'][name] = {'doc': doc, 'ok': store.parse_decls(doc), 'locks': store.parse_locks(doc),
                                   'ccs': store.parse_ccs(doc), 'lfos': store.parse_lfos(doc),
                                   'rough': store.parse_rough(doc), 'routes': store.parse_routes(doc),
-                                  'cvs': store.parse_cvs(doc), 'inits': store.parse_inits(doc), 'handles': store.parse_handles(doc)}
+                                  'cvs': store.parse_cvs(doc), 'inits': store.parse_inits(doc), 'handles': store.parse_handles(doc),
+                                  'offsets': store.parse_offsets(doc)}
         except ModError as e:
             out['decls'][name] = {'doc': doc, 'error': str(e)}
     for name, steps in KNOB_RUNS.items():

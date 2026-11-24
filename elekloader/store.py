@@ -452,6 +452,12 @@ def parse_inits(m):
     return {f['sym']: f['init'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('init')}
 
 
+def parse_offsets(m):
+    """A mod document's "storage" -> {sym: offset} of its fields with an "offset" (their pinned first bit).
+    parse_decls checks the rest."""
+    return {f['sym']: f['offset'] for f in m.get('storage', []) if isinstance(f, dict) and 'offset' in f}
+
+
 def parse_handles(m):
     """A mod document's "storage" -> the syms of its fields declared "handle": true, in order."""
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('handle') is True]
@@ -465,7 +471,7 @@ def parse_decls(m):
         raise ModError('"storage" is a list of fields')
     for f in st:
         if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod', 'track', 'init',
-                                                'handle'}:
+                                                'handle', 'offset'}:
             raise ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
         for k in ('lock', 'cc', 'lfo', 'smooth', 'mod', 'handle'):
             if k in f and not isinstance(f[k], bool):
@@ -504,6 +510,9 @@ def parse_decls(m):
         if 'init' in f and (not _whole(f['init']) or not 0 <= f['init'] < 1 << bits):
             raise ModError('storage field %s: init %r (0 to %d, what its %d bits hold)'
                            % (sym, f['init'], (1 << bits) - 1, bits))
+        if 'offset' in f and (not _whole(f['offset']) or f['offset'] < 0):
+            raise ModError('storage field %s: offset %r (its first bit in the scope, 0 or more)'
+                           % (sym, f['offset']))
         if sym in seen:
             raise ModError('storage field %s is declared twice' % sym)
         seen.add(sym)
@@ -951,16 +960,56 @@ def _bump(g):
     return 1 if g >= 255 else g + 1
 
 
-def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=(), drive=None):
+def _spans(fs):
+    return sorted((f['offset'], f['offset'] + f['bits']) for f in fs)
+
+
+def _first_fit(taken, bits, cap):
+    """The lowest bit where `bits` bits lie clear of the spans taken and inside cap, or None."""
+    at = 0
+    for a, b in sorted(taken):
+        if at + bits <= a:
+            break
+        at = max(at, b)
+    return at if at + bits <= cap else None
+
+
+def _pack(fs, pins, cap):
+    """Place fields from bit 0: the pinned ones at their offsets, then the others in (mod id, symbol) order,
+    each at the lowest bits clear of those placed; where that leaves one out, the others widest first.
+    -> {(mod id, sym): offset}, or None where they don't fit in cap bits. With no pins, this is the order
+    and the bits the allocator has always packed."""
+    free = [f for f in fs if (f['mod'], f['sym']) not in pins]
+    for order in (lambda f: (f['mod'], f['sym']), lambda f: (-f['bits'], f['mod'], f['sym'])):
+        out, taken = {}, []
+        for f in fs:
+            k = (f['mod'], f['sym'])
+            if k in pins:
+                out[k] = pins[k]
+                taken.append((pins[k], pins[k] + f['bits']))
+        for f in sorted(free, key=order):
+            at = _first_fit(taken, f['bits'], cap)
+            if at is None:
+                break
+            out[(f['mod'], f['sym'])] = at
+            taken.append((at, at + f['bits']))
+        else:
+            return out
+    return None
+
+
+def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=(), drive=None, pins=None):
     """lock: a lockfile (dict) or None for a new one; decls: [(mod id, sym,
     scope, bits)]; core: the build's core's version (None: the newest core's
     room); locks: [(mod id, sym)] of the lockable fields; ccs: those of them
     with a CC; inits: {(mod id, sym): init} of the fields with an init other
     than 0 (core-ar2 0.10); cvs: those declared "track": "cv" (core-a4mk2 0.5);
     drive: what the unit's +Drive keeps (drive_store.reserve), None to keep the
-    lockfile's, False to drop it.
+    lockfile's, False to drop it; pins: {(mod id, sym): offset} of the fields
+    declared with an "offset", placed at that bit and nowhere else.
     -> (the new lockfile, [notes]). The lockfile given is not changed."""
     inits = {k: v for k, v in (inits or {}).items() if v}
+    pins = dict(pins or {})
     notes = []
     if lock is None:
         lock = fresh(dev_key)
@@ -981,9 +1030,22 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=
         if any(k[1] == sym for k in want):
             raise ModError('the storage field %s is declared by two mods' % sym)
         want[(mid, sym)] = (scope, bits, inits.get((mid, sym), 0))
+    pins = {k: v for k, v in pins.items() if k in want}
+    # pinned fields of a scope must lie apart: nothing the allocator does can move one off the other
+    for s in SCOPES:
+        ps = sorted((pins[k], pins[k] + want[k][1], k) for k in pins if want[k][0] == s)
+        for (a0, a1, ka), (b0, b1, kb) in zip(ps, ps[1:]):
+            if b0 < a1:
+                raise ModError('the storage fields %s (%s, bits %d..%d) and %s (%s, bits %d..%d) are both pinned '
+                               'on bits %d..%d of %s storage' % (ka[1], ka[0], a0, a1 - 1, kb[1], kb[0], b0, b1 - 1,
+                                                                 b0, min(a1, b1) - 1, s))
+
+    def pin_ok(f):
+        k = (f['mod'], f['sym'])
+        return k not in pins or pins[k] == f['offset']
     kept, gone = [], []
     for f in lock['fields']:
-        if want.get((f['mod'], f['sym'])) == (f['scope'], f['bits'], f.get('init', 0)):
+        if want.get((f['mod'], f['sym'])) == (f['scope'], f['bits'], f.get('init', 0)) and pin_ok(f):
             kept.append(f)
         else:
             gone.append(f)
@@ -996,7 +1058,7 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=
     back = set()
     for f in added:
         same = [g for g in lock['freed'] if (g['mod'], g['sym'], g['scope'], g['bits'], g.get('init', 0))
-                == (f['mod'], f['sym'], f['scope'], f['bits'], f.get('init', 0))]
+                == (f['mod'], f['sym'], f['scope'], f['bits'], f.get('init', 0)) and pin_ok(g)]
         if same:
             f['offset'] = same[-1]['offset']
             lock['freed'].remove(same[-1])
@@ -1011,17 +1073,25 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=
         repacked.add(scope)
         lock['generation'][scope] = _bump(lock['generation'][scope])
         lock['freed'] = [f for f in lock['freed'] if f['scope'] != scope]
-        at = 0
-        for f in sorted((f for f in fields if f['scope'] == scope),
-                        key=lambda f: (f['mod'], f['sym'])):
-            f['offset'] = at
-            at += f['bits']
-        lock['next'][scope] = at
+        fs = [f for f in fields if f['scope'] == scope]
+        at = _pack(fs, pins, cap[scope])     # without pins, need() checked it fits
+        if at is None:
+            raise ModError('the mods\' %s fields do not fit in the %d bits of %s storage the %s has, their pinned '
+                           'fields at their offsets' % (scope, cap[scope], scope, dev_key))
+        for f in fs:
+            f['offset'] = at[(f['mod'], f['sym'])]
+        lock['next'][scope] = max([0] + [f['offset'] + f['bits'] for f in fs])
         notes.append('%s storage repacked (generation %d): older projects and sounds load it '
                      'at defaults' % (scope, lock['generation'][scope]))
 
     def need(scope):
-        return sum(f['bits'] for f in fields if f['scope'] == scope)
+        """The bits the scope's fields take packed: their sum, or with pins where the packing ends (a repack
+        refuses pinned fields that don't fit)."""
+        fs = [f for f in fields if f['scope'] == scope]
+        if not any((f['mod'], f['sym']) in pins for f in fs):
+            return sum(f['bits'] for f in fs)
+        at = _pack(fs, pins, 1 << 30)
+        return max([0] + [at[(f['mod'], f['sym'])] + f['bits'] for f in fs])
 
     def pending(scope):
         return [f for f in added if f['scope'] == scope and f['offset'] is None]
@@ -1052,11 +1122,20 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=
                      % (split['track'], split['pattern']))
         for k in moved:
             repack(k)
+    for k in sorted(pins):
+        s, bits = want[k][0], want[k][1]
+        if pins[k] + bits > cap[s]:
+            more = capacity(dev_key, lock['split'])[s]
+            raise ModError('%s: storage field %s: offset %d with %d bits ends past the %d bits of %s storage '
+                           'the %s keeps for mods%s'
+                           % (k[0], k[1], pins[k], bits, cap[s], s, dev_key,
+                              ' with core %s (%d with core %s)' % (core, more, _room_core(dev_key, lock['split'], s, core))
+                              if more > cap[s] and pins[k] + bits <= more else ''))
     for s in SCOPES:
-        if need(s) > cap[s]:
+        if sum(f['bits'] for f in fields if f['scope'] == s) > cap[s]:
             more = capacity(dev_key, lock['split'])[s]
             raise ModError('the mods need %d bits of %s storage; the %s has %d%s'
-                           % (need(s), s, dev_key, cap[s],
+                           % (sum(f['bits'] for f in fields if f['scope'] == s), s, dev_key, cap[s],
                               ' with core %s (%d with core %s)'
                               % (core, more, _room_core(dev_key, lock['split'], s, core))
                               if more > cap[s] else ''))
@@ -1067,10 +1146,29 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=
         pend = pending(s)
         if not pend:
             continue
-        if lock['next'][s] + sum(f['bits'] for f in pend) <= cap[s]:
-            for f in pend:
-                f['offset'] = lock['next'][s]
-                lock['next'][s] += f['bits']
+        # bits a field holds or held (a freed one's values are still there) are taken; the gaps pinned fields
+        # leave below the used bits never held anything, so a new field may take them
+        taken = _spans([f for f in fields if f['scope'] == s and f['offset'] is not None]
+                       + [f for f in lock['freed'] if f['scope'] == s])
+        placed, ok = [], True
+        for f in sorted(pend, key=lambda f: (f['mod'], f['sym']) not in pins):    # pinned first, in order
+            k = (f['mod'], f['sym'])
+            if k in pins:
+                at = pins[k]
+                if any(at < b and a < at + f['bits'] for a, b in taken):
+                    ok = False          # a field's bits, or a freed one's values: the scope is packed again
+                    break
+            else:
+                at = _first_fit(taken, f['bits'], cap[s])
+                if at is None:
+                    ok = False
+                    break
+            placed.append((f, at))
+            taken.append((at, at + f['bits']))
+        if ok:
+            for f, at in placed:
+                f['offset'] = at
+                lock['next'][s] = max(lock['next'][s], at + f['bits'])
         else:
             repack(s)
     for f in gone:
@@ -1079,6 +1177,7 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=
             notes.append('%s %s (%s): %s, its data is dropped'
                          % (f['mod'], f['sym'], f['scope'],
                             'no longer in the build' if w is None
+                            else 'moved to its offset' if w == (f['scope'], f['bits'], f.get('init', 0))
                             else 'changed its init' if w[:2] == (f['scope'], f['bits']) else 'changed size'))
         else:
             notes.append('%s %s (%s): no longer in the build; its bits are kept, so it gets its '

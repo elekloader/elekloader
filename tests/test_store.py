@@ -454,6 +454,75 @@ def test_pool_lockfiles_it_refuses():
         assert refused(store.check_lock, bad, DEV).startswith('lockfile: ')
 
 
+
+SC = [('sc', 'arp', 'sound', 10), ('sc', 'tag', 'sound', 14)]
+SC_PINS = {('sc', 'arp'): 30, ('sc', 'tag'): 42}
+
+
+def test_a_pinned_field_is_placed_at_its_offset_and_others_fill_the_gaps():
+    lock, notes = store.allocate(None, SC, DEV, '0.19', pins=SC_PINS)
+    assert where(lock) == {'arp': ('sound', 30, 10), 'tag': ('sound', 42, 14)} and lock['next']['sound'] == 56
+    lock, notes = store.allocate(lock, SC + [('o', 'x', 'sound', 8), ('o', 'y', 'sound', 2)], DEV, '0.19',
+                                 pins=SC_PINS)
+    assert where(lock)['x'] == ('sound', 0, 8) and where(lock)['y'] == ('sound', 8, 2), lock
+    assert lock['generation']['sound'] == 1 and not any('repacked' in n for n in notes), notes
+    kit = [('fx', 'w%d' % i, 'kit', 16) for i in range(4)]
+    lock, _ = store.allocate(None, kit, DEV, None, pins={k[:2]: 16 * i for i, k in enumerate(kit)})
+    assert [f['offset'] for f in lock['fields']] == [0, 16, 32, 48]
+
+
+def test_a_repack_keeps_the_pins():
+    """Another mod's new field that fits no gap repacks the scope: the pinned fields stay put."""
+    lock, _ = store.allocate(None, SC + [('o', 'x', 'sound', 20)], DEV, '0.19', pins=SC_PINS)
+    lock, notes = store.allocate(lock, SC + [('o', 'y', 'sound', 20)], DEV, '0.19', pins=SC_PINS)
+    assert any('repacked (generation 2)' in n for n in notes), notes
+    assert where(lock) == {'y': ('sound', 0, 20), 'arp': ('sound', 30, 10), 'tag': ('sound', 42, 14)}
+    store.check_lock(json.loads(json.dumps(lock)), DEV)
+
+
+def test_a_pin_on_a_fields_bits_or_a_freed_fields_repacks_the_scope():
+    lock, _ = store.allocate(None, [('a', 'z', 'sound', 8)], DEV, '0.19')
+    lock2, notes = store.allocate(lock, [('a', 'z', 'sound', 8)] + SC, DEV, '0.19',
+                                  pins={('sc', 'arp'): 0, ('sc', 'tag'): 42})
+    assert where(lock2)['arp'] == ('sound', 0, 10) and where(lock2)['z'] == ('sound', 10, 8), notes
+    assert lock2['generation']['sound'] == 2
+    lock3, _ = store.allocate(lock, [], DEV, '0.19')                  # z freed: its bits keep its values
+    lock4, notes = store.allocate(lock3, SC, DEV, '0.19', pins={('sc', 'arp'): 4, ('sc', 'tag'): 42})
+    assert lock4['generation']['sound'] == 2 and lock4['freed'] == [], notes
+
+
+def test_a_pin_that_changes_moves_the_field():
+    lock, _ = store.allocate(None, SC, DEV, '0.19', pins=SC_PINS)
+    moved, notes = store.allocate(lock, SC, DEV, '0.19', pins={('sc', 'arp'): 16, ('sc', 'tag'): 42})
+    assert where(moved)['arp'] == ('sound', 16, 10) and 'sc arp (sound): moved to its offset, its data is dropped' \
+        in notes, notes
+    same, notes = store.allocate(moved, SC, DEV, '0.19', pins={('sc', 'tag'): 42})   # no pin: it stays
+    assert same['id'] == moved['id'] and notes == [], notes
+
+
+def test_pins_it_refuses():
+    assert refused(store.allocate, None, SC, DEV, '0.19', (), (), None, (), None,
+                   {('sc', 'arp'): 30, ('sc', 'tag'): 35}) == \
+        'the storage fields arp (sc, bits 30..39) and tag (sc, bits 35..48) are both pinned on bits 35..39 of ' \
+        'sound storage'
+    assert refused(store.allocate, None, SC, DEV, '0.2', (), (), None, (), None, SC_PINS) == \
+        'sc: storage field arp: offset 30 with 10 bits ends past the 24 bits of sound storage the ' \
+        'analog-rytm-mk2 keeps for mods with core 0.2 (56 with core 0.3)'
+    assert refused(store.allocate, None, SC, DEV, '0.19', (), (), None, (), None,
+                   {('sc', 'arp'): 30, ('sc', 'tag'): 50}) == \
+        'sc: storage field tag: offset 50 with 14 bits ends past the 56 bits of sound storage the ' \
+        'analog-rytm-mk2 keeps for mods'
+    assert refused(store.allocate, None, SC + [('o', 'x', 'sound', 8), ('o', 'y', 'sound', 23)], DEV, '0.19',
+                   (), (), None, (), None, SC_PINS) == \
+        "the mods' sound fields do not fit in the 56 bits of sound storage the analog-rytm-mk2 has, their " \
+        'pinned fields at their offsets'
+    for bad in (-1, '30', True, 1.5):
+        assert 'offset' in refused(store.parse_decls, {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3,
+                                                                    'offset': bad}]})
+    assert store.parse_offsets({'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'offset': 30},
+                                            {'sym': 'b', 'scope': 'sound', 'bits': 3}]}) == {'a': 30}
+
+
 if __name__ == '__main__':
     for name, fn in sorted(globals().items()):
         if name.startswith('test_'):

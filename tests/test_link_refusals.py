@@ -269,6 +269,8 @@ def _(B):               # the storage module's reading of the mod's "storage"
                     ("m: storage field a: scope 'lunch'", storage([{'sym': 'a', 'scope': 'lunch', 'bits': 1}])),
                     ('m: storage field a: bits 33 (1 to 32)',
                      storage([{'sym': 'a', 'scope': 'project', 'bits': 33}])),
+                    ('m: storage field a: offset -1 (its first bit in the scope, 0 or more)',
+                     storage([{'sym': 'a', 'scope': 'project', 'bits': 1, 'offset': -1}])),
                     ('m: storage field a is declared twice',
                      storage([{'sym': 'a', 'scope': 'project', 'bits': 1}] * 2))], storage([]))
 
@@ -1575,6 +1577,43 @@ def test_a_field_with_an_init_gets_its_slot_and_a_new_place_when_the_init_change
                 raise AssertionError('accepted: %s' % said)
         assert build([{'sym': 'g%d' % i, 'scope': 'project', 'bits': 1, 'init': 1} for i in range(63)])
         assert build([dict(k, init=0)]).store['elekloader_store'] == 1   # init 0 is no init
+
+
+def test_a_field_with_an_offset_is_placed_there_and_stays_there():
+    """"offset": the linker hands a mod's pinned fields to the allocator, which places them at their
+    offset in a new lockfile and keeps them there when another mod's field makes the scope repack;
+    a pin past the scope's room, or on another mod's pin, is refused."""
+    with Bench('analog-rytm-mk2') as B:
+        core = keeper(B)
+
+        def build(mods, lock=None):
+            return link.link([link.Mod2(d, d['id']) for d in [copy.deepcopy(core)] + mods], B.img, lock=lock)
+        sc = B.other('sc', storage=[{'sym': 'sc_arp', 'scope': 'sound', 'bits': 10, 'offset': 30},
+                                    {'sym': 'sc_tag', 'scope': 'sound', 'bits': 14, 'offset': 42}])
+        first = build([sc]).store
+
+        def where(lock):
+            return {f['sym']: f['offset'] for f in lock['fields']}
+        assert where(first) == {'sc_arp': 30, 'sc_tag': 42}, first
+        other = B.other('o', storage=[{'sym': 'o_a', 'scope': 'sound', 'bits': 8},
+                                      {'sym': 'o_b', 'scope': 'sound', 'bits': 9}])
+        more = build([sc, other], lock=first).store
+        assert where(more) == {'o_a': 0, 'o_b': 8, 'sc_arp': 30, 'sc_tag': 42}, more
+        wide = B.other('o', storage=[{'sym': 'o_b', 'scope': 'sound', 'bits': 9},
+                                     {'sym': 'o_c', 'scope': 'sound', 'bits': 14}])
+        repacked = build([sc, wide], lock=more).store
+        assert repacked['generation']['sound'] == more['generation']['sound'] + 1, repacked
+        assert where(repacked) == {'o_b': 0, 'o_c': 9, 'sc_arp': 30, 'sc_tag': 42}, repacked
+        for mods, said in (([B.other('sc', storage=[{'sym': 'sc_tag', 'scope': 'sound', 'bits': 14, 'offset': 50}])],
+                            'sc: storage field sc_tag: offset 50 with 14 bits ends past the 56 bits of sound storage'),
+                           ([sc, B.other('o', storage=[{'sym': 'o_x', 'scope': 'sound', 'bits': 4, 'offset': 40}])],
+                            'the storage fields o_x (o, bits 40..43) and sc_tag (sc, bits 42..55) are both pinned on bits 42..43')):
+            try:
+                build(mods)
+            except ModError as e:
+                assert said in str(e), e
+            else:
+                raise AssertionError('accepted: %s' % said)
 
 
 def test_the_image_check_refuses_a_protected_or_kept_byte_the_other_checks_let_through():
