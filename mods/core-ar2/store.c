@@ -53,7 +53,9 @@
  * ancestors (core_store_ids) and its scope's generation is this build's:
  * sounds and kits by their own copy of the ID, everything else by the header
  * of the image it is read from. Anything else loads as zeros, and so does a
- * global slot from a SysEx dump, which has no room for an ID.
+ * global slot from a SysEx dump, which has no room for an ID. A kit counts
+ * as this layout's only while its 12 stored sounds carry a known ID too
+ * (0.20, kit_sounds_ok): stock's kit save leaves the kit's ID as it was.
  */
 
 #define S ((unsigned char *)0x405c8f20)         /* the stored project */
@@ -506,7 +508,10 @@ int st_sound_save(unsigned char *dst, unsigned char *live, int a)
  * kit just loaded, src the stored sound (162 B) or stored kit (2610 B) it was
  * loaded from, and id the layout ID src carries (0: none, so saved by stock,
  * by a build with no sound or kit fields, or by a build from before core
- * kept mod storage; else a layout this build has no ancestor for, or one
+ * kept mod storage; also a kit that carries this layout's ID but whose
+ * sounds carry none, since such a build saved it after this layout did, so
+ * its spare bytes hold this layout's last bytes or that build's own; else a
+ * layout this build has no ancestor for, or one
  * whose generation for this scope was bumped, or a project file of an
  * older project version). A handler that recognises
  * its own pre-core bytes in src sets its fields in live with
@@ -726,16 +731,38 @@ int st_kit_save(unsigned char *dst, unsigned char *live, int a)
 
 void core_kit_forget(unsigned char *kit);
 
+/* (0.20) Stock's sound save clears the stored sound's spare bytes, its ID
+ * with them, but stock's kit save writes the stored kit around its spare
+ * bytes and leaves them, ID and generation included, as they were. So a kit
+ * this layout saved, then saved again by stock or by a build that keeps no
+ * core storage, still carries this layout's ID, over bytes that are stale
+ * or that the other build wrote itself (an older build's own kit bytes sit
+ * exactly there). Every save of a kit by this layout writes its 12 sounds
+ * too, each with the ID (st_sound_save, to_stored, write_through), and any
+ * other build's kit save writes them without one: a kit whose sounds don't
+ * all carry a known ID was last saved by another build. */
+static int kit_sounds_ok(const unsigned char *src)
+{
+    int t;
+    for (t = 0; t < 12; t++)
+        if (!known_id(rd32(src + STORED_KIT_SOUNDS + SOUND_STORED * t + SOUND_SPARE + 3)))
+            return 0;
+    return 1;
+}
+
 int st_kit_load(unsigned char *live, unsigned char *src)
 {
     int r = st_kit_load_body(live, src), j;
     if (live && src) {
-        int ok = st_image && known_id(rd32(src + KIT_SPARE + 8)) &&
-                 src[KIT_SPARE + 12] == gen(SC_KIT);
+        unsigned id = rd32(src + KIT_SPARE + 8);
+        int ok;
+        if (known_id(id) && !kit_sounds_ok(src))
+            id = 0;                             /* re-saved by a build with no kit fields */
+        ok = st_image && known_id(id) && src[KIT_SPARE + 12] == gen(SC_KIT);
         for (j = 0; j < 8; j++)
             live[KIT_HOME + j] = ok ? src[KIT_SPARE + j] : 0;
         if (!ok)
-            adopt(SC_KIT, live, src, rd32(src + KIT_SPARE + 8));
+            adopt(SC_KIT, live, src, id);
         if (FX_LFO_DST) {
             if (live[LIVE_FX_DST] >= 42 && live[LIVE_FX_DST] <= 127)
                 live[LIVE_FX_DST] = FX_DST_NONE;
@@ -1271,6 +1298,11 @@ static void write_through(unsigned scope, unsigned char *item, int index)
                 dst[KIT_SPARE + j] = item[KIT_HOME + j];
             wr32(dst + KIT_SPARE + 8, core_store_ids[0]);
             dst[KIT_SPARE + 12] = gen(SC_KIT);
+            /* (0.20) and its sounds', as a save would: the kit's ID holds
+             * only while its sounds carry one too (kit_sounds_ok) */
+            for (t = 0; t < 12; t++)
+                sound_through(dst + STORED_KIT_SOUNDS + SOUND_STORED * t,
+                              item + LIVE_KIT_SOUNDS + LIVE_SOUND_SIZE * t);
         }
         return;
     case SC_SOUND:

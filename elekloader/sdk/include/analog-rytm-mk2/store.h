@@ -87,7 +87,12 @@
  * them. scope is STORE_SOUND or STORE_KIT; live is the live sound or kit,
  * the item core_store_get and core_store_set take; src the stored sound
  * (162 B) or stored kit (2610 B) it was loaded from, read only; id the
- * layout ID src carries, 0 for none. A handler that recognises its own
+ * layout ID src carries, 0 for none. A kit with this layout's ID whose
+ * sounds carry none comes with id 0: stock, or a build with no kit fields,
+ * saved it since, and its kit bytes are this layout's last ones or that
+ * build's own (stock's kit save leaves them as they were). A stock save
+ * keeps no field data: after one, a sound's spare bytes are 0. A handler
+ * that recognises its own
  * older bytes in src sets its fields in live with core_store_set; every
  * handler is called. From the task doing the load, on every path (project,
  * library, pool, SysEx, copy): keep it short and start no load or save.
