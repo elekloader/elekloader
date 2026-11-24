@@ -78,6 +78,29 @@
 #define CORE_SAVE_SLOT(how) ((how) >> 8 & 255)
 #define CORE_SAVE_FAILED 0x10000u
 
+/* core-ar2 0.20: ev_store_adopt handlers: void f(unsigned scope, void *live,
+ * const unsigned char *src, unsigned id), subscribed in mod.json
+ * ({"event": "ev_store_adopt", "fn": ...}). Called for each sound or kit
+ * that loads with a layout ID or generation this build does not read
+ * (saved by stock, by a build from before the mod used core storage, or by
+ * another layout), after core zeroed its fields and before anything reads
+ * them. scope is STORE_SOUND or STORE_KIT; live is the live sound or kit,
+ * the item core_store_get and core_store_set take; src the stored sound
+ * (162 B) or stored kit (2610 B) it was loaded from, read only; id the
+ * layout ID src carries, 0 for none. A kit with this layout's ID whose
+ * sounds carry none comes with id 0: stock, or a build with no kit fields,
+ * saved it since, and its kit bytes are this layout's last ones or that
+ * build's own (stock's kit save leaves them as they were). A stock save
+ * keeps no field data: after one, a sound's spare bytes are 0. A handler
+ * that recognises its own
+ * older bytes in src sets its fields in live with core_store_set; every
+ * handler is called. From the task doing the load, on every path (project,
+ * library, pool, SysEx, copy): keep it short and start no load or save.
+ * The fields reach storage with the item's next save, which also writes
+ * this build's ID; until then each load calls the handler again with the
+ * same bytes, so a handler should give the same result each time. */
+typedef void (*ev_store_adopt_fn)(unsigned scope, void *live, const unsigned char *src, unsigned id);
+
 unsigned core_store_get(unsigned field, void *item, int index);
 void core_store_set(unsigned field, void *item, int index, unsigned value);
 

@@ -1972,6 +1972,28 @@ global slot received as SysEx has no room for an ID, so its mod data is
 always dropped, even from the same build: only its stock settings load.
 Projects saved before OS 1.70 are not supported.
 
+**Data from before core storage (core-ar2 0.20).** A sound or kit that
+fails the check loads with its fields at zero. A mod that kept its data in
+the stored sound or kit before it used core storage (in its own detours, or
+in an older build of another layout) can take it over once, through
+`ev_store_adopt`:
+
+| event | when | C prototype | notes |
+|---|---|---|---|
+| `ev_store_adopt` | Analog Rytm MKII (core-ar2 0.20): each sound or kit that loads with a layout ID or generation the build does not read, after core zeroed its fields and before anything reads them; on every path a sound or kit loads (project, boot, library, pool, SysEx, copy) | `void f(unsigned scope, void *live, const unsigned char *src, unsigned id)` | `scope` is `STORE_SOUND` or `STORE_KIT`; `live` the live item, as `core_store_set` takes it; `src` the stored sound (162 B) or stored kit (2610 B) it was loaded from, read only; `id` the layout ID `src` carries, 0 for none (stock, or a build with no fields of that scope). A kit that carries this layout's ID while its sounds carry none comes with 0 too: such a build saved it since, and stock's kit save leaves the kit's spare bytes as they were, so they hold this layout's last bytes or that build's own. Every handler is called. Set your fields with `core_store_set`; they reach storage with the item's next save, which writes the build's ID, so the item is adopted once. Until that save each load calls the handler again with the same bytes: give the same result each time. Leave alone what you don't recognise. From the loading task: keep it short |
+
+Only bytes some build wrote can be adopted. Stock keeps no field data: its
+sound save clears the stored sound's spare bytes, so a project saved by
+stock, after a build with fields, comes back with those sounds' bytes at 0
+and their fields at their defaults, and its kit save leaves the stored
+kit's spare bytes as they were. An older build of the mod keeps its data only if its
+own detours write it at each save.
+
+It covers storage fields only: lock rows (p-locks) and scene entries of
+another layout are dropped as before. A mod that wants its older build to
+keep reading the same projects pins its fields to its older bytes with `offset` ("A field on fixed bits",
+above); the handler then has nothing to move.
+
 **When a project changes.** A mod that keeps its own copy of a field, or
 sets things up per project, subscribes to `ev_project`:
 
