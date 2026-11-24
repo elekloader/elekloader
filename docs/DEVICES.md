@@ -395,19 +395,19 @@ Digitakt's in the places elekloader depends on.
   OS" a received container from 0x80000); and an erase of 0x400000-0xc00000
   behind a marker. None writes bytes of the main OS image.
   tests/test_rytm_mk2.py checks both.
-- **Mods' area.** `0x47BE0000`-`0x47C00000`, the Digitakt mk1's. Checked on a
-  unit: filled from the boot site at power-on, no word of it changed through a
-  long session of playback, sampling, effects, MIDI and Overbridge, or after a
-  power cycle. With core-ar2 0.11 the mods run from `0x47B10000` to
-  `0x47FFF000` (5 MB, the profile's `core_ddr`), inside a bigger free area,
-  `0x47938000`-`0x47FFF000` (`big`): a canary over it on a unit with stock
-  1.74 (5 Nov 2026) saw no word change through setup, playback, sample
-  memory filled to its limit, heavy MIDI, kit dumps, Overbridge streaming and
-  a power cycle. Sample memory ends just below it (about `0x47937290`), the
-  OS clears a block at `0x479372E0` at every boot, and the last 4 KB under
-  `0x48000000` are the stack's. core-ar2 0.11 keeps its step tag tables
-  at fixed addresses in the area's first 1.8 MB (it claims that
-  region). For a payload, the flash budget is the tighter limit.
+- **Mods' area.** `0x47BE0000`-`0x47C00000` (the Digitakt mk1's, checked on a
+  unit) before core-ar2 0.11. With 0.21 the mods run from `0x47B48000` to
+  `0x47FFF000` (`core_ddr`; 0.11 to 0.20 start at `0x47B10000`) inside `big`,
+  `0x47938000`-`0x47FFF000`, which a canary on stock 1.74 saw unchanged
+  through playback, full sample memory, heavy MIDI, kit dumps, Overbridge and
+  a power cycle (USB mode unrecorded). Sample memory ends near
+  `0x47937290`, the OS clears a block at `0x479372E0` at every boot, and the
+  last 4 KB under `0x48000000` are the stack's. Stock 1.74 rewrites
+  `0x47B47440`-`0x47B47480`, its USB audio feedback ring, while a host has the
+  audio alternate setting selected, so 0.21's area
+  starts at the 4 KB boundary above it. core-ar2 keeps its step tag tables at
+  fixed addresses from `0x47938000` (it claims the region up to
+  `0x47B10000`). For a payload, the flash budget is the tighter limit.
 - **Recovery.** The STARTUP menu (FUNC at power-on), TRIG 4 for OS UPGRADE, the
   stock file over MIDI DIN. Checked on a unit with stock 1.73.
 - **The TypeScript engine** (js/) has the profile too (`ANALOG_RYTM_MK2`). Its

@@ -232,6 +232,18 @@ test('a payload id is link.py payload_id, and core-ar2 0.11 moves the Rytm\'s mo
   assert.notEqual(payloadId('porbxw'), payloadId('puscrb'))
   assert.deepEqual(ddrFor(ANALOG_RYTM_MK2, '0.10'), [0x47be0000, 0x47c00000])
   assert.deepEqual(ddrFor(ANALOG_RYTM_MK2, '0.11'), [0x47b10000, 0x47fff000])
+  assert.deepEqual(ddrFor(ANALOG_RYTM_MK2, '0.20'), [0x47b10000, 0x47fff000])
+})
+
+test('core-ar2 0.21 starts the Rytm\'s mods\' area above stock\'s USB feedback ring', () => {
+  const ring: [number, number] = [0x47b47440, 0x47b47480]
+  const [lo, hi] = ddrFor(ANALOG_RYTM_MK2, '0.21')
+  assert.deepEqual([lo, hi], [0x47b48000, 0x47fff000])
+  assert.equal(lo % 0x1000, 0)
+  assert.ok(lo >= ring[1])
+  assert.deepEqual(ddrFor(ANALOG_RYTM_MK2, '0.22'), [lo, hi])
+  const old = ddrFor(ANALOG_RYTM_MK2, '0.20')                    // the older cores' area still covers it
+  assert.ok(old[0] < ring[1] && ring[0] < old[1])
 })
 
 test('core-a4mk2 0.6 moves the A4\'s mods\' area into the canary-checked gap', () => {

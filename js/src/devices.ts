@@ -356,7 +356,8 @@ export const ANALOG_RYTM_MK2: Device = {
   stage: 0x40200000, flashAt: 0x80000, flashLimit: 0x300000,
   areas: { ddr: [0x47be0000, 0x47c00000], big: [0x47938000, 0x47fff000] },
   ddr: [0x47be0000, 0x47c00000],
-  coreDdr: [['0.11', [0x47b10000, 0x47fff000]]],   // core-ar2 0.11: 5 MB, above its tags and mirrors
+  coreDdr: [['0.11', [0x47b10000, 0x47fff000]],    // core-ar2 0.11: 5 MB, above its tags and mirrors
+            ['0.21', [0x47b48000, 0x47fff000]]],   // core-ar2 0.21: above stock's USB feedback ring
   driveAlign: 0x1000,                              // the +Drive mods' area: what the flashed build leaves of coreDdr's, from a 4 KB boundary
   dataFamily: 2,                                   // the data container's family id (stock checks it)
   dataDevice: 5,                                   // ... and its device id (a stock project download's)

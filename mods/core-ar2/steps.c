@@ -77,7 +77,7 @@ int core_rows_current(void);
 /* each owner's table: the handle + 1 at (object * 13 + track) * 64 + step,
  * 0 for none; and its tags in each object, so a copy that carries none
  * costs one look */
-/* the tables end at 0x47b00000, below the mods' area (0x47b10000) */
+/* the tables end at 0x47b00000, below the mods' area (0x47b10000, 0.21: 0x47b48000) */
 typedef char tables_fit[TAG_AREA + OWNERS * TABLE * 2 <= 0x47b00000u ? 1 : -1];
 static unsigned short *table[OWNERS];
 static unsigned short tagged[OWNERS][OBJECTS];
