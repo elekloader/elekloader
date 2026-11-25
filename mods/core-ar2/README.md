@@ -1113,21 +1113,20 @@ Opt-in, by the knob's id; a parameter without an entry is as in 0.10.
 
 In a build with the Drive Loader (`mods/drive-loader-ar2`, which loads mods
 from the +Drive at boot) each table gets spare entries the loader fills at
-boot. A linker without +Drive support reads only each table's `entry` and
-leaves the rest, so without the loader the tables are the same as 0.11's. Core's events (every `ev_*`
+boot. A linker without +Drive support reads only each table's `entry`, so
+without the loader the tables are 0.11's. Core's events (every `ev_*`
 table but 0.14's `ev_boot_drive`, which has none) declare 256, as many as the loader links, so each +Drive mod can add
-a handler to any event; `core_machines` caps at 10, its hidden slots
-34..43. The other tables declare what each can hold:
+a handler to any event. The other tables declare what each can hold:
 
 | table | spare | its limit |
 |---|---|---|
 | `core_pages`, `core_page_fns`, `core_view_pages` | 149 | the page key's room: 10 views of `VIEW_MAX` 16 pages (pages.s), 11 of them stock's; a view drops pages past its 16 |
 | `core_params`, `core_param_locks`, `core_param_scales` | 256 | none of their own (id ranges, from 555 for a mod's ids), so as many as the loader links |
+| `core_machines` | 19, `"max": 19` | slots 34..52; the loader's entries written after `ev_boot_drive` |
 | `core_step_owners` | 8, `"max": 8` | `OWNERS` 8 (steps.c), flashed and +Drive owners together: the spare ones are what the flashed build leaves |
 | `core_lock_params` | the linker's 16 | a +Drive mod has no storage, so no lock codes (42..127, all from the flashed lockfile) |
 
-A spare entry costs its 4 bytes of RAM in the flashed build, about 20 KB
-in all, which the +Drive area gives up.
+A spare entry costs 4 bytes of RAM, about 20 KB in all, taken from the +Drive area.
 
 ## Screen calls (0.13)
 

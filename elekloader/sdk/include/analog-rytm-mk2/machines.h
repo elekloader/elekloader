@@ -95,7 +95,7 @@ struct core_machine_knob {
 };
 
 struct core_machine {
-    int32_t slot;           /* 34..43; 34..52 from core 0.13; CORE_MACHINE(i) by count */
+    int32_t slot;           /* 34..43; 34..52 from core 0.13 (a +Drive mod's from 0.22); CORE_MACHINE(i) by count */
     core_engine engine;     /* 0: the slot's stock engine */
     int8_t home;            /* the track the machine list files it under: 0 BD,
                                1 SD, 4 BT, -1 none (as XT CLASSIC) */

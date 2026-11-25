@@ -498,8 +498,9 @@ image>` prints it.
   table's `"spare"` in the declaring mod's `collections`. A `"max"` there
   caps the table's entries in all: the spare ones are only what the
   build's own entries leave of it (none when they reach it), so
-  core-ar2's `core_machines` (`"max": 10`) leaves the +Drive mods the
-  hidden slots the flashed mods' machines don't take. Where the
+  core-ar2's `core_machines` (`"max": 19`, slots 34..52) leaves the +Drive mods the
+  hidden slots the flashed mods' machines don't take (written into the
+  machine table from core-ar2 0.22). Where the
   collection gives no `"spare"`, `core_lock_params` gets 32. The storage
   tables the linker fills, `core_store_ids` (16: a layout ID and 15
   ancestors), `core_lock_codes`, `core_lock_ccs` (32 each) and

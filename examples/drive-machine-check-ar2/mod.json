@@ -1,0 +1,18 @@
+{
+ "id": "drive-machine-check",
+ "version": "0.1",
+ "title": "+Drive machine check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for core-ar2's +Drive machines on the Analog Rytm MKII, checked in RAM and on screen. In ev_boot_drive it does what the Drive Loader does for a +Drive mod's machine: it puts DRV CHECK (slot 37, BD voice, plays as BD CLASSIC) in core_machines' first spare entry, after .boot has walked the table. Its record after the magic DMC1 says whether the entry went in, what the machine table holds for slot 37 at ev_boot_drive's end and at the first tick, and how often DRV CHECK's engine ran.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": ["check.c"],
+ "subscribe": [
+  {"event": "ev_boot_drive", "fn": "dmc_boot_drive", "order": 50},
+  {"event": "ev_tick", "fn": "dmc_tick", "order": 60}
+ ],
+ "resources": {"core": "0.22"},
+ "requires": ["core"]
+}

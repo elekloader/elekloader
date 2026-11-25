@@ -984,6 +984,7 @@ static int layout_moved(void)
  * collection has no spare entries: a +Drive mod is not called in it. */
 typedef void (*ev_boot_drive_t)(void);
 extern const ev_boot_drive_t ev_boot_drive[];
+void core_boot_drive_machines(void);   /* machines.c (0.22) */
 /* (live, stored, bool *upgraded): it writes *upgraded whenever that is not
  * 0; returns 1 when loaded (low byte) */
 #define PROJECT_CHECK_LOAD ((int (*)(void *, void *, unsigned char *))0x4000e846)
@@ -1019,6 +1020,7 @@ void core_boot_drive(void)
     unsigned char upgraded = 0;
     for (f = ev_boot_drive; *f; f++)
         (*f)();
+    core_boot_drive_machines();
     boot_wait = 0;
     if (!boot_loaded)
         return;
