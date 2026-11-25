@@ -3341,7 +3341,7 @@ writes each `def` of a knob with `min < max` into the sound
 
 The Rytm has 53 machine slots. 34..52 hold hidden factory machines: stock
 gives them a voice mask of 0, so no track may pick them, and nothing else
-of theirs is used. From core-ar2 0.5 a mod takes one of slots 34..43 for a
+of theirs is used. A mod, flashed or +Drive, takes one of slots 34..52 for a
 machine of its own through the table `core_machines`, with
 `elekloader/sdk/include/analog-rytm-mk2/machines.h`:
 
@@ -3364,7 +3364,7 @@ const struct core_machine my_machine = {
     {{"Level", "LEV", 0, 127, 100, 0}, {"Tune", "TUN", 32, 96, 58, 1}, /* ... */}};
 ```
 
-At boot, before the OS reads them, core writes the entry's engine, home
+At boot (a +Drive mod's entry right after `ev_boot_drive`), core writes the entry's engine, home
 track (the machine list files it under that track; -1 for none), voice
 mask and names into the machine table, and each knob's name, label, range,
 default and centring into the slot's parameter records. A record keeps

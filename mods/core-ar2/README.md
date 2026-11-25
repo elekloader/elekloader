@@ -359,17 +359,17 @@ rarely engages (92%, a 94% peak).
 
 ## Machines (0.5)
 
-`machines.c` lets a mod add a machine in one of the hidden slots 34..43
-(docs/ADAPTING.md, "Machines (core-ar2 0.5, Analog Rytm MKII)"; the SDK
-header is `analog-rytm-mk2/machines.h`). The OS keeps its machines in three
+`machines.c` lets a mod add a machine in one of the hidden slots 34..52
+(docs/ADAPTING.md, "Machines (core-ar2 0.5, Analog Rytm MKII)"; SDK header
+`analog-rytm-mk2/machines.h`). The OS keeps its machines in three
 arrays indexed by the machine's number (names at 0x401bf254, home track and
-voice mask at 0x401bf42c, the engine at 0x402906dc, all data of the 1.74
-image) and in the parameter records each machine owns. Stock hides 34..52
+voice mask at 0x401bf42c, the engine at 0x402906dc, 1.74's data) and in
+the parameter records each machine owns. Stock hides 34..52
 with a voice mask of 0. From `.boot` (core.s's `BOOT_INIT`), before the OS
 reads any of it, `core_boot_init` writes each `core_machines` entry's engine,
 home track, voices and names into the arrays, and its knobs' names, ranges
-and defaults into the slot's records. The OS then lists, stores and maps the
-machine as it does its own. elekloader names an entry's slot as the resource
+and defaults into the slot's records; a +Drive entry, after `ev_boot_drive`.
+The OS lists, stores and maps it as its own. elekloader names an entry's slot as the resource
 `machine:<n>` (the profile's `slot_claims`), so two mods that take one slot
 are refused at link.
 
