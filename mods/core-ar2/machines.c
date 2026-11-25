@@ -283,57 +283,83 @@ static void file_records(void)
 
 void core_std_boot(void);           /* std.c (0.17): std1's ev_boot, last */
 
-void core_boot_init(void)
+/* Write one core_machines entry into the machine table and its slot's
+ * records, unless an earlier entry took the slot (done). */
+static uint32_t done;
+
+static int machine_setup(const struct core_machine *m)
 {
-    uint32_t done = 0;
-    const struct core_machine *const *e;
-    core_store_boot_init();
-    for (e = core_machines; *e; e++) {
-        const struct core_machine *m = *e;
-        int32_t s = m->slot;
-        if (s < SLOT_FIRST || s > SLOT_LAST || (done >> (s - SLOT_FIRST) & 1))
+    int32_t s = m->slot;
+    if (s < SLOT_FIRST || s > SLOT_LAST || (done >> (s - SLOT_FIRST) & 1))
+        return 0;
+    done |= 1u << (s - SLOT_FIRST);
+    if (m->engine) {                /* 0: the slot's stock engine, as it is */
+        mod_engine[s - SLOT_FIRST] = m->engine;
+        ENGINES[s] = tramps[s - SLOT_FIRST];
+    }
+    slot_machine[s - SLOT_FIRST] = m;
+    AVAIL[2 * s] = (uint8_t)m->home;
+    AVAIL[2 * s + 1] = m->voices;
+    if (m->name)                    /* 0: the slot's stock names, as they are */
+        NAMES[2 * s] = m->name;
+    if (m->label)
+        NAMES[2 * s + 1] = m->label;
+    if (s >= SLOT_TEST && m->engine)   /* a mod's own machine; a stock one keeps its order */
+        place_knobs(s);
+    for (int id = 0; id < RECORD_COUNT; id++) {
+        uint8_t *r = RECORDS + RECORD_SIZE * id;
+        int32_t k = L(r, 0x04) - 9;
+        if (L(r, 0x00) != s || k < 0 || k > 7)
             continue;
-        done |= 1u << (s - SLOT_FIRST);
-        if (m->engine) {                /* 0: the slot's stock engine, as it is */
-            mod_engine[s - SLOT_FIRST] = m->engine;
-            ENGINES[s] = tramps[s - SLOT_FIRST];
-        }
-        slot_machine[s - SLOT_FIRST] = m;
-        AVAIL[2 * s] = (uint8_t)m->home;
-        AVAIL[2 * s + 1] = m->voices;
-        if (m->name)                    /* 0: the slot's stock names, as they are */
-            NAMES[2 * s] = m->name;
-        if (m->label)
-            NAMES[2 * s + 1] = m->label;
-        if (s >= SLOT_TEST && m->engine)   /* a mod's own machine; a stock one keeps its order */
-            place_knobs(s);
-        for (int id = 0; id < RECORD_COUNT; id++) {
-            uint8_t *r = RECORDS + RECORD_SIZE * id;
-            int32_t k = L(r, 0x04) - 9;
-            if (L(r, 0x00) != s || k < 0 || k > 7)
-                continue;
-            const struct core_machine_knob *n = &m->knobs[k];
-            if (!n->name)
-                continue;
-            L(r, 0x08) = n->min << 8;               /* min, max, default: value << 8 */
-            L(r, 0x0c) = n->max << 8;
-            L(r, 0x10) = n->def << 8;
-            L(r, 0x14) = n->centred;
-            L(r, 0x28) = (int32_t)n->name;
-            if (m->name)
-                L(r, 0x2c) = (int32_t)m->name;     /* the group: the machine */
-            L(r, 0x30) = (int32_t)n->label;
-            if (s >= SLOT_TEST) {
-                uint8_t *q = ref_record(k);
-                if (q) {
-                    L(r, 0x18) = L(q, 0x18);       /* CC 16 + k */
-                    L(r, 0x1c) = L(q, 0x1c);       /* NRPN 1:k */
-                    if (m->flags & CORE_MACHINE_DESTS)
-                        L(r, 0x24) = L(q, 0x24);   /* LFO, velocity, aftertouch */
-                }
+        const struct core_machine_knob *n = &m->knobs[k];
+        if (!n->name)
+            continue;
+        L(r, 0x08) = n->min << 8;               /* min, max, default: value << 8 */
+        L(r, 0x0c) = n->max << 8;
+        L(r, 0x10) = n->def << 8;
+        L(r, 0x14) = n->centred;
+        L(r, 0x28) = (int32_t)n->name;
+        if (m->name)
+            L(r, 0x2c) = (int32_t)m->name;     /* the group: the machine */
+        L(r, 0x30) = (int32_t)n->label;
+        if (s >= SLOT_TEST) {
+            uint8_t *q = ref_record(k);
+            if (q) {
+                L(r, 0x18) = L(q, 0x18);       /* CC 16 + k */
+                L(r, 0x1c) = L(q, 0x1c);       /* NRPN 1:k */
+                if (m->flags & CORE_MACHINE_DESTS)
+                    L(r, 0x24) = L(q, 0x24);   /* LFO, velocity, aftertouch */
             }
         }
     }
+    return 1;
+}
+
+void core_boot_init(void)
+{
+    const struct core_machine *const *e;
+    core_store_boot_init();
+    for (e = core_machines; *e; e++)
+        machine_setup(*e);
     file_records();
     core_std_boot();
+}
+
+/* (0.22) The +Drive mods' machines. The Drive Loader merges their
+ * core_machines entries into the table's spare entries at ev_boot_drive,
+ * after .boot has walked it, so core walks it again there (store.c,
+ * core_boot_drive), before the boot's project load is finished: the
+ * flashed entries are done and skipped, a +Drive entry for a free slot is
+ * written as a flashed one is at .boot. rec_of follows the records' owner
+ * and index, which no entry changes, so it stays as filed. Returns how
+ * many it wrote: the boot's load of the working project ran before them,
+ * with those slots still hidden (voice mask 0), so it set a track playing
+ * one to DISABLE, and core_boot_drive loads the project again. */
+int core_boot_drive_machines(void)
+{
+    const struct core_machine *const *e;
+    int n = 0;
+    for (e = core_machines; *e; e++)
+        n += machine_setup(*e);
+    return n;
 }

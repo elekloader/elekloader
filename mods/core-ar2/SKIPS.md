@@ -96,7 +96,7 @@ A slot is skipped in a block when all of these hold:
 |---|---|
 | the slot is not playing (+0x28 is 0) | its fetch is the zero buffer |
 | its bit is clear in this block's and the last block's trig masks (0x8000586c, 0x80005868) | a trig sets the slot up one block late and ramps its gain to 0 in the trig block |
-| the filter history, 12 longs at +0x2c..+0x5b, is all 0 | zero in and zero history give exactly zero out and keep the history at zero; a trig clears it, a sample that has ended may leave it nonzero until the next trig |
+| the filter history, 12 longs at +0x2c..+0x5b, is all 0 | zero in and zero history give exactly zero out and keep the history at zero; stock's 2:1 filter rewrites it every block from that block's input, so a stopped or ended sample's history is 0 within 1 to 2 blocks |
 | the MAC unit is in stock's mode (MACSR & 0xf0 is 0x20) | the mode the steps are exact in |
 
 What still runs for every slot: the fetch and its DMA (shared by all

@@ -2196,7 +2196,7 @@ def test_core_ar2_0_12_room_for_drive_mods():
             assert isinstance(v, dict) and v.get('spare') == 256, (name, v)
     # 0.14: the boot link's own event, which no +Drive mod joins (README, "+Drive storage at boot")
     assert cols['ev_boot_drive'] == {'entry': 4, 'spare': 0}
-    assert cols['core_machines'] == {'entry': 4, 'spare': 10, 'max': 10}   # less the flashed mods' machines
+    assert cols['core_machines'] == {'entry': 4, 'spare': 19, 'max': 19}   # slots 34..52, less the flashed mods' machines
     for name in ('core_pages', 'core_page_fns', 'core_view_pages'):
         assert cols[name] == {'entry': 4, 'spare': 10 * 16 - 11}, name
     for name in ('core_params', 'core_param_locks', 'core_param_scales'):
@@ -2729,7 +2729,7 @@ def test_core_ar2_0_21_starts_the_mods_area_above_the_usb_feedback_ring():
     assert lo % 0x1000 == 0 and lo >= ring[1]
     old = dev.ddr_for('0.20')
     assert old[0] < ring[1] and ring[0] < old[1]
-    assert json.load(open(os.path.join(os.path.dirname(__file__), '..', 'mods', 'core-ar2', 'mod.json')))['version'] == '0.21'
+    assert json.load(open(os.path.join(os.path.dirname(__file__), '..', 'mods', 'core-ar2', 'mod.json')))['version'] == '0.22'
 
 
 if __name__ == '__main__':

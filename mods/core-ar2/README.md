@@ -359,19 +359,18 @@ rarely engages (92%, a 94% peak).
 
 ## Machines (0.5)
 
-`machines.c` lets a mod add a machine in one of the hidden slots 34..43
-(docs/ADAPTING.md, "Machines (core-ar2 0.5, Analog Rytm MKII)"; the SDK
-header is `analog-rytm-mk2/machines.h`). The OS keeps its machines in three
+`machines.c` lets a mod add a machine in one of the hidden slots 34..52
+(docs/ADAPTING.md, "Machines (core-ar2 0.5, Analog Rytm MKII)"; SDK header
+`analog-rytm-mk2/machines.h`). The OS keeps its machines in three
 arrays indexed by the machine's number (names at 0x401bf254, home track and
-voice mask at 0x401bf42c, the engine at 0x402906dc, all data of the 1.74
-image) and in the parameter records each machine owns. Stock hides 34..52
+voice mask at 0x401bf42c, the engine at 0x402906dc, 1.74's data) and in
+the parameter records each machine owns. Stock hides 34..52
 with a voice mask of 0. From `.boot` (core.s's `BOOT_INIT`), before the OS
 reads any of it, `core_boot_init` writes each `core_machines` entry's engine,
 home track, voices and names into the arrays, and its knobs' names, ranges
-and defaults into the slot's records. The OS then lists, stores and maps the
-machine as it does its own. elekloader names an entry's slot as the resource
-`machine:<n>` (the profile's `slot_claims`), so two mods that take one slot
-are refused at link.
+and defaults into the slot's records; a +Drive entry after `ev_boot_drive`,
+then the project loads again. The OS lists, stores and maps it as its own. elekloader names an entry's slot as the resource
+`machine:<n>` (`slot_claims`), so two mods taking one slot are refused.
 
 Slots 44..52 (the TEST machines) are offered too ("Machine slots 44..52
 and the trig getters (0.13)" below). A kit saved with an added machine
@@ -1113,21 +1112,20 @@ Opt-in, by the knob's id; a parameter without an entry is as in 0.10.
 
 In a build with the Drive Loader (`mods/drive-loader-ar2`, which loads mods
 from the +Drive at boot) each table gets spare entries the loader fills at
-boot. A linker without +Drive support reads only each table's `entry` and
-leaves the rest, so without the loader the tables are the same as 0.11's. Core's events (every `ev_*`
+boot. A linker without +Drive support reads only each table's `entry`, so
+without the loader the tables are 0.11's. Core's events (every `ev_*`
 table but 0.14's `ev_boot_drive`, which has none) declare 256, as many as the loader links, so each +Drive mod can add
-a handler to any event; `core_machines` caps at 10, its hidden slots
-34..43. The other tables declare what each can hold:
+a handler to any event. The other tables declare what each can hold:
 
 | table | spare | its limit |
 |---|---|---|
 | `core_pages`, `core_page_fns`, `core_view_pages` | 149 | the page key's room: 10 views of `VIEW_MAX` 16 pages (pages.s), 11 of them stock's; a view drops pages past its 16 |
 | `core_params`, `core_param_locks`, `core_param_scales` | 256 | none of their own (id ranges, from 555 for a mod's ids), so as many as the loader links |
+| `core_machines` | 19, `"max": 19` | slots 34..52; the loader's entries written after `ev_boot_drive` |
 | `core_step_owners` | 8, `"max": 8` | `OWNERS` 8 (steps.c), flashed and +Drive owners together: the spare ones are what the flashed build leaves |
 | `core_lock_params` | the linker's 16 | a +Drive mod has no storage, so no lock codes (42..127, all from the flashed lockfile) |
 
-A spare entry costs its 4 bytes of RAM in the flashed build, about 20 KB
-in all, which the +Drive area gives up.
+A spare entry costs 4 bytes of RAM, about 20 KB in all, taken from the +Drive area.
 
 ## Screen calls (0.13)
 
