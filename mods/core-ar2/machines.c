@@ -287,11 +287,11 @@ void core_std_boot(void);           /* std.c (0.17): std1's ev_boot, last */
  * records, unless an earlier entry took the slot (done). */
 static uint32_t done;
 
-static void machine_setup(const struct core_machine *m)
+static int machine_setup(const struct core_machine *m)
 {
     int32_t s = m->slot;
     if (s < SLOT_FIRST || s > SLOT_LAST || (done >> (s - SLOT_FIRST) & 1))
-        return;
+        return 0;
     done |= 1u << (s - SLOT_FIRST);
     if (m->engine) {                /* 0: the slot's stock engine, as it is */
         mod_engine[s - SLOT_FIRST] = m->engine;
@@ -332,6 +332,7 @@ static void machine_setup(const struct core_machine *m)
             }
         }
     }
+    return 1;
 }
 
 void core_boot_init(void)
@@ -350,10 +351,15 @@ void core_boot_init(void)
  * core_boot_drive), before the boot's project load is finished: the
  * flashed entries are done and skipped, a +Drive entry for a free slot is
  * written as a flashed one is at .boot. rec_of follows the records' owner
- * and index, which no entry changes, so it stays as filed. */
-void core_boot_drive_machines(void)
+ * and index, which no entry changes, so it stays as filed. Returns how
+ * many it wrote: the boot's load of the working project ran before them,
+ * with those slots still hidden (voice mask 0), so it set a track playing
+ * one to DISABLE, and core_boot_drive loads the project again. */
+int core_boot_drive_machines(void)
 {
     const struct core_machine *const *e;
+    int n = 0;
     for (e = core_machines; *e; e++)
-        machine_setup(*e);
+        n += machine_setup(*e);
+    return n;
 }

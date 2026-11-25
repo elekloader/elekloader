@@ -368,10 +368,9 @@ the parameter records each machine owns. Stock hides 34..52
 with a voice mask of 0. From `.boot` (core.s's `BOOT_INIT`), before the OS
 reads any of it, `core_boot_init` writes each `core_machines` entry's engine,
 home track, voices and names into the arrays, and its knobs' names, ranges
-and defaults into the slot's records; a +Drive entry, after `ev_boot_drive`.
-The OS lists, stores and maps it as its own. elekloader names an entry's slot as the resource
-`machine:<n>` (the profile's `slot_claims`), so two mods that take one slot
-are refused at link.
+and defaults into the slot's records; a +Drive entry after `ev_boot_drive`,
+then the project loads again. The OS lists, stores and maps it as its own. elekloader names an entry's slot as the resource
+`machine:<n>` (`slot_claims`), so two mods taking one slot are refused.
 
 Slots 44..52 (the TEST machines) are offered too ("Machine slots 44..52
 and the trig getters (0.13)" below). A kit saved with an added machine

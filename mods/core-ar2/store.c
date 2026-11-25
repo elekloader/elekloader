@@ -976,7 +976,9 @@ static int layout_moved(void)
  * project loaded, and the audio interrupt and the UI task have not started.
  * The Drive Loader links the +Drive mods there and may set the live layout
  * (core_store_ids, core_store_gens). Then core finishes the boot's project
- * load: if the layout moved, it loads the working project again
+ * load: if the layout moved, or (0.22) core wrote a +Drive mod's machine
+ * (a track the first load found on a hidden slot is DISABLE), it loads the
+ * working project again
  * (FUN_4000e846, main()'s own load, through st_proj_load; on a valid
  * version 9 image it neither upgrades, saves nor inits) so every item is
  * read with the live layout; else it finishes the first load as is. Either
@@ -984,7 +986,7 @@ static int layout_moved(void)
  * collection has no spare entries: a +Drive mod is not called in it. */
 typedef void (*ev_boot_drive_t)(void);
 extern const ev_boot_drive_t ev_boot_drive[];
-void core_boot_drive_machines(void);   /* machines.c (0.22) */
+int core_boot_drive_machines(void);    /* machines.c (0.22) */
 /* (live, stored, bool *upgraded): it writes *upgraded whenever that is not
  * 0; returns 1 when loaded (low byte) */
 #define PROJECT_CHECK_LOAD ((int (*)(void *, void *, unsigned char *))0x4000e846)
@@ -1018,14 +1020,15 @@ void core_boot_drive(void)
 {
     const ev_boot_drive_t *f;
     unsigned char upgraded = 0;
+    int machines;
     for (f = ev_boot_drive; *f; f++)
         (*f)();
-    core_boot_drive_machines();
+    machines = core_boot_drive_machines();
     boot_wait = 0;
     if (!boot_loaded)
         return;
     boot_loaded = boot_done = 0;
-    if (layout_moved()) {
+    if (layout_moved() || machines) {
         int reset = BOOT_FLAGS & 0xa;
         if (reset)
             keep_reset(0);
