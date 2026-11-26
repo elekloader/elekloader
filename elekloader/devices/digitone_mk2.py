@@ -148,7 +148,7 @@ DEVICE = Device(
     toolchain={
         'prefix': 'm68k-linux-gnu-',                # binutils + gcc for m68k/ColdFire
         'asflags': ['-mcpu=54455'],                 # ColdFire V4 (the MCF5441x's ISA)
-        'cflags': ['-mcpu=54455', '-O2', '-ffreestanding', '-fno-builtin', '-nostdlib',
+        'cflags': ['-mcpu=54455', '-std=gnu17', '-O2', '-ffreestanding', '-fno-builtin', '-nostdlib',
                    '-fno-pic', '-fno-pie', '-fomit-frame-pointer', '-Wall'],
     },
 )

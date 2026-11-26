@@ -163,8 +163,17 @@ int core_perf_offset(int track, unsigned field)
 
 /* ---- editing, with a scene's or a performance's pad held ---- */
 
-typedef int (*method_t)();
-#define METHOD(o, off) (*(method_t *)(*(char **)(o) + (off)))
+/* the held list object's methods, by vtable offset: 32 (o) whether it is a
+ * performance's; 28 (o, track, code) whether the code has an entry; 24 (o,
+ * track, code) its value (8.8); 20 (o, track, code, value 8.8) sets it */
+typedef int (*method_kind_t)(void *);
+typedef int (*method_get_t)(void *, int, unsigned);
+typedef int (*method_set_t)(void *, int, unsigned, int);
+#define METHOD(o, off, type) (*(type *)(*(char **)(o) + (off)))
+#define HELD_PERF(o) METHOD(o, 32, method_kind_t)(o)
+#define HELD_HAS(o, t, c) METHOD(o, 28, method_get_t)(o, t, c)
+#define HELD_GET(o, t, c) METHOD(o, 24, method_get_t)(o, t, c)
+#define HELD_SET(o, t, c, v) METHOD(o, 20, method_set_t)(o, t, c, v)
 
 /* the view's list object while a pad is held (0x40036636), if a scene's or
  * a performance's */
@@ -209,13 +218,13 @@ int core_scene_turn(void *view, int id, int delta)
     int track, v, rel, step, sh;
     if (!o || !(p = core_lock_knob(view, id, &track, &code, &s)))
         return -1;
-    rel = (unsigned char)METHOD(o, 32)(o);
+    rel = (unsigned char)HELD_PERF(o);
     sh = core_lock_shift(p);
     step = delta > 0 ? (delta + 255) >> 8 : delta < 0 ? -((255 - delta) >> 8) : 0;
-    if ((unsigned char)METHOD(o, 28)(o, track, code))
-        v = (int16_t)METHOD(o, 24)(o, track, code) >> 8;
+    if ((unsigned char)HELD_HAS(o, track, code))
+        v = (int16_t)HELD_GET(o, track, code) >> 8;
     else if (rel) {
-        METHOD(o, 20)(o, track, code, 0);
+        HELD_SET(o, track, code, 0);
         return 1;
     } else
         v = core_store_get(core_lock_field(p), s, 0) >> sh;
@@ -225,7 +234,7 @@ int core_scene_turn(void *view, int id, int delta)
     } else {
         v = clamp(v + step, core_lock_min(p) >> sh, core_lock_max(p) >> sh);
     }
-    METHOD(o, 20)(o, track, code, v << 8);
+    HELD_SET(o, track, code, v << 8);
     return 1;
 }
 
@@ -239,12 +248,12 @@ int core_scene_push(void *view, int id)
     int track;
     if (!o || !(p = core_lock_knob(view, id, &track, &code, &s)))
         return -1;
-    if ((unsigned char)METHOD(o, 28)(o, track, code))
+    if ((unsigned char)HELD_HAS(o, track, code))
         return 0;
-    METHOD(o, 20)(o, track, code,
-                  (unsigned char)METHOD(o, 32)(o)
-                      ? 0
-                      : (int)(core_store_get(core_lock_field(p), s, 0) >> core_lock_shift(p)) << 8);
+    HELD_SET(o, track, code,
+             (unsigned char)HELD_PERF(o)
+                 ? 0
+                 : (int)(core_store_get(core_lock_field(p), s, 0) >> core_lock_shift(p)) << 8);
     return 1;
 }
 
@@ -275,9 +284,9 @@ int core_held_get(void *view, int id, int *value)
     int track, rel, v;
     if (!o || !(p = core_lock_knob(view, id, &track, &code, &s)))
         return 0;
-    rel = (unsigned char)METHOD(o, 32)(o);
-    if ((unsigned char)METHOD(o, 28)(o, track, code)) {
-        v = (int16_t)METHOD(o, 24)(o, track, code) >> 8 << core_lock_shift(p);
+    rel = (unsigned char)HELD_PERF(o);
+    if ((unsigned char)HELD_HAS(o, track, code)) {
+        v = (int16_t)HELD_GET(o, track, code) >> 8 << core_lock_shift(p);
         *value = rel ? core_scale_depth(p, v) << 8 : core_scale_show(p, v);
     } else if (rel)
         *value = 0;
@@ -297,7 +306,7 @@ int core_held_kind(void *view)
     void *o = view ? held(view) : 0;
     if (!o)
         return 0;
-    return (unsigned char)METHOD(o, 32)(o) ? 2 : 1;  /* CORE_HELD_PERF, _SCENE */
+    return (unsigned char)HELD_PERF(o) ? 2 : 1;  /* CORE_HELD_PERF, _SCENE */
 }
 
 /* (0.11) whether the text being drawn for id is a performance's depth that
