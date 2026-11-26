@@ -112,7 +112,7 @@ DEVICE = Device(
     toolchain={
         'prefix': 'm68k-linux-gnu-',              # or ELEKLOADER_CROSS=m68k-elf-
         'asflags': ['-mcpu=54455'],                 # ColdFire V4, as the MKII
-        'cflags': ['-mcpu=54455', '-O2', '-ffreestanding', '-fno-builtin', '-nostdlib',
+        'cflags': ['-mcpu=54455', '-std=gnu17', '-O2', '-ffreestanding', '-fno-builtin', '-nostdlib',
                    '-fno-pic', '-fno-pie', '-fomit-frame-pointer', '-Wall'],
     },
 )

@@ -31,7 +31,9 @@ monolithic build; section 4 says how to go from A to B.
   gcc-m68k-linux-gnu`; on Windows, inside WSL; on a Mac, with Homebrew,
   `brew install m68k-elf-binutils m68k-elf-gcc`, then
   `export ELEKLOADER_CROSS=m68k-elf-`. Set `ELEKLOADER_CROSS` whenever
-  your tools have another prefix.
+  your tools have another prefix. The profiles' C flags pin `-std=gnu17`,
+  so a gcc that defaults to C23 (15 and later) compiles the same code; a
+  mod's own `cflags` may name another standard after it.
 - For linkable mods: the **core** mod for your device (`core-*.elemod`).
   It owns the shared hook sites, copies every mod's code into RAM at boot,
   and turns the shared sites into events your mod subscribes to. Every

@@ -103,7 +103,7 @@ DEVICE = Device(
     toolchain={
         'prefix': 'm68k-elf-',                      # bare-metal binutils (+ gcc for C)
         'asflags': ['-mcpu=54418'],                 # ColdFire V4 with EMAC (the MCF5441x's ISA)
-        'cflags': ['-mcpu=54418', '-O2', '-ffreestanding', '-fno-builtin', '-nostdlib',
+        'cflags': ['-mcpu=54418', '-std=gnu17', '-O2', '-ffreestanding', '-fno-builtin', '-nostdlib',
                    '-fno-pic', '-fno-pie', '-fomit-frame-pointer', '-Wall'],
     },
 )
