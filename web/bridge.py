@@ -35,7 +35,28 @@ def _name(name):
     n = os.path.basename(str(name).replace('\\', '/')).strip()
     if n in ('', '.', '..'):
         raise ValueError('no file name')
-    return n
+    # patch.save writes <name>.map.json and <name>.part beside it, and Pyodide's
+    # file system cannot open or remove a name past 255 bytes (issue #406)
+    stem, ext = os.path.splitext(n)
+    while len((stem + ext).encode('utf-8')) > NAME_MAX_BYTES and stem:
+        stem = stem[:-1]
+    return stem + ext
+
+
+NAME_MAX_BYTES = 200
+
+
+def _fresh_out():
+    """An empty OUT. A folder Pyodide cannot empty is moved aside instead,
+    so one failed build does not stop every build after it (issue #406)."""
+    try:
+        shutil.rmtree(OUT)
+    except OSError:
+        n = 0
+        while os.path.exists('%s-old%d' % (OUT, n)):
+            n += 1
+        os.rename(OUT, '%s-old%d' % (OUT, n))
+    os.makedirs(OUT)
 
 
 def _device(d, rel=None):
@@ -193,8 +214,7 @@ def build(args, data, progress=None):
     v = args['version']
     if v and not v.isascii():               # the one case patch.build crashes on (above)
         return {'ok': False, 'error': _version_problem(v)}
-    shutil.rmtree(OUT)
-    os.makedirs(OUT)
+    _fresh_out()
     name = _name(args['name'])
     if not name.lower().endswith('.syx'):
         name += '.syx'

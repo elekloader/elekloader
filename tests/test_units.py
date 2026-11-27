@@ -2746,3 +2746,13 @@ if __name__ == '__main__':
             failed += 1
     print('%d passed, %d failed' % (ok, failed))
     sys.exit(1 if failed else 0)
+
+
+def test_a_build_of_many_mods_gets_a_short_file_name():
+    """Issue #406: 25 mods' ids made a name past 255 characters, which the web
+    page's file system could neither write beside (.map.json) nor remove."""
+    from elekloader import gui
+    few = [{'id': 'digihealth'}, {'id': 'digislicer'}, {'id': 'core'}]
+    assert gui.suggested_name(few, '1.54') == 'custom-1.54-digihealth+digislicer.syx'
+    many = [{'id': 'some-mod-%d' % i} for i in range(25)]
+    assert gui.suggested_name(many, '1.54') == 'custom-1.54-25-mods.syx'

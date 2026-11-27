@@ -145,8 +145,13 @@ export function oneCore(descs: Map<string, Desc>, paths: Iterable<string>): Set<
 
 export function suggestedName(descs: Desc[], version: string | null): string {
   const ids = descs.map(d => d.id).filter(i => i !== null && i !== undefined && i !== 'core').sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
-  return `custom-${version || 'x'}${ids.length ? '-' + ids.join('+') : ''}.syx`
+  let tail = ids.join('+')
+  if (tail.length > NAME_MAX_IDS) tail = `${ids.length}-mods`   // gui.suggested_name (issue #406)
+  return `custom-${version || 'x'}${ids.length ? '-' + tail : ''}.syx`
 }
+
+/** gui.NAME_MAX_IDS: past this the mod ids make a name file systems refuse. */
+export const NAME_MAX_IDS = 96
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
 
