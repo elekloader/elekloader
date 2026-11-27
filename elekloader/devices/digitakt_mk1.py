@@ -29,6 +29,12 @@ for both:
   boot stack's top page. The core's boot copier puts the mods wherever the
   linker laid them out, so only the area changes; an older core keeps
   0x47BE0000.
+- +Drive mods: a mod that imports core_desc and links more mods on the
+  unit (TELOS, github.com/elekloader/telos) gets what the flashed build
+  leaves of core_ddr (drive_align): about 200 KB beside core alone. Core
+  4.5 copies the OS image before it runs to the sample pool's top
+  (0x47800000; the pool fills from its start, and no sample loads before
+  ev_card_ready), where such a loader reads stock bytes.
 """
 from . import Device, Release
 
@@ -62,6 +68,9 @@ DEVICE = Device(
     },
     ddr=(0x47BE0000, 0x47C00000),
     core_ddr=(('4.0', (0x47BC0000, 0x47C00000)),),   # core 4.0: 256 KB (above)
+    drive_align=0x1000,                       # +Drive mods' area (above): what the flashed build
+                                              # leaves of core_ddr, from a 4 KB boundary
+    drive_shadow=True,                        # TELOS copies stock parts from RAM (desc.py, "shadow")
     sram_code=(0x8000F700, 0x80010000),
     fast_table='fa_copies',
     slot_claims=(('core_machines', 0, 128, 'machine'),),   # a machine's descriptor names its id at +0

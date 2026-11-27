@@ -1,10 +1,10 @@
 {
- "id": "core", "version": "4.4",
+ "id": "core", "version": "4.5",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina",
- "description": "The boot copier, the hook bus, SRC machine slots, from 3.0 the firmware locations as named exports and machines that describe their own page, and from 4.0 256 KB for the mods' code, tables and variables (from 0x47BC0000, in place of the 128 KB at 0x47BE0000), and from 4.1 the master output: the master pair before it goes out (ev_render_master), pages of the mods' own among the master pages (core_mpages) and rows in SETTINGS > GLOBAL FX/MIX (ev_fxmix), and from 4.2 the played notes (ev_live_note, fw_note_on, fw_note_off), and from 4.3 the MIDI CCs the unit receives, before the stock applies them (ev_midi_cc), and from 4.4 the AMP envelope (fw_amp_level; fw_amp_env is the filter envelope, also fw_filter_env): every other mod needs it. On its own it changes nothing the unit does.",
+ "description": "The boot copier, the hook bus, SRC machine slots, from 3.0 the firmware locations as named exports and machines that describe their own page, and from 4.0 256 KB for the mods' code, tables and variables (from 0x47BC0000, in place of the 128 KB at 0x47BE0000), and from 4.1 the master output: the master pair before it goes out (ev_render_master), pages of the mods' own among the master pages (core_mpages) and rows in SETTINGS > GLOBAL FX/MIX (ev_fxmix), and from 4.2 the played notes (ev_live_note, fw_note_on, fw_note_off), and from 4.3 the MIDI CCs the unit receives, before the stock applies them (ev_midi_cc), and from 4.4 the AMP envelope (fw_amp_level; fw_amp_env is the filter envelope, also fw_filter_env), and from 4.5 what a mod that links more mods on the unit needs (TELOS): ev_card_ready, ev_fs_ready (the +Drive's file system mounted), ev_sysex, ev_crash, core_restart, the card's routines (fw_card_*) and its file system's (fw_fs_*), project slot writes, saves and loads (ev_project_slot_write, ev_project_saved, ev_project_loaded), fw_sysex_send, the OS's tasks (core_tasks) and its image as it was before it ran (core_stock_info): every other mod needs it. On its own it changes nothing the unit does.",
  "device": "digitakt-mk1", "os": "1.53",
- "sources": ["core.s", "settings.s", "render.s", "machines.s", "fw.s", "master.s", "notes.s", "midi.s"],
+ "sources": ["core.s", "settings.s", "render.s", "machines.s", "fw.s", "master.s", "notes.s", "midi.s", "system.s"],
  "defsym": {
   "DRAWALL": "0x400ca382",
   "KEYDISP": "0x400084fe",
@@ -66,7 +66,32 @@
   "NOTE_OFF": "0x400d575e",
   "NOTE_ON_LINK": "-104",
   "NOTE_OFF_LINK": "-108",
-  "ROUTER_EXIT": "0x40015adc"
+  "ROUTER_EXIT": "0x40015adc",
+  "CARD_STATUS": "0x41980918",
+  "CRASH_SET": "0x40001c6a",
+  "FW_RESTART": "0x40005864",
+  "SYSEX_IN": "0x400d52c4",
+  "SYSEX_SEND": "0x400d6e1e",
+  "FW_CARD_SECTORS": "0x400e260c",
+  "FW_CARD_ERASE": "0x400e2904",
+  "FW_CARD_READ": "0x400e29ec",
+  "FW_CARD_WRITE": "0x400e2bd2",
+  "CORE_STOCK_COPY": "0x47800000",
+  "CORE_IMAGE_LEN": "2475584",
+  "CORE_TASK_SHIFT": "0",
+  "FS_MOUNTED": "0x420edc50",
+  "BOOTFLAGS": "0x401f55c0",
+  "FS_OPEN": "0x400cf178",
+  "FS_READ": "0x400ceebe",
+  "FS_WRITE": "0x400cef1e",
+  "FS_CLOSE": "0x400cf136",
+  "FS_UNLINK": "0x400cdb28",
+  "FS_MKDIR": "0x400cde0c",
+  "FS_RENAME": "0x400cd902",
+  "FS_STAT": "0x400cdc36",
+  "SLOT_CARD_WRITE": "0x400923b4",
+  "LOAD_DONE": "0x4004f054",
+  "CUR_SLOT": "0x40648125"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -117,7 +142,14 @@
   {"addr": "0x40184698", "stock": "40039982", "op": "ptr", "target": "core_mview_clear"},
   {"addr": "0x400d53dc", "stock": "4e56ff98707f", "op": "jmp", "target": "core_note_on"},
   {"addr": "0x400d575e", "stock": "4e56ff94707f", "op": "jmp", "target": "core_note_off"},
-  {"addr": "0x400158ec", "stock": "2c2f002cb082", "op": "jsr", "target": "core_midi_cc"}
+  {"addr": "0x400158ec", "stock": "2c2f002cb082", "op": "jsr", "target": "core_midi_cc"},
+  {"addr": "0x400691d2", "stock": "23c041980918", "op": "jsr", "target": "core_card_ready"},
+  {"addr": "0x40069264", "stock": "7040c0b9401f55c0", "op": "jsr", "target": "core_fs_ready"},
+  {"addr": "0x400923b4", "stock": "4fefffe048d7001c", "op": "jmp", "target": "core_slot_write"},
+  {"addr": "0x40016a02", "stock": "4eb9400923b4", "op": "jsr", "target": "core_project_saved"},
+  {"addr": "0x4004f054", "stock": "4e56ffe0206e0008", "op": "jmp", "target": "core_project_loaded"},
+  {"addr": "0x400cbf0a", "stock": "4eb940001c6a", "op": "jsr", "target": "core_crash_install"},
+  {"addr": "0x400d52c4", "stock": "4feffff048d70c0c", "op": "jmp", "target": "core_sysex"}
  ],
  "ports": {
   "1.54": {
@@ -182,7 +214,32 @@
     "NOTE_OFF": "0x400d5986",
     "NOTE_ON_LINK": "-104",
     "NOTE_OFF_LINK": "-108",
-    "ROUTER_EXIT": "0x40015adc"
+    "ROUTER_EXIT": "0x40015adc",
+    "CARD_STATUS": "0x41981918",
+    "CRASH_SET": "0x40001c6a",
+    "FW_RESTART": "0x40005864",
+    "SYSEX_IN": "0x400d54ec",
+    "SYSEX_SEND": "0x400d7046",
+    "FW_CARD_SECTORS": "0x400e2834",
+    "FW_CARD_ERASE": "0x400e2b2c",
+    "FW_CARD_READ": "0x400e2c14",
+    "FW_CARD_WRITE": "0x400e2dfa",
+    "CORE_STOCK_COPY": "0x47800000",
+    "CORE_IMAGE_LEN": "2479680",
+    "CORE_TASK_SHIFT": "0x1000",
+    "FS_MOUNTED": "0x420eec50",
+    "BOOTFLAGS": "0x401f5970",
+    "FS_OPEN": "0x400cf3a0",
+    "FS_READ": "0x400cf0e6",
+    "FS_WRITE": "0x400cf146",
+    "FS_CLOSE": "0x400cf35e",
+    "FS_UNLINK": "0x400cdd50",
+    "FS_MKDIR": "0x400ce034",
+    "FS_RENAME": "0x400cdb2a",
+    "FS_STAT": "0x400cde5e",
+    "SLOT_CARD_WRITE": "0x400923f8",
+    "LOAD_DONE": "0x4004f054",
+    "CUR_SLOT": "0x40649125"
    },
    "sites": [
     {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -233,7 +290,14 @@
     {"addr": "0x40184998", "stock": "40039982", "op": "ptr", "target": "core_mview_clear"},
     {"addr": "0x400d5604", "stock": "4e56ff98707f", "op": "jmp", "target": "core_note_on"},
     {"addr": "0x400d5986", "stock": "4e56ff94707f", "op": "jmp", "target": "core_note_off"},
-    {"addr": "0x400158ec", "stock": "2c2f002cb082", "op": "jsr", "target": "core_midi_cc"}
+    {"addr": "0x400158ec", "stock": "2c2f002cb082", "op": "jsr", "target": "core_midi_cc"},
+    {"addr": "0x400691d2", "stock": "23c041981918", "op": "jsr", "target": "core_card_ready"},
+    {"addr": "0x40069264", "stock": "7040c0b9401f5970", "op": "jsr", "target": "core_fs_ready"},
+    {"addr": "0x400923f8", "stock": "4fefffe048d7001c", "op": "jmp", "target": "core_slot_write"},
+    {"addr": "0x40016a02", "stock": "4eb9400923f8", "op": "jsr", "target": "core_project_saved"},
+    {"addr": "0x4004f054", "stock": "4e56ffe0206e0008", "op": "jmp", "target": "core_project_loaded"},
+    {"addr": "0x400cc132", "stock": "4eb940001c6a", "op": "jsr", "target": "core_crash_install"},
+    {"addr": "0x400d54ec", "stock": "4feffff048d70c0c", "op": "jmp", "target": "core_sysex"}
    ]
   }
  },
@@ -242,7 +306,7 @@
   "ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4,
   "ev_render_in": 4, "ev_render_out": 4, "core_machines": 4,
   "ev_render_master": 4, "core_mpages": 4, "ev_fxmix": 4, "ev_live_note": 4,
-  "ev_midi_cc": 4
+  "ev_midi_cc": 4, "ev_card_ready": 4, "ev_fs_ready": 4, "ev_project_slot_write": 4, "ev_project_saved": 4, "ev_project_loaded": 4, "ev_crash": 4, "ev_sysex": 4
  },
  "resources": {"names": ["timer:DTIM0"]}
 }
