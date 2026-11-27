@@ -2729,7 +2729,12 @@ def test_core_ar2_0_21_starts_the_mods_area_above_the_usb_feedback_ring():
     assert lo % 0x1000 == 0 and lo >= ring[1]
     old = dev.ddr_for('0.20')
     assert old[0] < ring[1] and ring[0] < old[1]
-    assert json.load(open(os.path.join(os.path.dirname(__file__), '..', 'mods', 'core-ar2', 'mod.json')))['version'] == '0.22'
+    path = os.path.join(HERE, '..', 'mods', 'core-ar2', 'mod.json')
+    if not os.path.exists(path):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(path, encoding='utf-8') as fh:
+        version = json.load(fh)['version']
+    assert tuple(map(int, version.split('.'))) >= (0, 21), version     # main's core-ar2 gets the new area
 
 
 if __name__ == '__main__':
